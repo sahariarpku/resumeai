@@ -82,12 +82,12 @@ const AiCustomSectionSchema = z.object({
 });
 
 
-export const ExtractProfileFromCvInputSchema = z.object({
+const ExtractProfileFromCvInputSchema = z.object({
   cvText: z.string().describe("The full text content of the user's CV/resume."),
 });
 export type ExtractProfileFromCvInput = z.infer<typeof ExtractProfileFromCvInputSchema>;
 
-export const ExtractProfileFromCvOutputSchema = z.object({
+const ExtractProfileFromCvOutputSchema = z.object({
   fullName: z.string().optional().describe("Full name of the person."),
   email: z.string().email().optional().describe("Email address."),
   phone: z.string().optional().describe("Phone number."),
