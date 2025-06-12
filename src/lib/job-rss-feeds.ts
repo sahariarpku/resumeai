@@ -2,50 +2,92 @@
 export interface RssFeed {
   name: string;
   url: string;
+  type: 'location' | 'subjectArea' | 'jobRole' | 'general' | 'academicLevel'; // Added type
+  category?: string; // Broader category e.g., "UK Locations", "Subject Areas"
+  categoryDetail: string; // Specific detail, e.g., "London", "Computer Sciences"
 }
 
-function generateFeedName(url: string): string {
+// Helper to attempt to derive type and categoryDetail from URL structure
+function deriveFeedMetadata(url: string): { name: string, type: RssFeed['type'], category: string, categoryDetail: string } {
+  let name = "Unknown Feed";
+  let type: RssFeed['type'] = 'general';
+  let category = "General";
+  let categoryDetail = "All";
+
   try {
     const path = new URL(url).pathname;
-    if (path.startsWith('/jobs/')) {
-      let namePart = path.substring('/jobs/'.length);
-      if (namePart.endsWith('/')) {
-        namePart = namePart.slice(0, -1);
+    const query = new URL(url).search; // Keep query for exact match if needed
+
+    if (path.startsWith('/jobs/') && query.includes('format=rss')) {
+      let segment = path.substring('/jobs/'.length).replace(/\/$/, ''); // Remove /jobs/ and trailing /
+      
+      // General locations
+      const ukLocations = ["london", "midlands-of-england", "northern-england", "northern-ireland", "republic-of-ireland", "scotland", "south-east-england", "south-west-england", "wales"];
+      const internationalLocations = ["north-south-and-central-america", "europe", "asia-and-middle-east", "australasia", "africa"];
+      
+      if (ukLocations.includes(segment)) {
+        type = 'location';
+        category = 'UK Locations';
+        categoryDetail = segment.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+        name = categoryDetail;
+      } else if (internationalLocations.includes(segment)) {
+        type = 'location';
+        category = 'International Locations';
+        categoryDetail = segment.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+        name = categoryDetail;
+      } 
+      // Subject areas (often structured like /jobs/computer-sciences/)
+      else if (!segment.includes('-and-') && segment.split('-').length <= 3 && !["administrative", "clerical", "technical", "masters", "phds", "other"].includes(segment)) { // Heuristic for subject areas
+        type = 'subjectArea';
+        category = 'Subject Areas';
+        categoryDetail = segment.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+        name = categoryDetail;
       }
-      // Handle specific patterns like 'london/?format=rss'
-      if (namePart.includes('/?format=rss')) {
-        namePart = namePart.split('/?format=rss')[0];
-      } else if (namePart.endsWith('/?format=rss')) {
-         namePart = namePart.slice(0, -'/?format=rss'.length);
+      // Job roles / types
+      else if (["administrative", "estates-and-facilities-management", "finance-and-procurement", "fundraising-alumni-bids-and-grants", "health-wellbeing-and-care", "hospitality-retail-conferences-and-events", "human-resources", "international-activities", "it-services", "laboratory-clinical-and-technician", "legal-compliance-and-policy", "library-services-data-and-information-management", "other", "pr-marketing-sales-and-communication", "project-management-and-consulting", "senior-management", "sports-and-leisure", "student-services", "sustainability", "web-design-and-development"].includes(segment)) {
+        type = 'jobRole';
+        category = 'Professional Services';
+        categoryDetail = segment.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+        name = categoryDetail;
       }
-      return namePart
-        .split('-')
-        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-        .join(' ');
+      // Academic levels
+      else if (["academic-or-research", "clerical", "craft-or-manual", "masters", "phds", "professional-or-managerial", "technical"].includes(segment)) {
+        type = 'academicLevel';
+        category = 'Job Levels / Types';
+        categoryDetail = segment.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+        name = categoryDetail;
+      }
+      // Fallback name if not categorized above
+      else {
+        name = segment.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+        categoryDetail = name;
+      }
     } else if (path.startsWith('/feeds/subject-areas/')) {
-      let namePart = path.substring('/feeds/subject-areas/'.length);
-       if (namePart.endsWith('/')) {
-        namePart = namePart.slice(0, -1);
-      }
-      return namePart
-        .split('-')
-        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-        .join(' ');
+      // Feeds like /feeds/subject-areas/law (no format=rss query param)
+      let segment = path.substring('/feeds/subject-areas/'.length).replace(/\/$/, '');
+      type = 'subjectArea';
+      category = 'Subject Areas (Feeds)';
+      categoryDetail = segment.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+      name = categoryDetail;
+    } else {
+       const segments = path.split('/').filter(Boolean);
+       const lastSegment = segments.pop() || 'Unknown Feed';
+       name = lastSegment.replace(/[?&].*$/, '').split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+       categoryDetail = name;
     }
-    // Fallback for unknown patterns
-    const segments = path.split('/').filter(Boolean);
-    const lastSegment = segments.pop() || 'Unknown Feed';
-    return lastSegment
-        .replace(/[?&].*$/, '') // Remove query params
-        .split('-')
-        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-        .join(' ');
+    
+    if (name === "Computer Sciences") name = "Computer Science"; // Normalization
+    if (name === "Sports And Leisure" && category === "Professional Services") name = "Sports And Leisure (Services)";
+
 
   } catch (e) {
     console.error("Error generating feed name for URL:", url, e);
-    return "Unknown Feed";
+    name = "Error Parsing Name";
+    categoryDetail = "Error";
   }
+  return { name, type, category, categoryDetail };
 }
+
 
 const rawRssLinks: string[] = [
   "https://www.jobs.ac.uk/jobs/london/?format=rss",
@@ -66,7 +108,7 @@ const rawRssLinks: string[] = [
   "https://www.jobs.ac.uk/jobs/architecture-building-and-planning/?format=rss",
   "https://www.jobs.ac.uk/jobs/biological-sciences/?format=rss",
   "https://www.jobs.ac.uk/jobs/business-and-management-studies/?format=rss",
-  "https://www.jobs.ac.uk/jobs/computer-sciences/?format=rss",
+  "https://www.jobs.ac.uk/jobs/computer-sciences/?format=rss", // Primary CS
   "https://www.jobs.ac.uk/jobs/creative-arts-and-design/?format=rss",
   "https://www.jobs.ac.uk/jobs/economics/?format=rss",
   "https://www.jobs.ac.uk/jobs/education-studies-inc-tefl/?format=rss",
@@ -75,14 +117,14 @@ const rawRssLinks: string[] = [
   "https://www.jobs.ac.uk/jobs/historical-and-philosophical-studies/?format=rss",
   "https://www.jobs.ac.uk/jobs/information-management-and-librarianship/?format=rss",
   "https://www.jobs.ac.uk/jobs/languages-literature-and-culture/?format=rss",
-  "https://www.jobs.ac.uk/jobs/law/?format=rss",
+  "https://www.jobs.ac.uk/jobs/law/?format=rss", // Subject Law
   "https://www.jobs.ac.uk/jobs/mathematics-and-statistics/?format=rss",
   "https://www.jobs.ac.uk/jobs/media-and-communications/?format=rss",
   "https://www.jobs.ac.uk/jobs/physical-and-environmental-sciences/?format=rss",
-  "https://www.jobs.ac.uk/jobs/politics-and-government/?format=rss",
+  "https://www.jobs.ac.uk/jobs/politics-and-government/?format=rss", // Subject Politics
   "https://www.jobs.ac.uk/jobs/psychology/?format=rss",
   "https://www.jobs.ac.uk/jobs/social-sciences-and-social-care/?format=rss",
-  "https://www.jobs.ac.uk/jobs/sport-and-leisure/?format=rss",
+  "https://www.jobs.ac.uk/jobs/sport-and-leisure/?format=rss", // Subject Sport
   "https://www.jobs.ac.uk/jobs/administrative/?format=rss",
   "https://www.jobs.ac.uk/jobs/estates-and-facilities-management/?format=rss",
   "https://www.jobs.ac.uk/jobs/finance-and-procurement/?format=rss",
@@ -99,7 +141,7 @@ const rawRssLinks: string[] = [
   "https://www.jobs.ac.uk/jobs/pr-marketing-sales-and-communication/?format=rss",
   "https://www.jobs.ac.uk/jobs/project-management-and-consulting/?format=rss",
   "https://www.jobs.ac.uk/jobs/senior-management/?format=rss",
-  "https://www.jobs.ac.uk/jobs/sports-and-leisure/?format=rss", // Duplicate of sport-and-leisure, will be named Sports And Leisure
+  // "https://www.jobs.ac.uk/jobs/sports-and-leisure/?format=rss", // Duplicate of subject sport, handled by naming convention
   "https://www.jobs.ac.uk/jobs/student-services/?format=rss",
   "https://www.jobs.ac.uk/jobs/sustainability/?format=rss",
   "https://www.jobs.ac.uk/jobs/web-design-and-development/?format=rss",
@@ -110,13 +152,13 @@ const rawRssLinks: string[] = [
   "https://www.jobs.ac.uk/jobs/phds/?format=rss",
   "https://www.jobs.ac.uk/jobs/professional-or-managerial/?format=rss",
   "https://www.jobs.ac.uk/jobs/technical/?format=rss",
-  "https://www.jobs.ac.uk/feeds/subject-areas/law",
-  "https://www.jobs.ac.uk/jobs/computer-science/?format=rss", // Duplicate of computer-sciences
+  "https://www.jobs.ac.uk/feeds/subject-areas/law", // Feed specific Law
+  // "https://www.jobs.ac.uk/jobs/computer-science/?format=rss", // Duplicate of computer-sciences
   "https://www.jobs.ac.uk/jobs/software-engineering/?format=rss",
   "https://www.jobs.ac.uk/jobs/information-systems/?format=rss",
   "https://www.jobs.ac.uk/jobs/artificial-intelligence/?format=rss",
   "https://www.jobs.ac.uk/jobs/cyber-security/?format=rss",
-  "https://www.jobs.ac.uk/feeds/subject-areas/politics-and-government",
+  "https://www.jobs.ac.uk/feeds/subject-areas/politics-and-government", // Feed specific Politics
   "https://www.jobs.ac.uk/jobs/history/?format=rss",
   "https://www.jobs.ac.uk/jobs/history-of-art/?format=rss",
   "https://www.jobs.ac.uk/jobs/archaeology/?format=rss",
@@ -127,10 +169,42 @@ const rawRssLinks: string[] = [
   "https://www.jobs.ac.uk/jobs/social-work/?format=rss",
   "https://www.jobs.ac.uk/jobs/anthropology/?format=rss",
   "https://www.jobs.ac.uk/jobs/human-and-social-geography/?format=rss",
-  "https://www.jobs.ac.uk/jobs/other-social-sciences/?format=rss"
+  "https://www.jobs.ac.uk/jobs/other-social-sciences/?format=rss",
+  "https://www.jobs.ac.uk/?format=rss" // General feed
 ];
 
-export const PREDEFINED_RSS_FEEDS: RssFeed[] = rawRssLinks.map(url => ({
-  name: generateFeedName(url),
-  url,
-})).sort((a, b) => a.name.localeCompare(b.name));
+// Deduplicate URLs before mapping
+const uniqueRawRssLinks = Array.from(new Set(rawRssLinks));
+
+export const PREDEFINED_RSS_FEEDS: RssFeed[] = uniqueRawRssLinks.map(url => {
+  const metadata = deriveFeedMetadata(url);
+  return {
+    url,
+    name: metadata.name,
+    type: metadata.type,
+    category: metadata.category,
+    categoryDetail: metadata.categoryDetail
+  };
+}).sort((a, b) => {
+  // Sort by category first, then by name
+  if (a.category && b.category && a.category !== b.category) {
+    return a.category.localeCompare(b.category);
+  }
+  return a.name.localeCompare(b.name);
+});
+
+// For dropdowns
+export const getFeedsByType = (type: RssFeed['type']): RssFeed[] => {
+    return PREDEFINED_RSS_FEEDS.filter(feed => feed.type === type);
+}
+export const getFeedCategoriesByType = (type: RssFeed['type']): string[] => {
+    const categories = new Set(PREDEFINED_RSS_FEEDS.filter(feed => feed.type === type).map(feed => feed.category || "Other"));
+    return Array.from(categories).sort();
+}
+
+export const getFeedDetailsByCategoryAndType = (type: RssFeed['type'], category: string): RssFeed[] => {
+    return PREDEFINED_RSS_FEEDS.filter(feed => feed.type === type && feed.category === category).sort((a,b) => a.categoryDetail.localeCompare(b.categoryDetail));
+}
+
+export const ALL_SUBJECT_AREAS_URL = "https://www.jobs.ac.uk/jobs/academic-disciplines/?format=rss";
+export const ALL_LOCATIONS_URL = "https://www.jobs.ac.uk/?format=rss"; // General feed for all locations
