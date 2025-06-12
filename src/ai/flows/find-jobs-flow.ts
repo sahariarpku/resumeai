@@ -72,7 +72,7 @@ const findJobsFlow = ai.defineFlow(
     // Ensure each job posting has at least an empty string for optional fields if missing
     const processedPostings = output.jobPostings.map(job => ({
       ...job,
-      location: job.location || "Not specified", // Should always be provided by AI based on new prompt
+      location: job.location || "Not specified", 
       jobUrl: job.jobUrl || undefined, 
     }));
     return { jobPostings: processedPostings };

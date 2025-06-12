@@ -187,7 +187,7 @@ const SimulatedJobPostingSchema = z.object({
   requirementsSummary: z.string().describe("A brief 1-3 sentence summary of the key requirements for the job."),
   deadlineText: z.string().describe("A textual representation of the application deadline (e.g., 'In 2 weeks', 'August 15, 2024', 'Open until filled'). This should represent a future date or an open status."),
   location: z.string().describe("The location of the job (e.g., 'Remote, USA', 'London, UK', 'Berlin, Germany (Hybrid)'). This should be relevant to the user's location preference if provided."),
-  jobUrl: z.string().optional().describe("A fictional but plausible and well-formed URL for the job posting."),
+  jobUrl: z.string().optional().describe("A fictional but plausible-looking and well-formed URL for the job posting (e.g., \"https://boards.greenhouse.io/fictional-company/jobs/12345\", \"https://fictionaltech.jobs/senior-developer\", \"https://careers.examplecorp.com/en/jobs/software-engineer-remote-123\")."),
 });
 
 export const FindJobsOutputSchema = z.object({
