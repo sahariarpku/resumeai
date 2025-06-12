@@ -1,8 +1,8 @@
 
 "use client";
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { useForm, Controller } from "react-hook-form";
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,12 +11,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { Rss, Search, Loader2, Briefcase, Building, FileText as FileTextIcon, CalendarDays, Percent, Sparkles as SparklesIcon, BarChart3, AlertTriangle, Tag, X, Plus, Link as LinkIcon, MapPin } from "lucide-react";
+import { Rss, Search, Loader2, Briefcase, Building, FileText as FileTextIcon, CalendarDays, Percent, Sparkles as SparklesIcon, BarChart3, AlertTriangle, Link as LinkIcon, MapPin, ExternalLink } from "lucide-react";
 import { useRouter } from 'next/navigation';
-import NextLink from "next/link"; 
 import type { JobPostingItem, UserProfile } from "@/lib/types";
 import { z } from "zod"; 
-import { findJobs } from "@/ai/flows/find-jobs-flow";
+import { extractJobDetailsFromRssItem } from "@/ai/flows/extract-rss-item-flow";
 import { calculateProfileJdMatch } from "@/ai/flows/calculate-profile-jd-match-flow";
 import { profileToResumeText } from '@/lib/profile-utils';
 import { Badge } from '@/components/ui/badge';
@@ -26,80 +25,36 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { Separator } from '@/components/ui/separator';
 
 const USER_PROFILE_STORAGE_KEY = "userProfile";
 const TAILOR_RESUME_PREFILL_JD_KEY = "tailorResumePrefillJD";
-const JOB_KEYWORDS_STORAGE_KEY = "jobKeywords";
-const JOB_LOCATION_PREFERENCE_STORAGE_KEY = "jobLocationPreference";
+const LAST_RSS_URL_STORAGE_KEY = "lastRssUrl";
 
 
-const NewKeywordSchema = z.object({ 
-  newKeyword: z.string().min(1, "Keyword cannot be empty.").max(50, "Keyword too long."),
+const RssFormSchema = z.object({ 
+  rssUrl: z.string().url("Please enter a valid RSS feed URL."),
 });
-type NewKeywordFormData = z.infer<typeof NewKeywordSchema>;
+type RssFormData = z.infer<typeof RssFormSchema>;
 
 
 export default function JobsRssPage() {
   const { toast } = useToast();
   const router = useRouter();
   const [jobPostings, setJobPostings] = useState<JobPostingItem[]>([]);
-  const [isLoadingSearch, setIsLoadingSearch] = useState(false);
+  const [isLoadingFeed, setIsLoadingFeed] = useState(false);
+  const [isProcessingItems, setIsProcessingItems] = useState(false);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [profileLoaded, setProfileLoaded] = useState(false);
-
-  const [keywords, setKeywords] = useState<string[]>([]);
-  const [isKeywordsLoaded, setIsKeywordsLoaded] = useState(false);
-  const [locationPreference, setLocationPreference] = useState<string>("");
-  const [isLocationLoaded, setIsLocationLoaded] = useState(false);
-
-  const newKeywordForm = useForm<NewKeywordFormData>({
-    resolver: zodResolver(NewKeywordSchema),
+  const [processingProgress, setProcessingProgress] = useState(0);
+  const [totalItemsToProcess, setTotalItemsToProcess] = useState(0);
+  
+  const rssForm = useForm<RssFormData>({
+    resolver: zodResolver(RssFormSchema),
     defaultValues: {
-      newKeyword: "",
+      rssUrl: "",
     },
   });
 
-  useEffect(() => {
-    try {
-      const storedKeywordsString = localStorage.getItem(JOB_KEYWORDS_STORAGE_KEY);
-      if (storedKeywordsString) {
-        setKeywords(JSON.parse(storedKeywordsString) as string[]);
-      }
-      const storedLocationPref = localStorage.getItem(JOB_LOCATION_PREFERENCE_STORAGE_KEY);
-      if (storedLocationPref) {
-        setLocationPreference(storedLocationPref);
-      }
-    } catch (error) {
-      console.error("Failed to load preferences from localStorage:", error);
-      toast({ title: "Preference Load Error", description: "Could not load saved keywords/location.", variant: "destructive" });
-    }
-    setIsKeywordsLoaded(true);
-    setIsLocationLoaded(true);
-  }, [toast]);
-
-  useEffect(() => {
-    if (isKeywordsLoaded) { 
-        try {
-            localStorage.setItem(JOB_KEYWORDS_STORAGE_KEY, JSON.stringify(keywords));
-        } catch (error) {
-            console.error("Failed to save keywords to localStorage:", error);
-            toast({ title: "Keyword Save Error", description: "Could not save keywords.", variant: "destructive" });
-        }
-    }
-  }, [keywords, isKeywordsLoaded, toast]);
-
-  useEffect(() => {
-    if (isLocationLoaded) {
-        try {
-            localStorage.setItem(JOB_LOCATION_PREFERENCE_STORAGE_KEY, locationPreference);
-        } catch (error) {
-            console.error("Failed to save location preference to localStorage:", error);
-            toast({ title: "Location Save Error", description: "Could not save location preference.", variant: "destructive" });
-        }
-    }
-  }, [locationPreference, isLocationLoaded, toast]);
-  
   useEffect(() => {
     try {
       const storedProfileString = localStorage.getItem(USER_PROFILE_STORAGE_KEY);
@@ -111,59 +66,94 @@ export default function JobsRssPage() {
       toast({ title: "Profile Load Error", description: "Could not load your profile for CV matching.", variant: "destructive" });
     }
     setProfileLoaded(true);
-  }, [toast]);
 
-
-  const searchJobs = useCallback(async (currentKeywords: string[], currentLocation: string) => {
-    if (currentKeywords.length === 0 && !currentLocation.trim()) {
-      setJobPostings([]); // Clear previous results if no criteria
-      return;
-    }
-    setIsLoadingSearch(true);
-    setJobPostings([]); 
-    const keywordsString = currentKeywords.join(' ');
-    toast({ title: "Searching for jobs...", description: `Using keywords: ${keywordsString}${currentLocation ? `, Location: ${currentLocation}` : ''}` });
-
-    if (!profileLoaded) {
-      toast({ title: "Profile not loaded", description: "Please wait for profile to load before searching.", variant: "default" });
-      setIsLoadingSearch(false);
-      return;
-    }
-    
     try {
-      const result = await findJobs({ 
-        keywords: keywordsString,
-        location: currentLocation.trim() || undefined 
-      });
-      if (result.jobPostings && result.jobPostings.length > 0) {
-        const postingsWithClientData = result.jobPostings.map((job, index) => ({
-          ...job,
-          id: `job-${Date.now()}-${index}`,
-          isCalculatingMatch: !!userProfile, // Start calculation only if profile exists
-        }));
-        setJobPostings(postingsWithClientData);
-        toast({ title: "Jobs Found!", description: `${result.jobPostings.length} simulated job postings loaded.` });
-      } else {
-        setJobPostings([]); 
-        toast({ title: "No Jobs Found", description: "AI couldn't find or simulate jobs for these criteria. Try different terms." });
+        const lastUrl = localStorage.getItem(LAST_RSS_URL_STORAGE_KEY);
+        if (lastUrl) {
+            rssForm.setValue("rssUrl", lastUrl);
+        }
+    } catch (error) {
+        console.error("Failed to load last RSS URL from localStorage:", error);
+    }
+
+  }, [toast, rssForm]);
+
+  const handleFetchAndProcessRss = async (data: RssFormData) => {
+    setIsLoadingFeed(true);
+    setIsProcessingItems(false);
+    setJobPostings([]);
+    setProcessingProgress(0);
+    setTotalItemsToProcess(0);
+    toast({ title: "Fetching RSS Feed...", description: `Fetching content from ${data.rssUrl}` });
+
+    try {
+        localStorage.setItem(LAST_RSS_URL_STORAGE_KEY, data.rssUrl);
+    } catch (error) {
+        console.warn("Could not save last RSS URL to localStorage", error);
+    }
+
+    try {
+      const fetchResponse = await fetch(`/api/fetch-rss?url=${encodeURIComponent(data.rssUrl)}`);
+      if (!fetchResponse.ok) {
+        const errorData = await fetchResponse.json();
+        throw new Error(errorData.error || `Failed to fetch RSS feed: ${fetchResponse.statusText}`);
       }
+      const { rawRssContent } = await fetchResponse.json();
+      setIsLoadingFeed(false);
+
+      if (!rawRssContent) {
+        toast({ title: "No Content Fetched", description: "The RSS URL did not return any content.", variant: "default" });
+        return;
+      }
+      
+      const itemRegex = /<item>([\s\S]*?)<\/item>/g;
+      let match;
+      const itemXmls: string[] = [];
+      while ((match = itemRegex.exec(rawRssContent)) !== null) {
+        itemXmls.push(match[0]);
+      }
+
+      if (itemXmls.length === 0) {
+        toast({ title: "No Job Items Found", description: "The RSS feed does not seem to contain any job items in the expected format.", variant: "default" });
+        return;
+      }
+
+      toast({ title: "Feed Fetched!", description: `Found ${itemXmls.length} items. Processing them with AI...` });
+      setIsProcessingItems(true);
+      setTotalItemsToProcess(itemXmls.length);
+      
+      const processedJobs: JobPostingItem[] = [];
+      for (let i = 0; i < itemXmls.length; i++) {
+        const itemXml = itemXmls[i];
+        try {
+          const extractedDetails = await extractJobDetailsFromRssItem({ rssItemXml: itemXml });
+          if (extractedDetails.role && extractedDetails.jobUrl) { // Basic validation
+            processedJobs.push({
+              ...extractedDetails,
+              id: `job-${Date.now()}-${i}`,
+              isCalculatingMatch: !!userProfile, // Start calculation only if profile exists
+            });
+          }
+        } catch (extractionError) {
+          console.error("Error processing RSS item with AI:", extractionError);
+          // Optionally add a placeholder or skip the item
+        }
+        setProcessingProgress(i + 1);
+      }
+      
+      setJobPostings(processedJobs);
+      toast({ title: "Jobs Processed!", description: `${processedJobs.length} jobs extracted and displayed.` });
+
     } catch (err) {
-      console.error("Error finding jobs:", err);
-      toast({ title: "Search Error", description: "Could not fetch job simulations.", variant: "destructive" });
+      console.error("Error fetching or processing RSS feed:", err);
+      let errorMessage = "Could not process the RSS feed.";
+      if (err instanceof Error) errorMessage = err.message;
+      toast({ title: "RSS Processing Error", description: errorMessage, variant: "destructive" });
     } finally {
-      setIsLoadingSearch(false);
+      setIsLoadingFeed(false);
+      setIsProcessingItems(false);
     }
-  }, [profileLoaded, userProfile, toast]);
-
-
-  useEffect(() => {
-    // Trigger search on initial load if keywords or location are present
-    if (isKeywordsLoaded && isLocationLoaded && (keywords.length > 0 || locationPreference.trim()) && !isLoadingSearch && jobPostings.length === 0 && !newKeywordForm.formState.isSubmitted) { 
-        searchJobs(keywords, locationPreference);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps 
-  }, [isKeywordsLoaded, isLocationLoaded, keywords, locationPreference]);
-
+  };
 
   const calculateMatchForJob = useCallback(async (job: JobPostingItem, profileText: string) => {
     if (!profileText.trim()) {
@@ -206,19 +196,6 @@ export default function JobsRssPage() {
     }
   }, [jobPostings, userProfile, profileLoaded, calculateMatchForJob]);
 
-
-  const handleAddKeyword = (data: NewKeywordFormData) => {
-    const keywordToAdd = data.newKeyword.trim();
-    if (keywordToAdd && !keywords.includes(keywordToAdd)) {
-      setKeywords(prevKeywords => [...prevKeywords, keywordToAdd]);
-    }
-    newKeywordForm.reset();
-  };
-
-  const handleDeleteKeyword = (keywordToDelete: string) => {
-    setKeywords(prevKeywords => prevKeywords.filter(kw => kw !== keywordToDelete));
-  };
-
   const handleTailorResume = (job: JobPostingItem) => {
     localStorage.setItem(TAILOR_RESUME_PREFILL_JD_KEY, job.requirementsSummary);
     router.push('/tailor-resume');
@@ -235,109 +212,57 @@ export default function JobsRssPage() {
     }
   };
 
-  if (!isKeywordsLoaded || !profileLoaded || !isLocationLoaded) {
+  if (!profileLoaded) { // Still wait for profile to load for context
      return (
       <div className="container mx-auto py-8 text-center">
         <Loader2 className="mx-auto h-12 w-12 animate-spin text-primary" />
-        <p className="mt-4 text-muted-foreground">Loading preferences and profile...</p>
+        <p className="mt-4 text-muted-foreground">Loading profile...</p>
       </div>
     );
   }
 
-
   return (
     <TooltipProvider>
     <div className="container mx-auto py-8 space-y-8">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="font-headline text-3xl font-bold flex items-center">
-            <Rss className="mr-3 h-8 w-8 text-primary" /> AI Simulated Job Feed
-          </h1>
-          <p className="text-muted-foreground">
-            Manage keywords & location to find AI-simulated job postings. Match them with your profile and tailor applications.
-          </p>
-        </div>
+      <div>
+        <h1 className="font-headline text-3xl font-bold flex items-center">
+          <Rss className="mr-3 h-8 w-8 text-primary" /> AI Powered RSS Job Feed
+        </h1>
+        <p className="text-muted-foreground">
+          Paste a job RSS feed URL. AI will parse the items, and you can match them with your profile and tailor applications.
+        </p>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle className="font-headline flex items-center"><Search className="mr-2 h-5 w-5" />Manage Job Search Criteria</CardTitle>
-          <CardDescription>Add keywords and set a location preference to refine your automated job search.</CardDescription>
+          <CardTitle className="font-headline flex items-center"><Search className="mr-2 h-5 w-5" />Enter RSS Feed URL</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-6">
-          <div>
-            <Label htmlFor="locationPreferenceInput" className="font-medium">Location Preference</Label>
-            <Input 
-              id="locationPreferenceInput" 
-              placeholder="e.g., Remote, New York, London" 
-              value={locationPreference}
-              onChange={(e) => setLocationPreference(e.target.value)}
-              className="mt-1"
-            />
-            <p className="text-xs text-muted-foreground mt-1">Enter a city, state, country, or "Remote".</p>
-          </div>
-
-          <Separator />
-          
-          <div>
-            <Label className="font-medium">Job Keywords</Label>
-            <Form {...newKeywordForm}>
-              <form onSubmit={newKeywordForm.handleSubmit(handleAddKeyword)} className="flex items-start gap-2 mt-1">
-                <FormField
-                  control={newKeywordForm.control}
-                  name="newKeyword"
-                  render={({ field }) => (
-                    <FormItem className="flex-grow">
-                      <FormLabel htmlFor="newKeywordInput" className="sr-only">New Keyword</FormLabel>
-                      <FormControl>
-                        <Input id="newKeywordInput" placeholder="e.g., 'React developer'" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <Button type="submit" aria-label="Add keyword">
-                  <Plus className="h-5 w-5" /> <span className="hidden sm:inline ml-2">Add</span>
-                </Button>
-              </form>
-            </Form>
-
-            {keywords.length > 0 && (
-              <div className="mt-3 space-y-2">
-                <p className="text-sm font-medium text-muted-foreground">Active Keywords:</p>
-                <div className="flex flex-wrap gap-2">
-                  {keywords.map((keyword) => (
-                    <Badge key={keyword} variant="secondary" className="text-sm py-1 px-2">
-                      {keyword}
-                      <button 
-                          onClick={() => handleDeleteKeyword(keyword)} 
-                          className="ml-1.5 rounded-full hover:bg-background/50 p-0.5 focus:outline-none focus:ring-1 focus:ring-ring"
-                          aria-label={`Remove keyword ${keyword}`}
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-          
-          <Separator />
-
-          <Button 
-            onClick={() => searchJobs(keywords, locationPreference)} 
-            disabled={isLoadingSearch || (keywords.length === 0 && !locationPreference.trim())} 
-            size="lg" 
-            className="w-full sm:w-auto"
-          >
-            {isLoadingSearch ? (
-              <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-            ) : (
-              <Search className="mr-2 h-5 w-5" />
-            )}
-            {isLoadingSearch ? "Searching..." : "Search Jobs"}
-          </Button>
+        <CardContent>
+          <Form {...rssForm}>
+            <form onSubmit={rssForm.handleSubmit(handleFetchAndProcessRss)} className="flex flex-col sm:flex-row items-start gap-2">
+              <FormField
+                control={rssForm.control}
+                name="rssUrl"
+                render={({ field }) => (
+                  <FormItem className="flex-grow w-full sm:w-auto">
+                    <FormLabel htmlFor="rssUrlInput" className="sr-only">RSS Feed URL</FormLabel>
+                    <FormControl>
+                      <Input id="rssUrlInput" placeholder="https://example.com/jobs.rss" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <Button type="submit" disabled={isLoadingFeed || isProcessingItems} size="lg" className="w-full sm:w-auto">
+                {(isLoadingFeed || isProcessingItems) ? (
+                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                ) : (
+                  <Search className="mr-2 h-5 w-5" />
+                )}
+                {(isLoadingFeed) ? "Fetching..." : (isProcessingItems ? `Processing ${processingProgress}/${totalItemsToProcess}` : "Fetch Jobs")}
+              </Button>
+            </form>
+          </Form>
            {!profileLoaded && <p className="text-sm text-muted-foreground mt-2">Loading profile for matching...</p>}
            {profileLoaded && !userProfile && (
                 <p className="text-sm text-amber-600 mt-3 flex items-center">
@@ -348,11 +273,17 @@ export default function JobsRssPage() {
         </CardContent>
       </Card>
 
+      {isProcessingItems && totalItemsToProcess > 0 && (
+        <div className="w-full bg-muted rounded-full h-2.5 dark:bg-gray-700 my-4">
+            <div className="bg-primary h-2.5 rounded-full" style={{ width: `${(processingProgress / totalItemsToProcess) * 100}%` }}></div>
+        </div>
+      )}
+
       {jobPostings.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle className="font-headline">Job Postings Found</CardTitle>
-            <CardDescription>Review the simulated job postings and take action.</CardDescription>
+            <CardTitle className="font-headline">Jobs from Feed</CardTitle>
+            <CardDescription>Review the jobs extracted from the RSS feed.</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="overflow-x-auto">
@@ -363,7 +294,7 @@ export default function JobsRssPage() {
                     <TableHead><Building className="inline-block mr-1 h-4 w-4" />Company</TableHead>
                     <TableHead><MapPin className="inline-block mr-1 h-4 w-4" />Location</TableHead>
                     <TableHead><FileTextIcon className="inline-block mr-1 h-4 w-4" />Requirements</TableHead>
-                    <TableHead><CalendarDays className="inline-block mr-1 h-4 w-4" />Deadline</TableHead>
+                    <TableHead><CalendarDays className="inline-block mr-1 h-4 w-4" />Deadline/Posted</TableHead>
                     <TableHead className="text-center"><Percent className="inline-block mr-1 h-4 w-4" />CV Match</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
@@ -377,17 +308,17 @@ export default function JobsRssPage() {
                             href={job.jobUrl} 
                             target="_blank" 
                             rel="noopener noreferrer" 
-                            className="hover:underline text-primary"
+                            className="hover:underline text-primary flex items-center"
                             title={`View job: ${job.role}`}
                           >
-                            {job.role} <LinkIcon className="inline-block ml-1 h-3 w-3" />
+                            {job.role} <ExternalLink className="inline-block ml-1.5 h-3.5 w-3.5 opacity-70" />
                           </a>
                         ) : (
                           job.role
                         )}
                       </TableCell>
-                      <TableCell>{job.company}</TableCell>
-                      <TableCell>{job.location}</TableCell>
+                      <TableCell>{job.company || <span className="text-muted-foreground/70">N/A</span>}</TableCell>
+                      <TableCell>{job.location || <span className="text-muted-foreground/70">N/A</span>}</TableCell>
                       <TableCell className="max-w-xs">
                          <Tooltip>
                             <TooltipTrigger asChild>
@@ -399,7 +330,7 @@ export default function JobsRssPage() {
                             </TooltipContent>
                         </Tooltip>
                       </TableCell>
-                      <TableCell>{job.deadlineText}</TableCell>
+                      <TableCell>{job.deadlineText || <span className="text-muted-foreground/70">N/A</span>}</TableCell>
                       <TableCell className="text-center">
                         {job.isCalculatingMatch ? (
                           <Loader2 className="h-4 w-4 animate-spin mx-auto text-primary" />
@@ -445,27 +376,37 @@ export default function JobsRssPage() {
         </Card>
       )}
 
-       {isLoadingSearch && jobPostings.length === 0 && (
+       {(isLoadingFeed || isProcessingItems) && jobPostings.length === 0 && (
          <div className="text-center py-12">
             <Loader2 className="mx-auto h-12 w-12 animate-spin text-primary mb-4" />
-            <p className="text-muted-foreground">AI is simulating job feeds based on your criteria...</p>
+            <p className="text-muted-foreground">
+                {isLoadingFeed ? "Fetching RSS feed..." : `Processing job items: ${processingProgress} / ${totalItemsToProcess}...`}
+            </p>
         </div>
       )}
 
-      {!isLoadingSearch && jobPostings.length === 0 && (keywords.length > 0 || locationPreference.trim() ? (newKeywordForm.formState.isSubmitted || isKeywordsLoaded || isLocationLoaded || jobPostings !== null ) : true) && (
+      {!isLoadingFeed && !isProcessingItems && jobPostings.length === 0 && rssForm.formState.isSubmitted && (
          <Card className="text-center py-12">
             <CardHeader>
                 <Rss className="mx-auto h-16 w-16 text-muted-foreground mb-4" />
-                <CardTitle className="font-headline text-2xl">
-                    {(keywords.length > 0 || locationPreference.trim()) ? "No Simulated Jobs Found" : "Add Criteria to Start"}
-                </CardTitle>
+                <CardTitle className="font-headline text-2xl">No Jobs Found in Feed</CardTitle>
             </CardHeader>
             <CardContent>
                 <p className="text-muted-foreground">
-                {(keywords.length > 0 || locationPreference.trim()) 
-                    ? "The AI couldn't generate job postings for your current criteria. Please try different or broader search terms, or adjust your active keywords/location."
-                    : "Add some keywords or a location preference above to start discovering AI-simulated job opportunities."
-                }
+                    The RSS feed was fetched, but no job items could be extracted, or the feed was empty. Please check the URL or try a different feed.
+                </p>
+            </CardContent>
+        </Card>
+      )}
+       {!isLoadingFeed && !isProcessingItems && jobPostings.length === 0 && !rssForm.formState.isSubmitted && (
+         <Card className="text-center py-12">
+            <CardHeader>
+                <Rss className="mx-auto h-16 w-16 text-muted-foreground mb-4" />
+                <CardTitle className="font-headline text-2xl">Enter an RSS Feed URL</CardTitle>
+            </CardHeader>
+            <CardContent>
+                <p className="text-muted-foreground">
+                    Paste a job RSS feed URL above to start discovering opportunities.
                 </p>
             </CardContent>
         </Card>
@@ -474,4 +415,3 @@ export default function JobsRssPage() {
     </TooltipProvider>
   );
 }
-

@@ -174,24 +174,19 @@ export const GenerateLatexCvOutputSchema = z.object({
 });
 export type GenerateLatexCvOutput = z.infer<typeof GenerateLatexCvOutputSchema>;
 
-// Schemas for Find Jobs Flow (Simulated RSS)
-export const FindJobsInputSchema = z.object({
-  keywords: z.string().min(1, "Keywords are required.").describe("Keywords for job search, e.g., 'software engineer react remote'"),
-  location: z.string().optional().describe("Optional location preference for the job search, e.g., 'Remote', 'New York, NY'.")
-});
-export type FindJobsInput = z.infer<typeof FindJobsInputSchema>;
 
-const SimulatedJobPostingSchema = z.object({
-  role: z.string().describe("The job title or role."),
-  company: z.string().describe("The name of the company."),
-  requirementsSummary: z.string().describe("A brief 1-3 sentence summary of the key requirements for the job."),
-  deadlineText: z.string().describe("A textual representation of the application deadline (e.g., 'In 2 weeks', 'August 15, 2024', 'Open until filled'). This should represent a future date or an open status."),
-  location: z.string().describe("The location of the job (e.g., 'Remote, USA', 'London, UK', 'Berlin, Germany (Hybrid)'). This should be relevant to the user's location preference if provided."),
-  jobUrl: z.string().optional().describe("A fictional but plausible-looking and well-formed URL for the job posting (e.g., \"https://boards.greenhouse.io/fictional-company/jobs/12345\", \"https://fictionaltech.jobs/senior-developer\", \"https://careers.examplecorp.com/en/jobs/software-engineer-remote-123\")."),
+// Schemas for Extracting Job Details from RSS Item
+export const ExtractRssItemInputSchema = z.object({
+  rssItemXml: z.string().describe("The XML content of a single <item> from an RSS feed."),
 });
+export type ExtractRssItemInput = z.infer<typeof ExtractRssItemInputSchema>;
 
-export const FindJobsOutputSchema = z.object({
-  jobPostings: z.array(SimulatedJobPostingSchema).describe("A list of simulated job postings found based on the keywords and location."),
+export const ExtractRssItemOutputSchema = z.object({
+  role: z.string().describe("The extracted job title. Look primarily in the <title> tag."),
+  company: z.string().describe("The extracted company name. Look for <dc:creator>, <jobs:employer_name>, or infer from text."),
+  requirementsSummary: z.string().describe("A concise summary of job requirements, skills, and qualifications from the <description> tag. Extract textual content if HTML is present."),
+  deadlineText: z.string().describe("The application deadline. Look for 'Closing Date:' in <description> or use <pubDate> as 'Posted on: [date]' if no deadline is found."),
+  location: z.string().describe("The job location. Look for tags like <jobs:location_options> or infer from text."),
+  jobUrl: z.string().describe("The direct URL to the job posting from the <link> tag. Should be a valid URL string."),
 });
-export type FindJobsOutput = z.infer<typeof FindJobsOutputSchema>;
-
+export type ExtractRssItemOutput = z.infer<typeof ExtractRssItemOutputSchema>;
