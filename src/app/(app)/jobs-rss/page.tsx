@@ -6,7 +6,7 @@ import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label"; // Added missing import
+import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -116,6 +116,7 @@ export default function JobsRssPage() {
 
   const searchJobs = useCallback(async (currentKeywords: string[], currentLocation: string) => {
     if (currentKeywords.length === 0 && !currentLocation.trim()) {
+      setJobPostings([]); // Clear previous results if no criteria
       return;
     }
     setIsLoadingSearch(true);
@@ -138,12 +139,12 @@ export default function JobsRssPage() {
         const postingsWithClientData = result.jobPostings.map((job, index) => ({
           ...job,
           id: `job-${Date.now()}-${index}`,
-          isCalculatingMatch: !!userProfile,
+          isCalculatingMatch: !!userProfile, // Start calculation only if profile exists
         }));
         setJobPostings(postingsWithClientData);
         toast({ title: "Jobs Found!", description: `${result.jobPostings.length} simulated job postings loaded.` });
       } else {
-        setJobPostings([]); // Ensure jobPostings is an empty array on no results
+        setJobPostings([]); 
         toast({ title: "No Jobs Found", description: "AI couldn't find or simulate jobs for these criteria. Try different terms." });
       }
     } catch (err) {
@@ -156,11 +157,12 @@ export default function JobsRssPage() {
 
 
   useEffect(() => {
+    // Trigger search on initial load if keywords or location are present
     if (isKeywordsLoaded && isLocationLoaded && (keywords.length > 0 || locationPreference.trim()) && !isLoadingSearch && jobPostings.length === 0 && !newKeywordForm.formState.isSubmitted) { 
         searchJobs(keywords, locationPreference);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isKeywordsLoaded, isLocationLoaded, keywords, locationPreference]); 
+  // eslint-disable-next-line react-hooks/exhaustive-deps 
+  }, [isKeywordsLoaded, isLocationLoaded, keywords, locationPreference]);
 
 
   const calculateMatchForJob = useCallback(async (job: JobPostingItem, profileText: string) => {
