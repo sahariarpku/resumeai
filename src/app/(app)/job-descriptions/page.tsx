@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
-import { PlusCircle, Briefcase, ArrowRight, Trash2, Edit3, FileSearch, Sparkles, Loader2 } from "lucide-react";
+import { PlusCircle, Briefcase, ArrowRight, Trash2, Edit3, FileSearch, Sparkles, Loader2, Link as LinkIcon, DownloadCloud } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from 'next/navigation';
 import type { JobDescriptionItem, UserProfile } from "@/lib/types";
@@ -26,7 +26,9 @@ import {
   DialogClose,
 } from "@/components/ui/dialog";
 import { extractJobDetails } from "@/ai/flows/extract-job-details-flow";
+import { extractTextFromHtml } from "@/ai/flows/extract-text-from-html-flow";
 import { profileToResumeText } from '@/lib/profile-utils';
+import { Separator } from '@/components/ui/separator';
 
 
 const fallbackInitialJds: JobDescriptionItem[] = [
@@ -47,6 +49,8 @@ export default function JobDescriptionsPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingJd, setEditingJd] = useState<JobDescriptionItem | null>(null);
   const [isExtracting, setIsExtracting] = useState(false);
+  const [isFetchingFromUrl, setIsFetchingFromUrl] = useState(false);
+  const [jdUrl, setJdUrl] = useState("");
   const [isLoaded, setIsLoaded] = useState(false);
 
 
@@ -57,10 +61,7 @@ export default function JobDescriptionsPage() {
         const storedJds = JSON.parse(storedJdsString) as JobDescriptionItem[];
         setJds(storedJds);
       } else {
-        // Optional: use fallback if local storage is empty for the very first time
-        // setJds(fallbackInitialJds); 
-        // localStorage.setItem(JOB_DESCRIPTIONS_STORAGE_KEY, JSON.stringify(fallbackInitialJds));
-        setJds([]); // Start with empty if nothing in storage
+        setJds([]); 
       }
     } catch (error) {
       console.error("Failed to load JDs from localStorage:", error);
@@ -69,13 +70,13 @@ export default function JobDescriptionsPage() {
         description: "Could not load job descriptions from local storage.",
         variant: "destructive",
       });
-      setJds(fallbackInitialJds); // Fallback in case of error
+      setJds(fallbackInitialJds); 
     }
     setIsLoaded(true);
   }, [toast]);
 
   useEffect(() => {
-    if (isLoaded) { // Only save after initial load to prevent overwriting
+    if (isLoaded) { 
       try {
         localStorage.setItem(JOB_DESCRIPTIONS_STORAGE_KEY, JSON.stringify(jds));
       } catch (error) {
@@ -114,18 +115,21 @@ export default function JobDescriptionsPage() {
     }
     setIsModalOpen(false);
     setEditingJd(null);
+    setJdUrl("");
     form.reset();
   };
 
   const openAddModal = () => {
     setEditingJd(null);
     form.reset();
+    setJdUrl("");
     setIsModalOpen(true);
   };
 
   const openEditModal = (jd: JobDescriptionItem) => {
     setEditingJd(jd);
-    form.reset(jd); // Pre-fill form with existing JD data
+    form.reset(jd); 
+    setJdUrl("");
     setIsModalOpen(true);
   };
 
@@ -134,12 +138,12 @@ export default function JobDescriptionsPage() {
     toast({ title: "Job Description Deleted", variant: "destructive" });
   };
 
-  const handleExtractDetails = async () => {
+  const handleExtractDetailsFromText = async () => {
     const descriptionValue = form.getValues("description");
     if (!descriptionValue || descriptionValue.trim().length < 50) {
       toast({
         title: "Cannot Extract Details",
-        description: "Please paste a job description (at least 50 characters) into the textarea first.",
+        description: "Please ensure the job description field has sufficient content (at least 50 characters).",
         variant: "default",
       });
       return;
@@ -153,11 +157,11 @@ export default function JobDescriptionsPage() {
       
       toast({
         title: "Extraction Attempted!",
-        description: "Job title and company name fields have been updated based on the AI's findings. Please review them.",
+        description: "Job title and company name fields have been updated. Please review them.",
       });
     } catch (err) {
-      console.error("Error extracting job details:", err);
-      let errorMessage = "Could not extract details. Please try again or fill them manually.";
+      console.error("Error extracting job details from text:", err);
+      let errorMessage = "Could not extract details from text. Please try again or fill them manually.";
       if (err instanceof Error && err.message) {
         errorMessage = `Extraction failed: ${err.message}`;
       }
@@ -170,6 +174,80 @@ export default function JobDescriptionsPage() {
       setIsExtracting(false);
     }
   };
+
+  const handleFetchFromUrl = async () => {
+    if (!jdUrl.trim() || !jdUrl.startsWith("http")) {
+      toast({
+        title: "Invalid URL",
+        description: "Please enter a valid URL (starting with http or https).",
+        variant: "default"
+      });
+      return;
+    }
+    setIsFetchingFromUrl(true);
+    try {
+      // Simulate fetching HTML content from URL
+      // In a real app, this would be an actual fetch call, possibly via a backend proxy to avoid CORS
+      await new Promise(resolve => setTimeout(resolve, 1500)); // Simulate network delay
+      const simulatedHtmlContent = `
+        <html><head><title>Senior Software Engineer at Acme Corp</title></head>
+        <body>
+          <header><h1>Senior Software Engineer</h1><p>Acme Corp - Anytown, USA</p></header>
+          <nav>...</nav>
+          <main>
+            <h2>Job Description</h2>
+            <p>We are looking for a talented Senior Software Engineer to join our dynamic team at Acme Corp.</p>
+            <p>Responsibilities include designing, developing, and maintaining software applications.</p>
+            <h3>Requirements:</h3>
+            <ul>
+              <li>5+ years of experience in software development.</li>
+              <li>Proficiency in JavaScript, React, and Node.js.</li>
+              <li>Strong problem-solving skills.</li>
+            </ul>
+            <p>This is a full-time position based in Anytown.</p>
+          </main>
+          <footer>Copyright Acme Corp</footer>
+        </body></html>
+      `;
+      
+      toast({
+          title: "Simulating URL Fetch",
+          description: "Fetching content from URL (this is a simulation).",
+          variant: "default"
+      });
+
+      const extractionResult = await extractTextFromHtml({ htmlContent: simulatedHtmlContent });
+      
+      if (extractionResult.extractedText) {
+        form.setValue("description", extractionResult.extractedText, { shouldValidate: true });
+        toast({
+          title: "Content Extracted!",
+          description: "Job description field has been populated from the URL. You can now use 'AI Extract Details' for title/company or save."
+        });
+      } else {
+        toast({
+          title: "No Content Extracted",
+          description: "Could not extract meaningful content from the simulated URL.",
+          variant: "default"
+        });
+      }
+
+    } catch (err) {
+      console.error("Error fetching/extracting from URL:", err);
+      let errorMessage = "Could not process the URL. Please try again or paste content manually.";
+      if (err instanceof Error && err.message) {
+        errorMessage = `Processing failed: ${err.message}`;
+      }
+      toast({
+        title: "URL Processing Error",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    } finally {
+      setIsFetchingFromUrl(false);
+    }
+  };
+
 
   const handleTailorResumeWithProfile = (jd: JobDescriptionItem) => {
     try {
@@ -277,16 +355,46 @@ export default function JobDescriptionsPage() {
         </div>
       )}
 
-      <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+      <Dialog open={isModalOpen} onOpenChange={(isOpen) => { setIsModalOpen(isOpen); if (!isOpen) setJdUrl(""); }}>
         <DialogContent className="sm:max-w-2xl">
             <DialogHeader>
             <DialogTitle className="font-headline">{editingJd ? "Edit Job Description" : "Add New Job Description"}</DialogTitle>
             <DialogDescription>
-                {editingJd ? "Update the details of this job description." : "Save a job description to tailor resumes for it later."}
+                {editingJd ? "Update the details of this job description." : "Save a job description to tailor resumes for it later. You can paste a URL to try and auto-fill the description."}
             </DialogDescription>
             </DialogHeader>
+            
+            <div className="space-y-4 py-2">
+                <div className="flex items-end gap-2">
+                    <div className="flex-grow">
+                        <FormLabel htmlFor="jdUrlInput">Job Posting URL (Optional)</FormLabel>
+                        <Input 
+                            id="jdUrlInput"
+                            placeholder="https://example.com/job-posting" 
+                            value={jdUrl}
+                            onChange={(e) => setJdUrl(e.target.value)}
+                            disabled={isFetchingFromUrl}
+                        />
+                    </div>
+                    <Button 
+                        type="button" 
+                        onClick={handleFetchFromUrl} 
+                        disabled={isFetchingFromUrl || !jdUrl.trim()}
+                        variant="outline"
+                    >
+                        {isFetchingFromUrl ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <DownloadCloud className="mr-2 h-4 w-4" />}
+                        Fetch & Extract
+                    </Button>
+                </div>
+                <div className="text-xs text-muted-foreground">
+                    Pasting a URL will attempt to extract the job description text. Currently, this is a simulation.
+                    The match meter for profile compatibility will be added in a future update.
+                </div>
+            </div>
+            <Separator />
+
             <Form {...form}>
-            <form onSubmit={form.handleSubmit(handleAddOrEditJd)} className="space-y-6 py-4">
+            <form onSubmit={form.handleSubmit(handleAddOrEditJd)} className="space-y-6 pt-4">
                 <FormField
                 control={form.control}
                 name="title"
@@ -320,7 +428,7 @@ export default function JobDescriptionsPage() {
                           type="button"
                           variant="outline"
                           size="sm"
-                          onClick={handleExtractDetails}
+                          onClick={handleExtractDetailsFromText}
                           disabled={isExtracting}
                         >
                           {isExtracting ? (
@@ -331,7 +439,7 @@ export default function JobDescriptionsPage() {
                           AI Extract Details
                         </Button>
                       </div>
-                      <FormControl><Textarea placeholder="Paste the full job description here..." {...field} rows={10} /></FormControl>
+                      <FormControl><Textarea placeholder="Paste the full job description here, or use the URL fetch option above." {...field} rows={10} /></FormControl>
                       <FormMessage />
                     </FormItem>
                 )}
@@ -340,7 +448,7 @@ export default function JobDescriptionsPage() {
                   <DialogClose asChild>
                     <Button type="button" variant="outline">Cancel</Button>
                   </DialogClose>
-                  <Button type="submit">{editingJd ? "Save Changes" : "Add Job Description"}</Button>
+                  <Button type="submit" disabled={isFetchingFromUrl || isExtracting}>{editingJd ? "Save Changes" : "Add Job Description"}</Button>
                 </DialogFooter>
             </form>
             </Form>
@@ -349,5 +457,3 @@ export default function JobDescriptionsPage() {
     </div>
   );
 }
-
-    
