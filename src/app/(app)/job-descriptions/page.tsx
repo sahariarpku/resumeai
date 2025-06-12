@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@/components/ui/button";
@@ -29,12 +29,13 @@ import { extractJobDetails } from "@/ai/flows/extract-job-details-flow";
 import { profileToResumeText } from '@/lib/profile-utils';
 
 
-const initialJds: JobDescriptionItem[] = [
-  { id: "jd1", title: "Senior Software Engineer", company: "Tech Giant LLC", description: "Looking for a skilled SSE...", createdAt: new Date().toISOString() },
-  { id: "jd2", title: "Product Marketing Manager", company: "Startup Co.", description: "Join our fast-paced team...", createdAt: new Date().toISOString() },
+const fallbackInitialJds: JobDescriptionItem[] = [
+  // { id: "jd1", title: "Senior Software Engineer", company: "Tech Giant LLC", description: "Looking for a skilled SSE...", createdAt: new Date().toISOString() },
+  // { id: "jd2", title: "Product Marketing Manager", company: "Startup Co.", description: "Join our fast-paced team...", createdAt: new Date().toISOString() },
 ];
 
 const USER_PROFILE_STORAGE_KEY = "userProfile";
+const JOB_DESCRIPTIONS_STORAGE_KEY = "jobDescriptions";
 const TAILOR_RESUME_PREFILL_JD_KEY = "tailorResumePrefillJD";
 const TAILOR_RESUME_PREFILL_RESUME_KEY = "tailorResumePrefillResume";
 
@@ -42,10 +43,52 @@ const TAILOR_RESUME_PREFILL_RESUME_KEY = "tailorResumePrefillResume";
 export default function JobDescriptionsPage() {
   const { toast } = useToast();
   const router = useRouter();
-  const [jds, setJds] = useState<JobDescriptionItem[]>(initialJds);
+  const [jds, setJds] = useState<JobDescriptionItem[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingJd, setEditingJd] = useState<JobDescriptionItem | null>(null);
   const [isExtracting, setIsExtracting] = useState(false);
+  const [isLoaded, setIsLoaded] = useState(false);
+
+
+  useEffect(() => {
+    try {
+      const storedJdsString = localStorage.getItem(JOB_DESCRIPTIONS_STORAGE_KEY);
+      if (storedJdsString) {
+        const storedJds = JSON.parse(storedJdsString) as JobDescriptionItem[];
+        setJds(storedJds);
+      } else {
+        // Optional: use fallback if local storage is empty for the very first time
+        // setJds(fallbackInitialJds); 
+        // localStorage.setItem(JOB_DESCRIPTIONS_STORAGE_KEY, JSON.stringify(fallbackInitialJds));
+        setJds([]); // Start with empty if nothing in storage
+      }
+    } catch (error) {
+      console.error("Failed to load JDs from localStorage:", error);
+      toast({
+        title: "Load Error",
+        description: "Could not load job descriptions from local storage.",
+        variant: "destructive",
+      });
+      setJds(fallbackInitialJds); // Fallback in case of error
+    }
+    setIsLoaded(true);
+  }, [toast]);
+
+  useEffect(() => {
+    if (isLoaded) { // Only save after initial load to prevent overwriting
+      try {
+        localStorage.setItem(JOB_DESCRIPTIONS_STORAGE_KEY, JSON.stringify(jds));
+      } catch (error) {
+        console.error("Failed to save JDs to localStorage:", error);
+        toast({
+          title: "Save Error",
+          description: "Could not save job descriptions to local storage.",
+          variant: "destructive",
+        });
+      }
+    }
+  }, [jds, isLoaded, toast]);
+
 
   const form = useForm<JobDescriptionFormData>({
     resolver: zodResolver(jobDescriptionFormSchema),
@@ -58,7 +101,7 @@ export default function JobDescriptionsPage() {
 
   const handleAddOrEditJd = (data: JobDescriptionFormData) => {
     if (editingJd) {
-      setJds(jds.map(jd => jd.id === editingJd.id ? { ...editingJd, ...data } : jd));
+      setJds(prevJds => prevJds.map(jd => jd.id === editingJd.id ? { ...editingJd, ...data, createdAt: jd.createdAt } : jd));
       toast({ title: "Job Description Updated!" });
     } else {
       const newJd: JobDescriptionItem = {
@@ -66,7 +109,7 @@ export default function JobDescriptionsPage() {
         ...data,
         createdAt: new Date().toISOString(),
       };
-      setJds(prev => [newJd, ...prev]);
+      setJds(prevJds => [newJd, ...prevJds]);
       toast({ title: "Job Description Saved!" });
     }
     setIsModalOpen(false);
@@ -82,12 +125,12 @@ export default function JobDescriptionsPage() {
 
   const openEditModal = (jd: JobDescriptionItem) => {
     setEditingJd(jd);
-    form.reset(jd);
+    form.reset(jd); // Pre-fill form with existing JD data
     setIsModalOpen(true);
   };
 
   const handleDeleteJd = (id: string) => {
-    setJds(jds.filter(jd => jd.id !== id));
+    setJds(prevJds => prevJds.filter(jd => jd.id !== id));
     toast({ title: "Job Description Deleted", variant: "destructive" });
   };
 
@@ -137,7 +180,7 @@ export default function JobDescriptionsPage() {
           description: "Please complete your profile first before tailoring with it.",
           variant: "default",
         });
-        router.push('/profile'); // Redirect to profile page
+        router.push('/profile'); 
         return;
       }
       const userProfile = JSON.parse(storedProfileString) as UserProfile;
@@ -168,6 +211,14 @@ export default function JobDescriptionsPage() {
     }
   };
 
+  if (!isLoaded) {
+    return (
+      <div className="container mx-auto py-8 text-center">
+        <Loader2 className="mx-auto h-12 w-12 animate-spin text-primary" />
+        <p className="mt-4 text-muted-foreground">Loading job descriptions...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto py-8 space-y-8">
