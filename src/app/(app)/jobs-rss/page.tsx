@@ -57,13 +57,15 @@ function parseBasicRssItem(itemXml: string, id: string): JobPostingRssItem {
   };
 
   let description = getTagValue('description', itemXml);
-  description = description.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').substring(0, 150) + (description.length > 150 ? '...' : '');
+  // Basic HTML stripping and truncation for the snippet
+  description = description.replace(/<br\s*\/?>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  description = description.substring(0, 150) + (description.length > 150 ? '...' : '');
 
 
   return {
     id: id,
     title: getTagValue('title', itemXml) || 'N/A',
-    link: getTagValue('link', itemXml),
+    link: getTagValue('link', itemXml) || '#', // Provide a fallback for link
     pubDate: getTagValue('pubDate', itemXml),
     rssItemXml: itemXml, 
     requirementsSummary: description, 
@@ -78,7 +80,10 @@ export default function JobsRssPage() {
   const [isLoadingFeed, setIsLoadingFeed] = useState(false);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [profileLoaded, setProfileLoaded] = useState(false);
+  
   const [areFiltersLoaded, setAreFiltersLoaded] = useState(false);
+  const [initialFetchDone, setInitialFetchDone] = useState(false);
+
   const [selectedJobIds, setSelectedJobIds] = useState<Set<string>>(new Set());
   const [processingProgress, setProcessingProgress] = useState(0);
   const [totalToProcess, setTotalToProcess] = useState(0);
@@ -95,7 +100,8 @@ export default function JobsRssPage() {
   const subjectAreaFeeds = useMemo(() => getFeedCategoriesByType('subjectArea'), []);
   const locationFeeds = useMemo(() => getFeedCategoriesByType('location'), []);
 
- useEffect(() => {
+  // Effect for loading user profile
+  useEffect(() => {
     try {
       const storedProfileString = localStorage.getItem(USER_PROFILE_STORAGE_KEY);
       if (storedProfileString) setUserProfile(JSON.parse(storedProfileString));
@@ -104,7 +110,10 @@ export default function JobsRssPage() {
       toast({ title: "Profile Load Error", variant: "destructive" });
     }
     setProfileLoaded(true);
+  }, [toast]);
 
+  // Effect for loading and initializing filters form from localStorage
+  useEffect(() => {
     try {
       const lastSubject = localStorage.getItem(LAST_SELECTED_SUBJECT_URL_KEY);
       const lastLocation = localStorage.getItem(LAST_SELECTED_LOCATION_URL_KEY);
@@ -117,11 +126,11 @@ export default function JobsRssPage() {
       });
     } catch (error) {
       console.error("Failed to load last filters from localStorage:", error);
-      // Form will use static defaultValues if localStorage fails
     }
-    setAreFiltersLoaded(true);
-  }, [toast, filtersForm]); // filtersForm.reset is stable, so filtersForm is okay
+    setAreFiltersLoaded(true); // Signal that form is now initialized
+  }, [filtersForm]);
 
+  // Effect for saving filters to localStorage whenever they change
   useEffect(() => {
     if (areFiltersLoaded) { // Only save after initial load & reset
       const subscription = filtersForm.watch((value) => {
@@ -137,7 +146,8 @@ export default function JobsRssPage() {
     }
   }, [filtersForm, areFiltersLoaded]);
 
-  const handleFetchRssFeed = async (data: RssFiltersData) => {
+
+  const handleFetchRssFeed = useCallback(async (data: RssFiltersData) => {
     setIsLoadingFeed(true);
     setJobPostings([]);
     setSelectedJobIds(new Set());
@@ -145,50 +155,54 @@ export default function JobsRssPage() {
     setTotalToProcess(0);
 
     let targetRssUrl = "";
-    let feedDescription = "";
+    let feedDescription = "selected filters";
 
+    // Determine the target RSS URL based on selections
     if (data.selectedSubjectUrl && data.selectedSubjectUrl !== ALL_SUBJECT_AREAS_URL) {
         targetRssUrl = data.selectedSubjectUrl;
-        feedDescription = `subject: ${PREDEFINED_RSS_FEEDS.find(f => f.url === data.selectedSubjectUrl)?.categoryDetail || 'Selected Subject'}`;
+        const feedDetails = PREDEFINED_RSS_FEEDS.find(f => f.url === data.selectedSubjectUrl);
+        feedDescription = `subject: ${feedDetails?.categoryDetail || 'Selected Subject'}`;
     } else if (data.selectedLocationUrl && data.selectedLocationUrl !== ALL_LOCATIONS_URL) {
         targetRssUrl = data.selectedLocationUrl;
-        feedDescription = `location: ${PREDEFINED_RSS_FEEDS.find(f => f.url === data.selectedLocationUrl)?.categoryDetail || 'Selected Location'}`;
-    } else { // Both are "Any" or one is "Any" and other is not set (should default to "Any")
-        targetRssUrl = ALL_LOCATIONS_URL; 
+        const feedDetails = PREDEFINED_RSS_FEEDS.find(f => f.url === data.selectedLocationUrl);
+        feedDescription = `location: ${feedDetails?.categoryDetail || 'Selected Location'}`;
+    } else { 
+        targetRssUrl = ALL_LOCATIONS_URL; // Default to a general feed if no specific subject/location
         feedDescription = "general feed (all jobs)";
     }
     
     if (!targetRssUrl) {
-        toast({ title: "No Feed Selected", description: "Please select a subject area or location.", variant: "default" });
-        setIsLoadingFeed(false);
-        return;
+        toast({ title: "No Feed Selected", description: "Please select a subject area or location, or a general feed will be used.", variant: "default" });
+        targetRssUrl = ALL_LOCATIONS_URL; // Ensure a fallback
+        feedDescription = "general feed (all jobs)";
     }
 
-    toast({ title: "Fetching RSS Feed...", description: `Fetching from ${feedDescription}` });
+    toast({ title: "Fetching RSS Feed...", description: `Using ${feedDescription}` });
 
     let rawRssContentString = '';
     try {
       const fetchResponse = await fetch(`/api/fetch-rss?url=${encodeURIComponent(targetRssUrl)}`);
-      let responseBodyAsText = '';
-      try { responseBodyAsText = await fetchResponse.text(); } 
-      catch (textError) { 
+      let responseBodyAsText = ''; // To store the raw response text for better error diagnosis
+
+      try {
+        responseBodyAsText = await fetchResponse.text(); // Always read as text first
+      } catch (textError) {
         setIsLoadingFeed(false);
-        throw new Error(`Failed to read response from API: ${textError instanceof Error ? textError.message : String(textError)}`); 
+        throw new Error(`Failed to read response from API: ${textError instanceof Error ? textError.message : String(textError)}`);
       }
 
       if (!fetchResponse.ok) {
         setIsLoadingFeed(false);
-        try { const errorData = JSON.parse(responseBodyAsText); throw new Error(errorData.error || `API Error (${fetchResponse.status}): ${fetchResponse.statusText}`); } 
-        catch (e) { throw new Error(`API Error (${fetchResponse.status}): ${fetchResponse.statusText}. Response: ${responseBodyAsText.substring(0, 300)}...`); }
+        try {
+          const errorData = JSON.parse(responseBodyAsText); // Try to parse as JSON
+          throw new Error(errorData.error || `API Error (${fetchResponse.status}): ${fetchResponse.statusText}`);
+        } catch (e) { // If not JSON, it's likely HTML or plain text error
+          throw new Error(`API Error (${fetchResponse.status}): ${fetchResponse.statusText}. Response: ${responseBodyAsText.substring(0, 300)}...`);
+        }
       }
       
-      const contentType = fetchResponse.headers.get("content-type");
-      if (!contentType || !contentType.includes("application/json")) {
-        setIsLoadingFeed(false);
-        throw new Error(`Expected JSON response from API, but received ${contentType || 'unknown content type'}. Response: ${responseBodyAsText.substring(0,500)}...`);
-      }
-      
-      const responseData = JSON.parse(responseBodyAsText); 
+      // If fetchResponse.ok is true, now we parse the text as JSON
+      const responseData = JSON.parse(responseBodyAsText);
       if (responseData.error) { setIsLoadingFeed(false); throw new Error(responseData.error); }
       if (!responseData.rawRssContent) { setIsLoadingFeed(false); throw new Error("API returned success but no rawRssContent found.");}
       
@@ -221,7 +235,7 @@ export default function JobsRssPage() {
             const searchableText = [
               job.title?.toLowerCase() || "",
               job.company?.toLowerCase() || "", 
-              job.requirementsSummary?.toLowerCase() || "", 
+              job.requirementsSummary?.toLowerCase() || "", // Initial summary for keyword filter
               job.location?.toLowerCase() || "", 
             ].join(" ");
             return keywordArray.every(kw => searchableText.includes(kw));
@@ -242,7 +256,30 @@ export default function JobsRssPage() {
     } finally {
       setIsLoadingFeed(false);
     }
-  };
+  }, [toast]); // Only toast is a dependency here as setters are stable.
+
+  // Watch form values for the auto-fetch useEffect dependency
+  const watchedSubjectUrl = filtersForm.watch("selectedSubjectUrl");
+  const watchedLocationUrl = filtersForm.watch("selectedLocationUrl");
+  const watchedKeywords = filtersForm.watch("keywords");
+  
+  // Auto-fetch effect
+  useEffect(() => {
+    if (areFiltersLoaded && !initialFetchDone) {
+      console.log("Auto-fetching with filters:", filtersForm.getValues());
+      filtersForm.handleSubmit(handleFetchRssFeed)(); 
+      setInitialFetchDone(true);
+    }
+  }, [
+    areFiltersLoaded, 
+    initialFetchDone, 
+    filtersForm, 
+    handleFetchRssFeed,
+    watchedSubjectUrl, // Ensures effect re-runs if these specific form values
+    watchedLocationUrl, // change *after* areFiltersLoaded=true but *before*
+    watchedKeywords     // initialFetchDone=true (e.g. due to async form.reset)
+  ]);
+
 
   const handleProcessSelectedJobs = async () => {
     if (selectedJobIds.size === 0) {
@@ -328,7 +365,7 @@ export default function JobsRssPage() {
       }
     }
     toast({ title: "Processing Complete!", description: "Selected jobs have been processed." });
-    setTotalToProcess(0); // Reset progress
+    setTotalToProcess(0); 
   };
   
   const handleSelectJob = (jobId: string, checked: boolean) => {
@@ -385,12 +422,12 @@ export default function JobsRssPage() {
       <Accordion type="single" collapsible defaultValue="item-1" className="w-full">
         <AccordionItem value="item-1">
           <AccordionTrigger>
-             <div className="flex items-center text-lg font-medium"> {/* Using CardTitle equivalent styling */}
+             <div className="flex items-center text-lg font-medium">
                 <Filter className="mr-2 h-5 w-5" />Configure & Fetch Feed
             </div>
           </AccordionTrigger>
           <AccordionContent>
-            <Card className="border-none shadow-none"> {/* Remove card-like appearance if inside accordion */}
+            <Card className="border-none shadow-none">
               <CardContent className="pt-6">
                 <Form {...filtersForm}>
                   <form onSubmit={filtersForm.handleSubmit(handleFetchRssFeed)} className="space-y-6">
@@ -403,7 +440,7 @@ export default function JobsRssPage() {
                             <FormLabel>Filter by Subject Area</FormLabel>
                             <Select 
                               onValueChange={field.onChange} 
-                              value={field.value}
+                              value={field.value || ALL_SUBJECT_AREAS_URL} // Ensure value is never undefined for Select
                             >
                               <FormControl>
                                 <SelectTrigger>
@@ -436,7 +473,7 @@ export default function JobsRssPage() {
                             <FormLabel>Filter by Location</FormLabel>
                             <Select 
                               onValueChange={field.onChange} 
-                              value={field.value}
+                              value={field.value || ALL_LOCATIONS_URL} // Ensure value is never undefined for Select
                             >
                               <FormControl>
                                 <SelectTrigger>
@@ -614,17 +651,18 @@ export default function JobsRssPage() {
                                   e.stopPropagation(); 
                                   // Only select this job if not already selected
                                   if (!selectedJobIds.has(job.id)) {
-                                    setSelectedJobIds(new Set([job.id]));
+                                     setSelectedJobIds(prev => new Set(prev).add(job.id));
                                   }
                                   // Wait for state to update before calling process
                                   // (Better to handle this with a slight delay or in a useEffect based on selectedJobIds if direct call is problematic)
-                                  setTimeout(() => handleProcessSelectedJobs(), 0); 
+                                  setTimeout(() => handleProcessSelectedJobs(), 50); 
                                 }}
+                                disabled={!job.rssItemXml} // Disable if no XML to process
                               >
-                                <Info className="h-4 w-4 text-muted-foreground/70" />
+                                <SparklesIcon className="h-4 w-4 text-muted-foreground/70 hover:text-primary" />
                               </Button>
                             </TooltipTrigger>
-                            <TooltipContent><p className="text-xs">Click to process this job</p></TooltipContent>
+                            <TooltipContent><p className="text-xs">Process this job for full details & CV match</p></TooltipContent>
                           </Tooltip>
                         )}
                       </TableCell>
@@ -657,15 +695,15 @@ export default function JobsRssPage() {
             </CardContent>
         </Card>
       )}
-       {!isLoadingFeed && jobPostings.length === 0 && !filtersForm.formState.isSubmitted && (
+       {!isLoadingFeed && jobPostings.length === 0 && !filtersForm.formState.isSubmitted && !initialFetchDone && (
          <Card className="text-center py-12">
             <CardHeader>
                 <Rss className="mx-auto h-16 w-16 text-muted-foreground mb-4" />
-                <CardTitle className="font-headline text-2xl">Select Filters to Begin</CardTitle>
+                <CardTitle className="font-headline text-2xl">Configure Filters to Begin</CardTitle>
             </CardHeader>
             <CardContent>
                 <p className="text-muted-foreground">
-                    Choose a subject area and/or location, optionally add keywords, then click "Fetch RSS Feed".
+                    Choose a subject area and/or location, optionally add keywords, then click "Fetch RSS Feed", or wait for auto-fetch.
                 </p>
                  {profileLoaded && !userProfile && (
                     <p className="text-sm text-amber-600 mt-4 flex items-center justify-center">
