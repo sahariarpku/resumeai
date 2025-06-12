@@ -25,6 +25,7 @@ import {
   FolderKanban
 } from "lucide-react";
 import { ResumeForgeLogo } from "../resume-forge-logo";
+import React, { useEffect, useState } from "react"; // Import React
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -45,6 +46,27 @@ const navItems = [
 export function MainNav() {
   const pathname = usePathname();
   const { open } = useSidebar();
+  const [currentClientHref, setCurrentClientHref] = useState("");
+
+  useEffect(() => {
+    // This effect runs only on the client, after initial hydration
+    if (typeof window !== "undefined") {
+      const updateClientHref = () => {
+        setCurrentClientHref(window.location.pathname + window.location.hash);
+      };
+
+      updateClientHref(); // Initial set
+
+      window.addEventListener('hashchange', updateClientHref);
+      window.addEventListener('popstate', updateClientHref); // For browser back/forward that changes path/hash
+
+      return () => {
+        window.removeEventListener('hashchange', updateClientHref);
+        window.removeEventListener('popstate', updateClientHref);
+      };
+    }
+  }, [pathname]); // Re-run if pathname changes, to ensure hash is correctly associated
+
 
   return (
     <nav className="flex flex-col h-full">
@@ -53,49 +75,55 @@ export function MainNav() {
         {!open && <Link href="/dashboard"><Sparkles className="h-8 w-8 text-sidebar-primary" /></Link>}
       </div>
       <SidebarMenu className="flex-1 p-2">
-        {navItems.map((item) => (
-          <SidebarMenuItem key={item.href}>
-            <Link href={item.href}>
-              <span>
-                <SidebarMenuButton
-                  variant="default"
-                  size="default"
-                  isActive={pathname.startsWith(item.href) && (item.href === "/dashboard" ? pathname === item.href : true) }
-                  className={cn(
-                    "w-full justify-start",
-                    !open && "justify-center"
-                  )}
-                  tooltip={open ? undefined : item.label}
-                >
-                  <item.icon className="h-5 w-5" />
-                  {open && <span className="ml-2">{item.label}</span>}
-                </SidebarMenuButton>
-              </span>
-            </Link>
-             {/* Render sub-items if they exist and sidebar is open */}
-             {open && item.subItems && pathname.startsWith(item.href) && (
-                <ul className="pl-6 mt-1 space-y-1 border-l border-sidebar-border ml-3">
-                  {item.subItems.map(subItem => (
-                    <li key={subItem.href}>
-                       <Link href={subItem.href}>
-                        <span>
-                          <SidebarMenuButton
-                              variant="ghost"
-                              size="sm"
-                              isActive={pathname === subItem.href || (pathname + location.hash) === subItem.href}
-                              className="w-full justify-start text-sm"
-                          >
-                              <subItem.icon className="h-4 w-4 mr-2 text-sidebar-foreground/70" />
-                              {subItem.label}
-                          </SidebarMenuButton>
-                        </span>
-                       </Link>
-                    </li>
-                  ))}
-                </ul>
-            )}
-          </SidebarMenuItem>
-        ))}
+        {navItems.map((item) => {
+          const isMainActive = item.href === "/dashboard" 
+            ? pathname === item.href 
+            : pathname.startsWith(item.href);
+
+          return (
+            <SidebarMenuItem key={item.href}>
+              <Link href={item.href}>
+                <span>
+                  <SidebarMenuButton
+                    variant="default"
+                    size="default"
+                    isActive={isMainActive}
+                    className={cn(
+                      "w-full justify-start",
+                      !open && "justify-center"
+                    )}
+                    tooltip={open ? undefined : item.label}
+                  >
+                    <item.icon className="h-5 w-5" />
+                    {open && <span className="ml-2">{item.label}</span>}
+                  </SidebarMenuButton>
+                </span>
+              </Link>
+               {/* Render sub-items if they exist, sidebar is open, and the main path matches */}
+               {open && item.subItems && pathname.startsWith(item.href.split('#')[0]) && (
+                  <ul className="pl-6 mt-1 space-y-1 border-l border-sidebar-border ml-3">
+                    {item.subItems.map(subItem => (
+                      <li key={subItem.href}>
+                         <Link href={subItem.href}>
+                          <span>
+                            <SidebarMenuButton
+                                variant="ghost"
+                                size="sm"
+                                isActive={currentClientHref === subItem.href}
+                                className="w-full justify-start text-sm"
+                            >
+                                <subItem.icon className="h-4 w-4 mr-2 text-sidebar-foreground/70" />
+                                {subItem.label}
+                            </SidebarMenuButton>
+                          </span>
+                         </Link>
+                      </li>
+                    ))}
+                  </ul>
+              )}
+            </SidebarMenuItem>
+          );
+        })}
       </SidebarMenu>
       {open && (
         <div className="p-4 mt-auto border-t border-sidebar-border">
