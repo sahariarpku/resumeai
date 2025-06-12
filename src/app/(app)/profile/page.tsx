@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
@@ -455,7 +456,7 @@ export default function ProfilePage() {
   };
   
   const handleMoveSection = (sectionKey: ProfileSectionKey, direction: 'up' | 'down') => {
-    const currentOrder = [...(profileData.sectionOrder || DEFAULT_SECTION_ORDER)];
+    const currentOrder = [...((profileData.sectionOrder && profileData.sectionOrder.length > 0) ? profileData.sectionOrder : DEFAULT_SECTION_ORDER)];
     const currentIndex = currentOrder.indexOf(sectionKey);
   
     if (currentIndex === -1) return; 
@@ -657,7 +658,8 @@ export default function ProfilePage() {
   }
 
   const renderSection = (sectionKey: ProfileSectionKey, index: number) => {
-    const totalReorderableSections = (profileData.sectionOrder || DEFAULT_SECTION_ORDER).length;
+    const currentActiveOrder = (profileData.sectionOrder && profileData.sectionOrder.length > 0) ? profileData.sectionOrder : DEFAULT_SECTION_ORDER;
+    const totalReorderableSections = currentActiveOrder.length;
     const canMoveUp = index > 0; 
     const canMoveDown = index < totalReorderableSections - 1; 
 
@@ -994,6 +996,10 @@ export default function ProfilePage() {
     }
   };
 
+  const currentDisplayOrder = (profileData.sectionOrder && profileData.sectionOrder.length > 0) 
+                              ? profileData.sectionOrder 
+                              : DEFAULT_SECTION_ORDER;
+
   return (
     <TooltipProvider>
     <div className="space-y-8">
@@ -1031,7 +1037,7 @@ export default function ProfilePage() {
 
       <Accordion 
         type="multiple" 
-        defaultValue={['general-info', ...(profileData.sectionOrder || DEFAULT_SECTION_ORDER).map(s => s.toLowerCase())]} 
+        defaultValue={['general-info', ...currentDisplayOrder.map(s => s.toLowerCase())]} 
         className="w-full space-y-4"
       >
         <AccordionItem value="general-info" className="border-none">
@@ -1073,7 +1079,7 @@ export default function ProfilePage() {
             </FormSection>
         </AccordionItem>
 
-        {(profileData.sectionOrder || DEFAULT_SECTION_ORDER).map((sectionKey, index) => renderSection(sectionKey, index))}
+        {currentDisplayOrder.map((sectionKey, index) => renderSection(sectionKey, index))}
 
       </Accordion>
 
