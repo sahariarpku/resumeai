@@ -12,6 +12,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel } from "@/components/ui/select";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { useToast } from "@/hooks/use-toast";
 import { Rss, Search, Loader2, Briefcase, Building, FileText as FileTextIcon, CalendarDays, Percent, Sparkles as SparklesIcon, AlertTriangle, Link as LinkIcon, MapPin, ExternalLink, Filter, Tag, XCircle, CheckSquare, Square, Info } from "lucide-react";
 import { useRouter } from 'next/navigation';
@@ -55,7 +56,6 @@ function parseBasicRssItem(itemXml: string, id: string): JobPostingRssItem {
     return match ? (match[1] || match[2] || '').trim() : '';
   };
 
-  // Sanitize description: remove HTML tags for basic display and limit length
   let description = getTagValue('description', itemXml);
   description = description.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').substring(0, 150) + (description.length > 150 ? '...' : '');
 
@@ -65,9 +65,8 @@ function parseBasicRssItem(itemXml: string, id: string): JobPostingRssItem {
     title: getTagValue('title', itemXml) || 'N/A',
     link: getTagValue('link', itemXml),
     pubDate: getTagValue('pubDate', itemXml),
-    rssItemXml: itemXml, // Store the full XML for later AI processing
-    // requirementsSummary will be populated by AI later if requested
-    requirementsSummary: description, // Use basic parsed description as initial summary
+    rssItemXml: itemXml, 
+    requirementsSummary: description, 
   };
 }
 
@@ -81,6 +80,8 @@ export default function JobsRssPage() {
   const [profileLoaded, setProfileLoaded] = useState(false);
   const [areFiltersLoaded, setAreFiltersLoaded] = useState(false);
   const [selectedJobIds, setSelectedJobIds] = useState<Set<string>>(new Set());
+  const [processingProgress, setProcessingProgress] = useState(0);
+  const [totalToProcess, setTotalToProcess] = useState(0);
 
   const filtersForm = useForm<RssFiltersData>({
     resolver: zodResolver(RssFiltersSchema),
@@ -94,7 +95,7 @@ export default function JobsRssPage() {
   const subjectAreaFeeds = useMemo(() => getFeedCategoriesByType('subjectArea'), []);
   const locationFeeds = useMemo(() => getFeedCategoriesByType('location'), []);
 
-  useEffect(() => {
+ useEffect(() => {
     try {
       const storedProfileString = localStorage.getItem(USER_PROFILE_STORAGE_KEY);
       if (storedProfileString) setUserProfile(JSON.parse(storedProfileString));
@@ -109,18 +110,20 @@ export default function JobsRssPage() {
       const lastLocation = localStorage.getItem(LAST_SELECTED_LOCATION_URL_KEY);
       const lastKeywords = localStorage.getItem(LAST_KEYWORDS_KEY);
 
-      filtersForm.setValue("selectedSubjectUrl", lastSubject || ALL_SUBJECT_AREAS_URL);
-      filtersForm.setValue("selectedLocationUrl", lastLocation || ALL_LOCATIONS_URL);
-      if (lastKeywords) filtersForm.setValue("keywords", lastKeywords);
-      
+      filtersForm.reset({ 
+        selectedSubjectUrl: lastSubject || ALL_SUBJECT_AREAS_URL,
+        selectedLocationUrl: lastLocation || ALL_LOCATIONS_URL,
+        keywords: lastKeywords || "",
+      });
     } catch (error) {
-      console.error("Failed to load last filters:", error);
+      console.error("Failed to load last filters from localStorage:", error);
+      // Form will use static defaultValues if localStorage fails
     }
     setAreFiltersLoaded(true);
-  }, [toast, filtersForm]);
+  }, [toast, filtersForm]); // filtersForm.reset is stable, so filtersForm is okay
 
   useEffect(() => {
-    if (areFiltersLoaded) {
+    if (areFiltersLoaded) { // Only save after initial load & reset
       const subscription = filtersForm.watch((value) => {
         try {
           localStorage.setItem(LAST_SELECTED_SUBJECT_URL_KEY, value.selectedSubjectUrl || ALL_SUBJECT_AREAS_URL);
@@ -138,27 +141,21 @@ export default function JobsRssPage() {
     setIsLoadingFeed(true);
     setJobPostings([]);
     setSelectedJobIds(new Set());
+    setProcessingProgress(0);
+    setTotalToProcess(0);
 
     let targetRssUrl = "";
     let feedDescription = "";
 
-    // Determine the target RSS URL based on selections
-    // Priority: Specific Subject > Specific Location > General Subject > General Location
     if (data.selectedSubjectUrl && data.selectedSubjectUrl !== ALL_SUBJECT_AREAS_URL) {
         targetRssUrl = data.selectedSubjectUrl;
         feedDescription = `subject: ${PREDEFINED_RSS_FEEDS.find(f => f.url === data.selectedSubjectUrl)?.categoryDetail || 'Selected Subject'}`;
     } else if (data.selectedLocationUrl && data.selectedLocationUrl !== ALL_LOCATIONS_URL) {
         targetRssUrl = data.selectedLocationUrl;
         feedDescription = `location: ${PREDEFINED_RSS_FEEDS.find(f => f.url === data.selectedLocationUrl)?.categoryDetail || 'Selected Location'}`;
-    } else if (data.selectedSubjectUrl === ALL_SUBJECT_AREAS_URL && data.selectedLocationUrl === ALL_LOCATIONS_URL) {
-        targetRssUrl = ALL_LOCATIONS_URL; // Most general fallback if both are "Any"
+    } else { // Both are "Any" or one is "Any" and other is not set (should default to "Any")
+        targetRssUrl = ALL_LOCATIONS_URL; 
         feedDescription = "general feed (all jobs)";
-    } else if (data.selectedSubjectUrl === ALL_SUBJECT_AREAS_URL) { // Subject is Any, Location might be specific or Any
-        targetRssUrl = data.selectedLocationUrl || ALL_LOCATIONS_URL;
-        feedDescription = `location: ${data.selectedLocationUrl === ALL_LOCATIONS_URL ? 'Any Location' : PREDEFINED_RSS_FEEDS.find(f => f.url === data.selectedLocationUrl)?.categoryDetail || 'Selected Location'}`;
-    } else { // Location is Any, Subject might be specific or Any
-        targetRssUrl = data.selectedSubjectUrl || ALL_SUBJECT_AREAS_URL;
-        feedDescription = `subject: ${data.selectedSubjectUrl === ALL_SUBJECT_AREAS_URL ? 'Any Subject' : PREDEFINED_RSS_FEEDS.find(f => f.url === data.selectedSubjectUrl)?.categoryDetail || 'Selected Subject'}`;
     }
     
     if (!targetRssUrl) {
@@ -174,9 +171,13 @@ export default function JobsRssPage() {
       const fetchResponse = await fetch(`/api/fetch-rss?url=${encodeURIComponent(targetRssUrl)}`);
       let responseBodyAsText = '';
       try { responseBodyAsText = await fetchResponse.text(); } 
-      catch (textError) { throw new Error(`Failed to read response from API: ${textError instanceof Error ? textError.message : String(textError)}`); }
+      catch (textError) { 
+        setIsLoadingFeed(false);
+        throw new Error(`Failed to read response from API: ${textError instanceof Error ? textError.message : String(textError)}`); 
+      }
 
       if (!fetchResponse.ok) {
+        setIsLoadingFeed(false);
         try { const errorData = JSON.parse(responseBodyAsText); throw new Error(errorData.error || `API Error (${fetchResponse.status}): ${fetchResponse.statusText}`); } 
         catch (e) { throw new Error(`API Error (${fetchResponse.status}): ${fetchResponse.statusText}. Response: ${responseBodyAsText.substring(0, 300)}...`); }
       }
@@ -230,7 +231,7 @@ export default function JobsRssPage() {
       }
       
       setJobPostings(finalJobs);
-      toast({ title: "RSS Feed Loaded!", description: `${finalJobs.length} jobs displayed from ${feedDescription}. Select jobs and click 'Process Selected' for more details & CV match.` });
+      toast({ title: "RSS Feed Loaded!", description: `${finalJobs.length} jobs displayed. Select jobs and click 'Process Selected' for more details & CV match.` });
 
     } catch (err) {
       console.error("Error in handleFetchRssFeed:", err);
@@ -261,6 +262,9 @@ export default function JobsRssPage() {
     }
 
     toast({ title: "Processing Selected Jobs...", description: `Fetching details for ${selectedJobIds.size} job(s). This may take a moment.` });
+    setTotalToProcess(selectedJobIds.size);
+    setProcessingProgress(0);
+    let processedCount = 0;
 
     let updatedJobPostings = [...jobPostings];
 
@@ -275,7 +279,10 @@ export default function JobsRssPage() {
         const jobToProcess = updatedJobPostings[jobIndex];
         if (!jobToProcess.rssItemXml) {
           toast({ title: "Error", description: `Missing RSS XML for job ${jobToProcess.title || 'Untitled Job'}`, variant: "destructive" });
-          updatedJobPostings[jobIndex] = { ...jobToProcess, isProcessingDetails: false, isCalculatingMatch: false };
+          updatedJobPostings[jobIndex] = { ...jobToProcess, isProcessingDetails: false, isCalculatingMatch: false, matchSummary: "Missing data for processing." };
+          setJobPostings([...updatedJobPostings]);
+          processedCount++;
+          setProcessingProgress(processedCount);
           continue;
         }
 
@@ -315,9 +322,13 @@ export default function JobsRssPage() {
         };
         setJobPostings([...updatedJobPostings]);
         toast({ title: "Processing Error", description: `Could not process job: ${currentJobTitle}`, variant: "destructive" });
+      } finally {
+        processedCount++;
+        setProcessingProgress(processedCount);
       }
     }
     toast({ title: "Processing Complete!", description: "Selected jobs have been processed." });
+    setTotalToProcess(0); // Reset progress
   };
   
   const handleSelectJob = (jobId: string, checked: boolean) => {
@@ -371,113 +382,123 @@ export default function JobsRssPage() {
         </p>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="font-headline flex items-center"><Filter className="mr-2 h-5 w-5" />Configure & Fetch Feed</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Form {...filtersForm}>
-            <form onSubmit={filtersForm.handleSubmit(handleFetchRssFeed)} className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <FormField
-                  control={filtersForm.control}
-                  name="selectedSubjectUrl"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Filter by Subject Area</FormLabel>
-                      <Select 
-                        onValueChange={field.onChange} 
-                        value={field.value || ALL_SUBJECT_AREAS_URL}
-                      >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Any Subject Area" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent className="max-h-[400px] overflow-y-auto">
-                            <SelectItem value={ALL_SUBJECT_AREAS_URL}>Any Subject Area (General Feed)</SelectItem>
-                            {subjectAreaFeeds.map(category => (
-                                <SelectGroup key={category}>
-                                    <SelectLabel>{category}</SelectLabel>
-                                    {getFeedDetailsByCategoryAndType('subjectArea', category).map((feed) => (
-                                        <SelectItem key={feed.url} value={feed.url}>
-                                            {feed.categoryDetail}
-                                        </SelectItem>
-                                    ))}
-                                </SelectGroup>
-                            ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={filtersForm.control}
-                  name="selectedLocationUrl"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Filter by Location</FormLabel>
-                      <Select 
-                        onValueChange={field.onChange} 
-                        value={field.value || ALL_LOCATIONS_URL}
-                      >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Any Location" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent className="max-h-[400px] overflow-y-auto">
-                           <SelectItem value={ALL_LOCATIONS_URL}>Any Location (General Feed)</SelectItem>
-                           {locationFeeds.map(category => (
-                                <SelectGroup key={category}>
-                                    <SelectLabel>{category}</SelectLabel>
-                                    {getFeedDetailsByCategoryAndType('location', category).map((feed) => (
-                                        <SelectItem key={feed.url} value={feed.url}>
-                                            {feed.categoryDetail}
-                                        </SelectItem>
-                                    ))}
-                                </SelectGroup>
-                            ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
+      <Accordion type="single" collapsible defaultValue="item-1" className="w-full">
+        <AccordionItem value="item-1">
+          <AccordionTrigger>
+             <div className="flex items-center text-lg font-medium"> {/* Using CardTitle equivalent styling */}
+                <Filter className="mr-2 h-5 w-5" />Configure & Fetch Feed
+            </div>
+          </AccordionTrigger>
+          <AccordionContent>
+            <Card className="border-none shadow-none"> {/* Remove card-like appearance if inside accordion */}
+              <CardContent className="pt-6">
+                <Form {...filtersForm}>
+                  <form onSubmit={filtersForm.handleSubmit(handleFetchRssFeed)} className="space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <FormField
+                        control={filtersForm.control}
+                        name="selectedSubjectUrl"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Filter by Subject Area</FormLabel>
+                            <Select 
+                              onValueChange={field.onChange} 
+                              value={field.value}
+                            >
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Any Subject Area" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent className="max-h-[400px] overflow-y-auto">
+                                  <SelectItem value={ALL_SUBJECT_AREAS_URL}>Any Subject Area (General Feed)</SelectItem>
+                                  {subjectAreaFeeds.map(category => (
+                                      <SelectGroup key={category}>
+                                          <SelectLabel>{category}</SelectLabel>
+                                          {getFeedDetailsByCategoryAndType('subjectArea', category).map((feed) => (
+                                              <SelectItem key={feed.url} value={feed.url}>
+                                                  {feed.categoryDetail}
+                                              </SelectItem>
+                                          ))}
+                                      </SelectGroup>
+                                  ))}
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={filtersForm.control}
+                        name="selectedLocationUrl"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Filter by Location</FormLabel>
+                            <Select 
+                              onValueChange={field.onChange} 
+                              value={field.value}
+                            >
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Any Location" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent className="max-h-[400px] overflow-y-auto">
+                                <SelectItem value={ALL_LOCATIONS_URL}>Any Location (General Feed)</SelectItem>
+                                {locationFeeds.map(category => (
+                                      <SelectGroup key={category}>
+                                          <SelectLabel>{category}</SelectLabel>
+                                          {getFeedDetailsByCategoryAndType('location', category).map((feed) => (
+                                              <SelectItem key={feed.url} value={feed.url}>
+                                                  {feed.categoryDetail}
+                                              </SelectItem>
+                                          ))}
+                                      </SelectGroup>
+                                  ))}
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
 
-              <FormField
-                control={filtersForm.control}
-                name="keywords"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel htmlFor="keywordsInput">Filter by Keywords (optional, comma or space separated)</FormLabel>
-                    <FormControl>
-                      <Input id="keywordsInput" placeholder="e.g. research, python, remote, lecturer, history, TEFL" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+                    <FormField
+                      control={filtersForm.control}
+                      name="keywords"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel htmlFor="keywordsInput">Filter by Keywords (optional, comma or space separated)</FormLabel>
+                           <FormDescription>E.g., enter 'history, art' to find jobs matching both terms, after selecting a primary feed.</FormDescription>
+                          <FormControl>
+                            <Input id="keywordsInput" placeholder="e.g. research, python, remote, lecturer, history, TEFL" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
 
-              <Button type="submit" disabled={isLoadingFeed} size="lg" className="w-full sm:w-auto">
-                {isLoadingFeed ? (
-                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                ) : (
-                  <Search className="mr-2 h-5 w-5" />
-                )}
-                {isLoadingFeed ? "Fetching Feed..." : "Fetch RSS Feed"}
-              </Button>
-            </form>
-          </Form>
-        </CardContent>
-      </Card>
+                    <Button type="submit" disabled={isLoadingFeed} size="lg" className="w-full sm:w-auto">
+                      {isLoadingFeed ? (
+                        <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                      ) : (
+                        <Search className="mr-2 h-5 w-5" />
+                      )}
+                      {isLoadingFeed ? "Fetching Feed..." : "Fetch RSS Feed"}
+                    </Button>
+                  </form>
+                </Form>
+              </CardContent>
+            </Card>
+          </AccordionContent>
+        </AccordionItem>
+      </Accordion>
+
 
       {jobPostings.length > 0 && (
         <Card>
           <CardHeader>
-            <div className="flex justify-between items-center">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
               <div>
                 <CardTitle className="font-headline">Jobs from Feed</CardTitle>
                 <CardDescription>
@@ -486,13 +507,18 @@ export default function JobsRssPage() {
               </div>
               <Button 
                 onClick={handleProcessSelectedJobs} 
-                disabled={selectedJobIds.size === 0 || jobPostings.some(job => job.isProcessingDetails)}
+                disabled={selectedJobIds.size === 0 || jobPostings.some(job => job.isProcessingDetails || job.isCalculatingMatch) || totalToProcess > 0}
                 size="lg"
               >
                 <SparklesIcon className="mr-2 h-5 w-5" />
                 Process Selected ({selectedJobIds.size})
               </Button>
             </div>
+             {totalToProcess > 0 && (
+                <div className="mt-2 text-sm text-muted-foreground">
+                    Processing: {processingProgress} / {totalToProcess} jobs...
+                </div>
+            )}
           </CardHeader>
           <CardContent>
             <div className="overflow-x-auto">
@@ -506,6 +532,7 @@ export default function JobsRssPage() {
                                 checked={isAllSelected}
                                 onCheckedChange={(checked) => handleSelectAllJobs(Boolean(checked))}
                                 aria-label="Select all jobs"
+                                disabled={jobPostings.some(job => job.isProcessingDetails || job.isCalculatingMatch)}
                             />
                         </TooltipTrigger>
                         <TooltipContent>Select/Deselect All</TooltipContent>
@@ -527,6 +554,7 @@ export default function JobsRssPage() {
                             checked={selectedJobIds.has(job.id)}
                             onCheckedChange={(checked) => handleSelectJob(job.id, Boolean(checked))}
                             aria-labelledby={`job-title-${job.id}`}
+                            disabled={job.isProcessingDetails || job.isCalculatingMatch}
                         />
                       </TableCell>
                       <TableCell className="font-medium max-w-xs">
@@ -577,7 +605,25 @@ export default function JobsRssPage() {
                           </Tooltip>
                         ) : (
                           <Tooltip>
-                            <TooltipTrigger asChild><Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); setSelectedJobIds(new Set([job.id])); handleProcessSelectedJobs();}}><Info className="h-4 w-4 text-muted-foreground/70" /></Button></TooltipTrigger>
+                            <TooltipTrigger asChild>
+                              <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                className="h-7 w-7" 
+                                onClick={(e) => { 
+                                  e.stopPropagation(); 
+                                  // Only select this job if not already selected
+                                  if (!selectedJobIds.has(job.id)) {
+                                    setSelectedJobIds(new Set([job.id]));
+                                  }
+                                  // Wait for state to update before calling process
+                                  // (Better to handle this with a slight delay or in a useEffect based on selectedJobIds if direct call is problematic)
+                                  setTimeout(() => handleProcessSelectedJobs(), 0); 
+                                }}
+                              >
+                                <Info className="h-4 w-4 text-muted-foreground/70" />
+                              </Button>
+                            </TooltipTrigger>
                             <TooltipContent><p className="text-xs">Click to process this job</p></TooltipContent>
                           </Tooltip>
                         )}
@@ -635,4 +681,3 @@ export default function JobsRssPage() {
     </TooltipProvider>
   );
 }
-
