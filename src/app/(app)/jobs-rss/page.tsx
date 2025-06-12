@@ -6,6 +6,7 @@ import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label"; // Added missing import
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -142,6 +143,7 @@ export default function JobsRssPage() {
         setJobPostings(postingsWithClientData);
         toast({ title: "Jobs Found!", description: `${result.jobPostings.length} simulated job postings loaded.` });
       } else {
+        setJobPostings([]); // Ensure jobPostings is an empty array on no results
         toast({ title: "No Jobs Found", description: "AI couldn't find or simulate jobs for these criteria. Try different terms." });
       }
     } catch (err) {
@@ -154,7 +156,7 @@ export default function JobsRssPage() {
 
 
   useEffect(() => {
-    if (isKeywordsLoaded && isLocationLoaded && (keywords.length > 0 || locationPreference.trim()) && !isLoadingSearch && jobPostings.length === 0) { 
+    if (isKeywordsLoaded && isLocationLoaded && (keywords.length > 0 || locationPreference.trim()) && !isLoadingSearch && jobPostings.length === 0 && !newKeywordForm.formState.isSubmitted) { 
         searchJobs(keywords, locationPreference);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -448,7 +450,7 @@ export default function JobsRssPage() {
         </div>
       )}
 
-      {!isLoadingSearch && jobPostings.length === 0 && (keywords.length > 0 || locationPreference.trim() ? newKeywordForm.formState.isSubmitted || isKeywordsLoaded || isLocationLoaded : true) && (
+      {!isLoadingSearch && jobPostings.length === 0 && (keywords.length > 0 || locationPreference.trim() ? (newKeywordForm.formState.isSubmitted || isKeywordsLoaded || isLocationLoaded || jobPostings !== null ) : true) && (
          <Card className="text-center py-12">
             <CardHeader>
                 <Rss className="mx-auto h-16 w-16 text-muted-foreground mb-4" />
