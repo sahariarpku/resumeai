@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label';
+import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import type { UserProfile, ProfileSectionKey } from "@/lib/types";
 import { DEFAULT_SECTION_ORDER } from "@/lib/types";
