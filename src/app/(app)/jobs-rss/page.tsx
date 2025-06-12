@@ -68,8 +68,8 @@ export default function JobsRssPage() {
   const filtersForm = useForm<RssFiltersData>({
     resolver: zodResolver(RssFiltersSchema),
     defaultValues: {
-      selectedSubjectUrl: "",
-      selectedLocationUrl: "",
+      selectedSubjectUrl: ALL_SUBJECT_AREAS_URL,
+      selectedLocationUrl: ALL_LOCATIONS_URL,
       keywords: "",
     },
   });
@@ -93,8 +93,8 @@ export default function JobsRssPage() {
       const lastLocation = localStorage.getItem(LAST_SELECTED_LOCATION_URL_KEY);
       const lastKeywords = localStorage.getItem(LAST_KEYWORDS_KEY);
 
-      if (lastSubject) filtersForm.setValue("selectedSubjectUrl", lastSubject);
-      if (lastLocation) filtersForm.setValue("selectedLocationUrl", lastLocation);
+      filtersForm.setValue("selectedSubjectUrl", lastSubject || ALL_SUBJECT_AREAS_URL);
+      filtersForm.setValue("selectedLocationUrl", lastLocation || ALL_LOCATIONS_URL);
       if (lastKeywords) filtersForm.setValue("keywords", lastKeywords);
       
     } catch (error) {
@@ -106,11 +106,11 @@ export default function JobsRssPage() {
 
   useEffect(() => {
     if (areFiltersLoaded) {
-      const subscription = filtersForm.watch((value, { name }) => {
+      const subscription = filtersForm.watch((value) => {
         try {
-          if (name === "selectedSubjectUrl") localStorage.setItem(LAST_SELECTED_SUBJECT_URL_KEY, value.selectedSubjectUrl || "");
-          if (name === "selectedLocationUrl") localStorage.setItem(LAST_SELECTED_LOCATION_URL_KEY, value.selectedLocationUrl || "");
-          if (name === "keywords") localStorage.setItem(LAST_KEYWORDS_KEY, value.keywords || "");
+          localStorage.setItem(LAST_SELECTED_SUBJECT_URL_KEY, value.selectedSubjectUrl || ALL_SUBJECT_AREAS_URL);
+          localStorage.setItem(LAST_SELECTED_LOCATION_URL_KEY, value.selectedLocationUrl || ALL_LOCATIONS_URL);
+          localStorage.setItem(LAST_KEYWORDS_KEY, value.keywords || "");
         } catch (error) {
           console.warn("Could not save filters to localStorage", error);
         }
@@ -130,41 +130,27 @@ export default function JobsRssPage() {
     let targetRssUrl = "";
     let feedDescription = "";
 
-    if (data.selectedSubjectUrl && data.selectedLocationUrl) {
-        // This is complex. For now, we might prioritize subject or use a very general feed.
-        // Or see if a combination exists (future improvement for job-rss-feeds.ts)
-        // For now, let's try using subject if specific, else location, else general
-        const subjectFeed = PREDEFINED_RSS_FEEDS.find(f => f.url === data.selectedSubjectUrl);
-        const locationFeed = PREDEFINED_RSS_FEEDS.find(f => f.url === data.selectedLocationUrl);
-        
-        if (subjectFeed && subjectFeed.url !== ALL_SUBJECT_AREAS_URL) {
-            targetRssUrl = subjectFeed.url;
-            feedDescription = `subject: ${subjectFeed.name}`;
-            if (locationFeed && locationFeed.url !== ALL_LOCATIONS_URL) {
-                 feedDescription += ` & location: ${locationFeed.name} (location applied via keywords if possible)`;
-            }
-        } else if (locationFeed && locationFeed.url !== ALL_LOCATIONS_URL) {
-            targetRssUrl = locationFeed.url;
-            feedDescription = `location: ${locationFeed.name}`;
-        } else {
-            targetRssUrl = ALL_LOCATIONS_URL; // Most general if both are "Any" or error
-            feedDescription = "general feed (all jobs)";
+    if (data.selectedSubjectUrl && data.selectedSubjectUrl !== ALL_SUBJECT_AREAS_URL) {
+        targetRssUrl = data.selectedSubjectUrl;
+        feedDescription = `subject: ${PREDEFINED_RSS_FEEDS.find(f => f.url === data.selectedSubjectUrl)?.name || 'Selected Subject'}`;
+
+        if (data.selectedLocationUrl && data.selectedLocationUrl !== ALL_LOCATIONS_URL) {
+            // For now, if both subject and location are specific, subject feed is primary.
+            // Location filtering happens via keywords if provided, or user inspects.
+            feedDescription += ` & location: ${PREDEFINED_RSS_FEEDS.find(f => f.url === data.selectedLocationUrl)?.name || 'Selected Location'} (location refined by keywords if provided)`;
         }
-    } else if (data.selectedSubjectUrl) {
-        const feed = PREDEFINED_RSS_FEEDS.find(f => f.url === data.selectedSubjectUrl) || {url: ALL_SUBJECT_AREAS_URL, name: "Any Subject Area"};
-        targetRssUrl = feed.url;
-        feedDescription = `subject: ${feed.name}`;
-    } else if (data.selectedLocationUrl) {
-        const feed = PREDEFINED_RSS_FEEDS.find(f => f.url === data.selectedLocationUrl) || {url: ALL_LOCATIONS_URL, name: "Any Location"};
-        targetRssUrl = feed.url;
-        feedDescription = `location: ${feed.name}`;
+    } else if (data.selectedLocationUrl && data.selectedLocationUrl !== ALL_LOCATIONS_URL) {
+        targetRssUrl = data.selectedLocationUrl;
+        feedDescription = `location: ${PREDEFINED_RSS_FEEDS.find(f => f.url === data.selectedLocationUrl)?.name || 'Selected Location'}`;
     } else {
-        targetRssUrl = ALL_LOCATIONS_URL; // Default to the most general feed
+        // Both are "Any" or one is "Any" and the other not set (should default to ALL_..._URL)
+        targetRssUrl = ALL_LOCATIONS_URL; // Most general if both are "Any"
         feedDescription = "general feed (all jobs)";
     }
     
     if (!targetRssUrl) {
-        toast({ title: "No Feed Selected", description: "Please select a subject area or location, or enter a URL manually.", variant: "default" });
+        // This case should be less likely now with defaults
+        toast({ title: "No Feed Selected", description: "Please select a subject area or location.", variant: "default" });
         setIsLoadingFeed(false);
         return;
     }
@@ -366,14 +352,17 @@ export default function JobsRssPage() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Filter by Subject Area</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value || ""} value={field.value || ""}>
+                      <Select 
+                        onValueChange={field.onChange} 
+                        value={field.value}
+                      >
                         <FormControl>
                           <SelectTrigger>
                             <SelectValue placeholder="Any Subject Area" />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent className="max-h-[400px] overflow-y-auto">
-                            <SelectItem value="">Any Subject Area (General Feed)</SelectItem>
+                            <SelectItem value={ALL_SUBJECT_AREAS_URL}>Any Subject Area (General Feed)</SelectItem>
                             {subjectAreaFeeds.map(category => (
                                 <SelectGroup key={category}>
                                     <SelectLabel>{category}</SelectLabel>
@@ -396,14 +385,17 @@ export default function JobsRssPage() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Filter by Location</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value || ""} value={field.value || ""}>
+                      <Select 
+                        onValueChange={field.onChange} 
+                        value={field.value}
+                      >
                         <FormControl>
                           <SelectTrigger>
                             <SelectValue placeholder="Any Location" />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent className="max-h-[400px] overflow-y-auto">
-                           <SelectItem value="">Any Location (General Feed)</SelectItem>
+                           <SelectItem value={ALL_LOCATIONS_URL}>Any Location (General Feed)</SelectItem>
                            {locationFeeds.map(category => (
                                 <SelectGroup key={category}>
                                     <SelectLabel>{category}</SelectLabel>
@@ -598,3 +590,4 @@ export default function JobsRssPage() {
     </TooltipProvider>
   );
 }
+
