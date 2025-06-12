@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState } from 'react';
@@ -26,7 +27,7 @@ export default function TailorResumePage() {
     resolver: zodResolver(tailorResumeFormSchema),
     defaultValues: {
       jobDescription: "",
-      resumeContent: "", // In a real app, pre-fill from user's profile
+      resumeContent: "",
     },
   });
 
@@ -67,17 +68,15 @@ export default function TailorResumePage() {
   };
 
   const handleDownload = (content: string | null, filename: string) => {
-    if (!content) return;
-    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(link.href);
+    console.log('Attempting to download:', filename, 'with content present:', !!content);
+    if (!content) {
+      toast({ title: "Download Error", description: "No content to download.", variant: "destructive" });
+      return;
+    }
+    // Minimal placeholder for download logic to test parsing
+    toast({ title: "Download Placeholder", description: `Would download ${filename}` });
   };
-
+  
   return (
     <div className="container mx-auto py-8 space-y-8">
       <div>
