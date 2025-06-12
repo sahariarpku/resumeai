@@ -1164,17 +1164,25 @@ export default function ProfilePage() {
 
       {/* Education Modal */}
       <Dialog open={isEducationModalOpen} onOpenChange={setIsEducationModalOpen}>
-        <DialogContent className="sm:max-w-2xl"> 
-          <DialogHeader><DialogTitle className="font-headline">{editingEducation ? 'Edit Education' : 'Add New Education'}</DialogTitle><DialogDescription>Provide your educational qualifications and details.</DialogDescription></DialogHeader>
-          <Form {...educationForm}>
-            <form onSubmit={educationForm.handleSubmit(onEducationSubmit)} className="space-y-6 py-4">
-              <EducationFormFields control={educationForm.control} onPolishRequest={(fieldName) => handleAIPolish(fieldName, educationForm)} polishingField={polishingField as keyof EducationFormData | null} isSubmitting={educationForm.formState.isSubmitting} />
-              <DialogFooter>
-                <DialogClose asChild><Button type="button" variant="outline">Cancel</Button></DialogClose>
-                <Button type="submit" disabled={educationForm.formState.isSubmitting}><Save className="mr-2 h-4 w-4"/>{educationForm.formState.isSubmitting ? <Loader2 className="animate-spin"/> : (editingEducation ? 'Save Changes' : 'Add Education')}</Button>
-              </DialogFooter>
-            </form>
-          </Form>
+        <DialogContent className="sm:max-w-2xl max-h-[85vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="font-headline">{editingEducation ? 'Edit Education' : 'Add New Education'}</DialogTitle>
+            <DialogDescription>Provide your educational qualifications and details.</DialogDescription>
+          </DialogHeader>
+          <div className="flex-grow overflow-y-auto pr-3"> {/* Adjusted for scrollbar */}
+            <Form {...educationForm}>
+              <form id="educationForm" onSubmit={educationForm.handleSubmit(onEducationSubmit)} className="space-y-6 py-4">
+                <EducationFormFields control={educationForm.control} onPolishRequest={(fieldName) => handleAIPolish(fieldName, educationForm)} polishingField={polishingField as keyof EducationFormData | null} isSubmitting={educationForm.formState.isSubmitting} />
+              </form>
+            </Form>
+          </div>
+          <DialogFooter className="pt-4 mt-auto border-t">
+            <DialogClose asChild><Button type="button" variant="outline">Cancel</Button></DialogClose>
+            <Button type="submit" form="educationForm" disabled={educationForm.formState.isSubmitting}>
+              <Save className="mr-2 h-4 w-4"/>
+              {educationForm.formState.isSubmitting ? <Loader2 className="animate-spin"/> : (editingEducation ? 'Save Changes' : 'Add Education')}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
