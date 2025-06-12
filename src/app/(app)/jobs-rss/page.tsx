@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { Rss, Search, Loader2, Briefcase, Building, FileText as FileTextIcon, CalendarDays, Percent, Sparkles as SparklesIcon, AlertTriangle, Link as LinkIcon, MapPin, ExternalLink } from "lucide-react";
 import { useRouter } from 'next/navigation';
@@ -25,6 +26,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { PREDEFINED_RSS_FEEDS, type RssFeed } from '@/lib/job-rss-feeds';
 
 const USER_PROFILE_STORAGE_KEY = "userProfile";
 const TAILOR_RESUME_PREFILL_JD_KEY = "tailorResumePrefillJD";
@@ -32,7 +34,7 @@ const LAST_RSS_URL_STORAGE_KEY = "lastRssUrl";
 
 
 const RssFormSchema = z.object({ 
-  rssUrl: z.string().url("Please enter a valid RSS feed URL."),
+  rssUrl: z.string().url({ message: "Please enter a valid RSS feed URL." }),
 });
 type RssFormData = z.infer<typeof RssFormSchema>;
 
@@ -70,7 +72,9 @@ export default function JobsRssPage() {
     try {
         const lastUrl = localStorage.getItem(LAST_RSS_URL_STORAGE_KEY);
         if (lastUrl) {
-            rssForm.setValue("rssUrl", lastUrl);
+            rssForm.setValue("rssUrl", lastUrl, { shouldValidate: true });
+        } else if (PREDEFINED_RSS_FEEDS.length > 0) {
+             rssForm.setValue("rssUrl", PREDEFINED_RSS_FEEDS[0].url, { shouldValidate: true });
         }
     } catch (error) {
         console.error("Failed to load last RSS URL from localStorage:", error);
@@ -96,16 +100,15 @@ export default function JobsRssPage() {
     try {
       const fetchResponse = await fetch(`/api/fetch-rss?url=${encodeURIComponent(data.rssUrl)}`);
       
-      let responseBodyAsText;
+      let responseBodyAsText = '';
       try {
-        responseBodyAsText = await fetchResponse.text(); // Always get text first
+        responseBodyAsText = await fetchResponse.text();
       } catch (textError) {
         setIsLoadingFeed(false);
         throw new Error(`Failed to read response from API: ${textError instanceof Error ? textError.message : String(textError)}`);
       }
 
       if (!fetchResponse.ok) {
-        // Try to parse the error body as JSON, but fallback if it's not (e.g. HTML error page)
         try {
           const errorData = JSON.parse(responseBodyAsText);
           throw new Error(errorData.error || `API Error (${fetchResponse.status}): ${fetchResponse.statusText}`);
@@ -113,21 +116,24 @@ export default function JobsRssPage() {
           throw new Error(`API Error (${fetchResponse.status}): ${fetchResponse.statusText}. Response: ${responseBodyAsText.substring(0, 300)}...`);
         }
       }
-
-      // If response.ok is true, try to parse as JSON, assuming success path from API
-      try {
-        const responseData = JSON.parse(responseBodyAsText);
-        if (responseData.error) { // Our API might return 200 OK with a JSON error object
-          throw new Error(responseData.error);
-        }
-        if (!responseData.rawRssContent) {
-          throw new Error("API returned success but no rawRssContent found.");
-        }
-        rawRssContentString = responseData.rawRssContent;
-      } catch (e) {
+      
+      const contentType = fetchResponse.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
         setIsLoadingFeed(false);
-        throw new Error(`Failed to parse successful API response. Expected JSON with rawRssContent. Received: ${responseBodyAsText.substring(0,300)}...`);
+        throw new Error(`Expected JSON response from API, but received ${contentType || 'unknown content type'}. Response: ${responseBodyAsText.substring(0,500)}...`);
       }
+      
+      const responseData = JSON.parse(responseBodyAsText); // Safe to parse now
+      
+      if (responseData.error) {
+        setIsLoadingFeed(false);
+        throw new Error(responseData.error);
+      }
+      if (!responseData.rawRssContent) {
+        setIsLoadingFeed(false);
+        throw new Error("API returned success but no rawRssContent found.");
+      }
+      rawRssContentString = responseData.rawRssContent;
       
       setIsLoadingFeed(false);
 
@@ -148,7 +154,7 @@ export default function JobsRssPage() {
         return;
       }
 
-      toast({ title: "Feed Fetched!", description: `Found ${itemXmls.length} items. Processing them with AI...` });
+      toast({ title: "Feed Fetched!", description: `Found ${itemXmls.length} items. Processing them with AI... This may take a few moments.` });
       setIsProcessingItems(true);
       setTotalItemsToProcess(itemXmls.length);
       
@@ -157,7 +163,7 @@ export default function JobsRssPage() {
         const itemXml = itemXmls[i];
         try {
           const extractedDetails = await extractJobDetailsFromRssItem({ rssItemXml: itemXml });
-          if (extractedDetails.role && extractedDetails.jobUrl) { // Basic validation
+          if (extractedDetails.role && extractedDetails.jobUrl) { 
             processedJobs.push({
               ...extractedDetails,
               id: `job-${Date.now()}-${i}`,
@@ -168,7 +174,7 @@ export default function JobsRssPage() {
           }
         } catch (extractionError) {
           console.error("Error processing RSS item with AI:", extractionError, itemXml.substring(0,100));
-          toast({ title: `AI Processing Error (Item ${i+1})`, description: `Could not process an item. Skipping. ${extractionError instanceof Error ? extractionError.message : ''}`, variant: "destructive", duration: 5000 });
+          toast({ title: `AI Processing Error (Item ${i+1})`, description: `Could not process an item. Skipping. ${extractionError instanceof Error ? extractionError.message : ''}`, variant: "destructive", duration: 3000 });
         }
         setProcessingProgress(i + 1);
       }
@@ -269,7 +275,7 @@ export default function JobsRssPage() {
           <Rss className="mr-3 h-8 w-8 text-primary" /> AI Powered RSS Job Feed
         </h1>
         <p className="text-muted-foreground">
-          Paste a job RSS feed URL. AI will parse the items, and you can match them with your profile and tailor applications.
+          Select a predefined feed or paste a job RSS feed URL. AI will parse the items, and you can match them with your profile and tailor applications.
         </p>
       </div>
 
@@ -277,7 +283,29 @@ export default function JobsRssPage() {
         <CardHeader>
           <CardTitle className="font-headline flex items-center"><Search className="mr-2 h-5 w-5" />Enter RSS Feed URL</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="predefinedFeedSelect">Select a Predefined Feed (Optional)</Label>
+            <Select
+                value={rssForm.getValues("rssUrl")}
+                onValueChange={(value) => {
+                    if (value) {
+                        rssForm.setValue("rssUrl", value, { shouldValidate: true });
+                    }
+                }}
+            >
+                <SelectTrigger id="predefinedFeedSelect">
+                    <SelectValue placeholder="Choose a jobs.ac.uk feed..." />
+                </SelectTrigger>
+                <SelectContent position="popper" className="max-h-[400px]">
+                {PREDEFINED_RSS_FEEDS.map((feed) => (
+                    <SelectItem key={feed.url} value={feed.url}>
+                    {feed.name}
+                    </SelectItem>
+                ))}
+                </SelectContent>
+            </Select>
+          </div>
           <Form {...rssForm}>
             <form onSubmit={rssForm.handleSubmit(handleFetchAndProcessRss)} className="flex flex-col sm:flex-row items-start gap-2">
               <FormField
@@ -287,7 +315,7 @@ export default function JobsRssPage() {
                   <FormItem className="flex-grow w-full sm:w-auto">
                     <FormLabel htmlFor="rssUrlInput" className="sr-only">RSS Feed URL</FormLabel>
                     <FormControl>
-                      <Input id="rssUrlInput" placeholder="https://example.com/jobs.rss" {...field} />
+                      <Input id="rssUrlInput" placeholder="https://example.com/jobs.rss (or select from above)" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -299,11 +327,10 @@ export default function JobsRssPage() {
                 ) : (
                   <Search className="mr-2 h-5 w-5" />
                 )}
-                {(isLoadingFeed) ? "Fetching..." : (isProcessingItems ? `Processing ${processingProgress}/${totalItemsToProcess}` : "Fetch Jobs")}
+                {(isLoadingFeed) ? "Fetching..." : (isProcessingItems ? `Processing ${processingProgress}/${totalItemsToProcess}` : "Fetch & Display Jobs")}
               </Button>
             </form>
           </Form>
-           {!profileLoaded && <p className="text-sm text-muted-foreground mt-2">Loading profile for matching...</p>}
            {profileLoaded && !userProfile && (
                 <p className="text-sm text-amber-600 mt-3 flex items-center">
                     <AlertTriangle className="mr-2 h-4 w-4" />
@@ -444,11 +471,11 @@ export default function JobsRssPage() {
          <Card className="text-center py-12">
             <CardHeader>
                 <Rss className="mx-auto h-16 w-16 text-muted-foreground mb-4" />
-                <CardTitle className="font-headline text-2xl">Enter an RSS Feed URL</CardTitle>
+                <CardTitle className="font-headline text-2xl">Select or Enter an RSS Feed URL</CardTitle>
             </CardHeader>
             <CardContent>
                 <p className="text-muted-foreground">
-                    Paste a job RSS feed URL above to start discovering opportunities.
+                    Choose a predefined feed from the dropdown or paste a job RSS feed URL above to start discovering opportunities.
                 </p>
             </CardContent>
         </Card>
