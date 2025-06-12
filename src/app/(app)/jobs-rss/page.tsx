@@ -10,12 +10,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { Rss, Search, Loader2, Briefcase, Building, FileText as FileTextIcon, CalendarDays, Percent, Sparkles as SparklesIcon, BarChart3, AlertTriangle, Tag, X, Plus, Link as LinkIcon } from "lucide-react";
+import { Rss, Search, Loader2, Briefcase, Building, FileText as FileTextIcon, CalendarDays, Percent, Sparkles as SparklesIcon, BarChart3, AlertTriangle, Tag, X, Plus, Link as LinkIcon, MapPin } from "lucide-react";
 import { useRouter } from 'next/navigation';
-import NextLink from "next/link"; // Renamed to avoid conflict with LinkIcon
-import type { JobPostingItem, UserProfile, SimulatedJobPosting } from "@/lib/types";
-import { z } from "zod"; // Import Zod
-// import { FindJobsInputSchema, type FindJobsInput } from "@/lib/schemas"; // Keep for reference, but form might change
+import NextLink from "next/link"; 
+import type { JobPostingItem, UserProfile } from "@/lib/types";
+import { z } from "zod"; 
 import { findJobs } from "@/ai/flows/find-jobs-flow";
 import { calculateProfileJdMatch } from "@/ai/flows/calculate-profile-jd-match-flow";
 import { profileToResumeText } from '@/lib/profile-utils';
@@ -26,13 +25,15 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { Separator } from '@/components/ui/separator';
 
 const USER_PROFILE_STORAGE_KEY = "userProfile";
 const TAILOR_RESUME_PREFILL_JD_KEY = "tailorResumePrefillJD";
 const JOB_KEYWORDS_STORAGE_KEY = "jobKeywords";
+const JOB_LOCATION_PREFERENCE_STORAGE_KEY = "jobLocationPreference";
 
 
-const NewKeywordSchema = z.object({ // Schema for the new keyword input
+const NewKeywordSchema = z.object({ 
   newKeyword: z.string().min(1, "Keyword cannot be empty.").max(50, "Keyword too long."),
 });
 type NewKeywordFormData = z.infer<typeof NewKeywordSchema>;
@@ -48,6 +49,8 @@ export default function JobsRssPage() {
 
   const [keywords, setKeywords] = useState<string[]>([]);
   const [isKeywordsLoaded, setIsKeywordsLoaded] = useState(false);
+  const [locationPreference, setLocationPreference] = useState<string>("");
+  const [isLocationLoaded, setIsLocationLoaded] = useState(false);
 
   const newKeywordForm = useForm<NewKeywordFormData>({
     resolver: zodResolver(NewKeywordSchema),
@@ -56,24 +59,26 @@ export default function JobsRssPage() {
     },
   });
 
-  // Load keywords from localStorage on mount
   useEffect(() => {
     try {
       const storedKeywordsString = localStorage.getItem(JOB_KEYWORDS_STORAGE_KEY);
       if (storedKeywordsString) {
-        const storedKeywords = JSON.parse(storedKeywordsString) as string[];
-        setKeywords(storedKeywords);
+        setKeywords(JSON.parse(storedKeywordsString) as string[]);
+      }
+      const storedLocationPref = localStorage.getItem(JOB_LOCATION_PREFERENCE_STORAGE_KEY);
+      if (storedLocationPref) {
+        setLocationPreference(storedLocationPref);
       }
     } catch (error) {
-      console.error("Failed to load keywords from localStorage:", error);
-      toast({ title: "Keyword Load Error", description: "Could not load saved keywords.", variant: "destructive" });
+      console.error("Failed to load preferences from localStorage:", error);
+      toast({ title: "Preference Load Error", description: "Could not load saved keywords/location.", variant: "destructive" });
     }
     setIsKeywordsLoaded(true);
+    setIsLocationLoaded(true);
   }, [toast]);
 
-  // Save keywords to localStorage when they change
   useEffect(() => {
-    if (isKeywordsLoaded) { // Only save after initial load to prevent overwriting
+    if (isKeywordsLoaded) { 
         try {
             localStorage.setItem(JOB_KEYWORDS_STORAGE_KEY, JSON.stringify(keywords));
         } catch (error) {
@@ -82,8 +87,18 @@ export default function JobsRssPage() {
         }
     }
   }, [keywords, isKeywordsLoaded, toast]);
+
+  useEffect(() => {
+    if (isLocationLoaded) {
+        try {
+            localStorage.setItem(JOB_LOCATION_PREFERENCE_STORAGE_KEY, locationPreference);
+        } catch (error) {
+            console.error("Failed to save location preference to localStorage:", error);
+            toast({ title: "Location Save Error", description: "Could not save location preference.", variant: "destructive" });
+        }
+    }
+  }, [locationPreference, isLocationLoaded, toast]);
   
-  // Load user profile
   useEffect(() => {
     try {
       const storedProfileString = localStorage.getItem(USER_PROFILE_STORAGE_KEY);
@@ -98,16 +113,14 @@ export default function JobsRssPage() {
   }, [toast]);
 
 
-  const searchJobsWithKeywords = useCallback(async (currentKeywords: string[]) => {
-    if (currentKeywords.length === 0) {
-      // setJobPostings([]); // Clear jobs if no keywords
-      // toast({ title: "No Keywords", description: "Add some keywords to find jobs.", variant: "default" });
+  const searchJobs = useCallback(async (currentKeywords: string[], currentLocation: string) => {
+    if (currentKeywords.length === 0 && !currentLocation.trim()) {
       return;
     }
     setIsLoadingSearch(true);
-    setJobPostings([]); // Clear previous results before new search
+    setJobPostings([]); 
     const keywordsString = currentKeywords.join(' ');
-    toast({ title: "Searching for jobs...", description: `Using keywords: ${keywordsString}` });
+    toast({ title: "Searching for jobs...", description: `Using keywords: ${keywordsString}${currentLocation ? `, Location: ${currentLocation}` : ''}` });
 
     if (!profileLoaded) {
       toast({ title: "Profile not loaded", description: "Please wait for profile to load before searching.", variant: "default" });
@@ -116,7 +129,10 @@ export default function JobsRssPage() {
     }
     
     try {
-      const result = await findJobs({ keywords: keywordsString });
+      const result = await findJobs({ 
+        keywords: keywordsString,
+        location: currentLocation.trim() || undefined 
+      });
       if (result.jobPostings && result.jobPostings.length > 0) {
         const postingsWithClientData = result.jobPostings.map((job, index) => ({
           ...job,
@@ -126,7 +142,7 @@ export default function JobsRssPage() {
         setJobPostings(postingsWithClientData);
         toast({ title: "Jobs Found!", description: `${result.jobPostings.length} simulated job postings loaded.` });
       } else {
-        toast({ title: "No Jobs Found", description: "AI couldn't find or simulate jobs for these keywords. Try different terms." });
+        toast({ title: "No Jobs Found", description: "AI couldn't find or simulate jobs for these criteria. Try different terms." });
       }
     } catch (err) {
       console.error("Error finding jobs:", err);
@@ -137,13 +153,12 @@ export default function JobsRssPage() {
   }, [profileLoaded, userProfile, toast]);
 
 
-  // Auto-search on load if keywords exist
   useEffect(() => {
-    if (isKeywordsLoaded && keywords.length > 0 && !isLoadingSearch && jobPostings.length === 0) { // Added checks to prevent re-search if already loading or has results
-        searchJobsWithKeywords(keywords);
+    if (isKeywordsLoaded && isLocationLoaded && (keywords.length > 0 || locationPreference.trim()) && !isLoadingSearch && jobPostings.length === 0) { 
+        searchJobs(keywords, locationPreference);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isKeywordsLoaded, keywords]); // Simplified dependencies for initial load
+  }, [isKeywordsLoaded, isLocationLoaded, keywords, locationPreference]); 
 
 
   const calculateMatchForJob = useCallback(async (job: JobPostingItem, profileText: string) => {
@@ -216,11 +231,11 @@ export default function JobsRssPage() {
     }
   };
 
-  if (!isKeywordsLoaded || !profileLoaded) {
+  if (!isKeywordsLoaded || !profileLoaded || !isLocationLoaded) {
      return (
       <div className="container mx-auto py-8 text-center">
         <Loader2 className="mx-auto h-12 w-12 animate-spin text-primary" />
-        <p className="mt-4 text-muted-foreground">Loading keywords and profile...</p>
+        <p className="mt-4 text-muted-foreground">Loading preferences and profile...</p>
       </div>
     );
   }
@@ -235,60 +250,80 @@ export default function JobsRssPage() {
             <Rss className="mr-3 h-8 w-8 text-primary" /> AI Simulated Job Feed
           </h1>
           <p className="text-muted-foreground">
-            Manage keywords to find AI-simulated job postings. Match them with your profile and tailor applications.
+            Manage keywords & location to find AI-simulated job postings. Match them with your profile and tailor applications.
           </p>
         </div>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle className="font-headline flex items-center"><Tag className="mr-2 h-5 w-5" />Manage Job Keywords</CardTitle>
-          <CardDescription>Add or remove keywords to refine your automated job search.</CardDescription>
+          <CardTitle className="font-headline flex items-center"><Search className="mr-2 h-5 w-5" />Manage Job Search Criteria</CardTitle>
+          <CardDescription>Add keywords and set a location preference to refine your automated job search.</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <Form {...newKeywordForm}>
-            <form onSubmit={newKeywordForm.handleSubmit(handleAddKeyword)} className="flex items-start gap-2">
-              <FormField
-                control={newKeywordForm.control}
-                name="newKeyword"
-                render={({ field }) => (
-                  <FormItem className="flex-grow">
-                    <FormLabel htmlFor="newKeywordInput" className="sr-only">New Keyword</FormLabel>
-                    <FormControl>
-                      <Input id="newKeywordInput" placeholder="e.g., 'React developer remote'" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <Button type="submit" aria-label="Add keyword">
-                <Plus className="h-5 w-5" /> <span className="hidden sm:inline ml-2">Add Keyword</span>
-              </Button>
-            </form>
-          </Form>
+        <CardContent className="space-y-6">
+          <div>
+            <Label htmlFor="locationPreferenceInput" className="font-medium">Location Preference</Label>
+            <Input 
+              id="locationPreferenceInput" 
+              placeholder="e.g., Remote, New York, London" 
+              value={locationPreference}
+              onChange={(e) => setLocationPreference(e.target.value)}
+              className="mt-1"
+            />
+            <p className="text-xs text-muted-foreground mt-1">Enter a city, state, country, or "Remote".</p>
+          </div>
 
-          {keywords.length > 0 && (
-            <div className="space-y-2">
-              <p className="text-sm font-medium text-muted-foreground">Active Keywords:</p>
-              <div className="flex flex-wrap gap-2">
-                {keywords.map((keyword) => (
-                  <Badge key={keyword} variant="secondary" className="text-sm py-1 px-2">
-                    {keyword}
-                    <button 
-                        onClick={() => handleDeleteKeyword(keyword)} 
-                        className="ml-1.5 rounded-full hover:bg-background/50 p-0.5 focus:outline-none focus:ring-1 focus:ring-ring"
-                        aria-label={`Remove keyword ${keyword}`}
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </Badge>
-                ))}
+          <Separator />
+          
+          <div>
+            <Label className="font-medium">Job Keywords</Label>
+            <Form {...newKeywordForm}>
+              <form onSubmit={newKeywordForm.handleSubmit(handleAddKeyword)} className="flex items-start gap-2 mt-1">
+                <FormField
+                  control={newKeywordForm.control}
+                  name="newKeyword"
+                  render={({ field }) => (
+                    <FormItem className="flex-grow">
+                      <FormLabel htmlFor="newKeywordInput" className="sr-only">New Keyword</FormLabel>
+                      <FormControl>
+                        <Input id="newKeywordInput" placeholder="e.g., 'React developer'" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <Button type="submit" aria-label="Add keyword">
+                  <Plus className="h-5 w-5" /> <span className="hidden sm:inline ml-2">Add</span>
+                </Button>
+              </form>
+            </Form>
+
+            {keywords.length > 0 && (
+              <div className="mt-3 space-y-2">
+                <p className="text-sm font-medium text-muted-foreground">Active Keywords:</p>
+                <div className="flex flex-wrap gap-2">
+                  {keywords.map((keyword) => (
+                    <Badge key={keyword} variant="secondary" className="text-sm py-1 px-2">
+                      {keyword}
+                      <button 
+                          onClick={() => handleDeleteKeyword(keyword)} 
+                          className="ml-1.5 rounded-full hover:bg-background/50 p-0.5 focus:outline-none focus:ring-1 focus:ring-ring"
+                          aria-label={`Remove keyword ${keyword}`}
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </Badge>
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
+          
+          <Separator />
+
           <Button 
-            onClick={() => searchJobsWithKeywords(keywords)} 
-            disabled={isLoadingSearch || keywords.length === 0} 
+            onClick={() => searchJobs(keywords, locationPreference)} 
+            disabled={isLoadingSearch || (keywords.length === 0 && !locationPreference.trim())} 
             size="lg" 
             className="w-full sm:w-auto"
           >
@@ -297,7 +332,7 @@ export default function JobsRssPage() {
             ) : (
               <Search className="mr-2 h-5 w-5" />
             )}
-            {isLoadingSearch ? "Searching..." : "Search Jobs with Current Keywords"}
+            {isLoadingSearch ? "Searching..." : "Search Jobs"}
           </Button>
            {!profileLoaded && <p className="text-sm text-muted-foreground mt-2">Loading profile for matching...</p>}
            {profileLoaded && !userProfile && (
@@ -322,6 +357,7 @@ export default function JobsRssPage() {
                   <TableRow>
                     <TableHead><Briefcase className="inline-block mr-1 h-4 w-4" />Role</TableHead>
                     <TableHead><Building className="inline-block mr-1 h-4 w-4" />Company</TableHead>
+                    <TableHead><MapPin className="inline-block mr-1 h-4 w-4" />Location</TableHead>
                     <TableHead><FileTextIcon className="inline-block mr-1 h-4 w-4" />Requirements</TableHead>
                     <TableHead><CalendarDays className="inline-block mr-1 h-4 w-4" />Deadline</TableHead>
                     <TableHead className="text-center"><Percent className="inline-block mr-1 h-4 w-4" />CV Match</TableHead>
@@ -347,6 +383,7 @@ export default function JobsRssPage() {
                         )}
                       </TableCell>
                       <TableCell>{job.company}</TableCell>
+                      <TableCell>{job.location}</TableCell>
                       <TableCell className="max-w-xs">
                          <Tooltip>
                             <TooltipTrigger asChild>
@@ -407,23 +444,23 @@ export default function JobsRssPage() {
        {isLoadingSearch && jobPostings.length === 0 && (
          <div className="text-center py-12">
             <Loader2 className="mx-auto h-12 w-12 animate-spin text-primary mb-4" />
-            <p className="text-muted-foreground">AI is simulating job feeds based on your keywords...</p>
+            <p className="text-muted-foreground">AI is simulating job feeds based on your criteria...</p>
         </div>
       )}
 
-      {!isLoadingSearch && jobPostings.length === 0 && (keywords.length > 0 ? newKeywordForm.formState.isSubmitted || isKeywordsLoaded : true) && (
+      {!isLoadingSearch && jobPostings.length === 0 && (keywords.length > 0 || locationPreference.trim() ? newKeywordForm.formState.isSubmitted || isKeywordsLoaded || isLocationLoaded : true) && (
          <Card className="text-center py-12">
             <CardHeader>
                 <Rss className="mx-auto h-16 w-16 text-muted-foreground mb-4" />
                 <CardTitle className="font-headline text-2xl">
-                    {keywords.length > 0 ? "No Simulated Jobs Found" : "Add Keywords to Start"}
+                    {(keywords.length > 0 || locationPreference.trim()) ? "No Simulated Jobs Found" : "Add Criteria to Start"}
                 </CardTitle>
             </CardHeader>
             <CardContent>
                 <p className="text-muted-foreground">
-                {keywords.length > 0 
-                    ? "The AI couldn't generate job postings for your current keywords. Please try different or broader search terms, or adjust your active keywords."
-                    : "Add some keywords above to start discovering AI-simulated job opportunities."
+                {(keywords.length > 0 || locationPreference.trim()) 
+                    ? "The AI couldn't generate job postings for your current criteria. Please try different or broader search terms, or adjust your active keywords/location."
+                    : "Add some keywords or a location preference above to start discovering AI-simulated job opportunities."
                 }
                 </p>
             </CardContent>
