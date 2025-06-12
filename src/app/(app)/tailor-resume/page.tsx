@@ -8,9 +8,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
-import { Sparkles, Download, Copy, FileText, Brain, Lightbulb, Loader2 } from "lucide-react";
+import { Sparkles, Download, Copy, FileText, Brain, Lightbulb, Loader2, Save } from "lucide-react";
 import { tailorResumeFormSchema, TailorResumeFormData } from "@/lib/schemas";
-import { tailorResumeToJobDescription, improveResume } from "@/ai/flows"; // Assuming correct paths
+import { tailorResumeToJobDescription } from "@/ai/flows/tailor-resume-to-job-description";
+import { improveResume } from "@/ai/flows/improve-resume-based-on-job-description";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Separator } from '@/components/ui/separator';
 
@@ -76,7 +77,6 @@ export default function TailorResumePage() {
     document.body.removeChild(link);
     URL.revokeObjectURL(link.href);
   };
-
 
   return (
     <div className="container mx-auto py-8 space-y-8">
