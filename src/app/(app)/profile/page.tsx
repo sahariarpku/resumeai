@@ -159,17 +159,14 @@ export default function ProfilePage() {
       if (storedProfileString) {
         const parsedProfile = JSON.parse(storedProfileString) as UserProfile;
         
-        // Robust handling for sectionOrder
-        const validSectionOrder = 
-          parsedProfile.sectionOrder && 
-          Array.isArray(parsedProfile.sectionOrder) && 
-          parsedProfile.sectionOrder.length > 0
-          ? parsedProfile.sectionOrder.filter(key => DEFAULT_SECTION_ORDER.includes(key as ProfileSectionKey)) // Filter out invalid keys
-          : [...DEFAULT_SECTION_ORDER];
-        
-        // Ensure all default keys are present if user's order is incomplete
-        const finalSectionOrder = [...new Set([...validSectionOrder, ...DEFAULT_SECTION_ORDER])];
-
+        let effectiveSectionOrder: ProfileSectionKey[];
+        if (parsedProfile.sectionOrder && Array.isArray(parsedProfile.sectionOrder) && parsedProfile.sectionOrder.length > 0) {
+          const validStoredKeys = parsedProfile.sectionOrder.filter(key => DEFAULT_SECTION_ORDER.includes(key as ProfileSectionKey));
+          const missingDefaultKeys = DEFAULT_SECTION_ORDER.filter(key => !validStoredKeys.includes(key));
+          effectiveSectionOrder = [...validStoredKeys, ...missingDefaultKeys];
+        } else {
+          effectiveSectionOrder = [...DEFAULT_SECTION_ORDER];
+        }
 
         loadedProfile = {
             ...fallbackInitialProfileData, 
@@ -191,7 +188,7 @@ export default function ProfilePage() {
             publications: parsedProfile.publications || [],
             references: parsedProfile.references || [],
             customSections: parsedProfile.customSections || [],
-            sectionOrder: finalSectionOrder,
+            sectionOrder: effectiveSectionOrder,
         };
       } else {
         loadedProfile = { ...fallbackInitialProfileData, sectionOrder: [...DEFAULT_SECTION_ORDER] };
@@ -469,7 +466,7 @@ export default function ProfilePage() {
   };
   
   const handleMoveSection = (sectionKey: ProfileSectionKey, direction: 'up' | 'down') => {
-    const currentActiveOrder = (profileData.sectionOrder && profileData.sectionOrder.length > 0) ? profileData.sectionOrder : DEFAULT_SECTION_ORDER;
+    const currentActiveOrder = (profileData.sectionOrder && profileData.sectionOrder.length > 0) ? [...profileData.sectionOrder] : [...DEFAULT_SECTION_ORDER];
     const currentIndex = currentActiveOrder.indexOf(sectionKey);
   
     if (currentIndex === -1) return; 
@@ -674,6 +671,326 @@ export default function ProfilePage() {
                               ? profileData.sectionOrder 
                               : DEFAULT_SECTION_ORDER;
 
+  const renderSection = (sectionKey: ProfileSectionKey, index: number) => {
+    const sectionTitle = formatSectionTitleLocal(sectionKey);
+    const canMoveUp = index > 0;
+    const canMoveDown = index < currentDisplayOrder.length - 1;
+
+    switch (sectionKey) {
+      case 'workExperiences':
+        return (
+          <AccordionItem value={sectionKey} key={sectionKey} className="border-none">
+            <FormSection
+              id="work-experience"
+              title={sectionTitle}
+              description="Detail your professional roles and accomplishments."
+              actions={<Button onClick={handleAddWorkExperience}><PlusCircle className="mr-2 h-4 w-4" /> Add Work Experience</Button>}
+              isReorderable={true}
+              onMoveUp={() => handleMoveSection(sectionKey, 'up')}
+              onMoveDown={() => handleMoveSection(sectionKey, 'down')}
+              canMoveUp={canMoveUp}
+              canMoveDown={canMoveDown}
+            >
+              <FormSectionList
+                items={profileData.workExperiences}
+                renderItem={(exp) => (
+                  <div key={exp.id} className="flex justify-between items-center py-2">
+                    <div>
+                      <h4 className="font-semibold">{exp.role} at {exp.company}</h4>
+                      <p className="text-sm text-muted-foreground">{exp.startDate} - {exp.endDate || 'Present'}</p>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button variant="outline" size="sm" onClick={() => handleEditWorkExperience(exp)}><Edit3 className="mr-2 h-4 w-4"/>Edit</Button>
+                      <Button variant="destructive" size="sm" onClick={() => handleDeleteWorkExperience(exp.id)}><Trash2 className="mr-2 h-4 w-4"/>Delete</Button>
+                    </div>
+                  </div>
+                )}
+                emptyState={<p className="text-sm text-muted-foreground">No work experiences added yet.</p>}
+              />
+            </FormSection>
+          </AccordionItem>
+        );
+      case 'projects':
+        return (
+          <AccordionItem value={sectionKey} key={sectionKey} className="border-none">
+            <FormSection
+              id="projects"
+              title={sectionTitle}
+              description="Showcase your personal or professional projects."
+              actions={<Button onClick={handleAddProject}><PlusCircle className="mr-2 h-4 w-4" /> Add Project</Button>}
+              isReorderable={true}
+              onMoveUp={() => handleMoveSection(sectionKey, 'up')}
+              onMoveDown={() => handleMoveSection(sectionKey, 'down')}
+              canMoveUp={canMoveUp}
+              canMoveDown={canMoveDown}
+            >
+              <FormSectionList
+                items={profileData.projects}
+                renderItem={(item) => (
+                  <div key={item.id} className="flex justify-between items-center py-2">
+                    <div>
+                      <h4 className="font-semibold">{item.name}</h4>
+                      <p className="text-sm text-muted-foreground truncate max-w-md">{item.description}</p>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button variant="outline" size="sm" onClick={() => handleEditProject(item)}><Edit3 className="mr-2 h-4 w-4"/>Edit</Button>
+                      <Button variant="destructive" size="sm" onClick={() => handleDeleteProject(item.id)}><Trash2 className="mr-2 h-4 w-4"/>Delete</Button>
+                    </div>
+                  </div>
+                )}
+                emptyState={<p className="text-sm text-muted-foreground">No projects added yet.</p>}
+              />
+            </FormSection>
+          </AccordionItem>
+        );
+      case 'education':
+        return (
+           <AccordionItem value={sectionKey} key={sectionKey} className="border-none">
+            <FormSection
+              id="education"
+              title={sectionTitle}
+              description="List your educational qualifications."
+              actions={<Button onClick={handleAddEducation}><PlusCircle className="mr-2 h-4 w-4" /> Add Education</Button>}
+              isReorderable={true}
+              onMoveUp={() => handleMoveSection(sectionKey, 'up')}
+              onMoveDown={() => handleMoveSection(sectionKey, 'down')}
+              canMoveUp={canMoveUp}
+              canMoveDown={canMoveDown}
+            >
+              <FormSectionList
+                items={profileData.education}
+                renderItem={(item) => (
+                  <div key={item.id} className="flex justify-between items-center py-2">
+                    <div>
+                      <h4 className="font-semibold">{item.degree} - {item.institution}</h4>
+                      <p className="text-sm text-muted-foreground">{item.fieldOfStudy}</p>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button variant="outline" size="sm" onClick={() => handleEditEducation(item)}><Edit3 className="mr-2 h-4 w-4"/>Edit</Button>
+                      <Button variant="destructive" size="sm" onClick={() => handleDeleteEducation(item.id)}><Trash2 className="mr-2 h-4 w-4"/>Delete</Button>
+                    </div>
+                  </div>
+                )}
+                emptyState={<p className="text-sm text-muted-foreground">No education entries added yet.</p>}
+              />
+            </FormSection>
+          </AccordionItem>
+        );
+      case 'skills':
+          return (
+            <AccordionItem value={sectionKey} key={sectionKey} className="border-none">
+              <FormSection
+                id="skills"
+                title={sectionTitle}
+                description="List your skills and their proficiency levels."
+                actions={<Button onClick={handleAddSkill}><PlusCircle className="mr-2 h-4 w-4" /> Add Skill</Button>}
+                isReorderable={true}
+                onMoveUp={() => handleMoveSection(sectionKey, 'up')}
+                onMoveDown={() => handleMoveSection(sectionKey, 'down')}
+                canMoveUp={canMoveUp}
+                canMoveDown={canMoveDown}
+              >
+                <FormSectionList
+                  items={profileData.skills}
+                  renderItem={(item) => (
+                    <div key={item.id} className="flex justify-between items-center py-2">
+                      <div>
+                        <h4 className="font-semibold">{item.name}</h4>
+                        <p className="text-sm text-muted-foreground">
+                          {item.category && <span>{item.category}</span>}
+                          {item.category && item.proficiency && <span> - </span>}
+                          {item.proficiency && <span>{item.proficiency}</span>}
+                        </p>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button variant="outline" size="sm" onClick={() => handleEditSkill(item)}><Edit3 className="mr-2 h-4 w-4"/>Edit</Button>
+                        <Button variant="destructive" size="sm" onClick={() => handleDeleteSkill(item.id)}><Trash2 className="mr-2 h-4 w-4"/>Delete</Button>
+                      </div>
+                    </div>
+                  )}
+                  emptyState={<p className="text-sm text-muted-foreground">No skills added yet.</p>}
+                />
+              </FormSection>
+            </AccordionItem>
+        );
+      case 'certifications':
+        return (
+          <AccordionItem value={sectionKey} key={sectionKey} className="border-none">
+            <FormSection
+              id="certifications"
+              title={sectionTitle}
+              description="List your certifications and credentials."
+              actions={<Button onClick={handleAddCertification}><PlusCircle className="mr-2 h-4 w-4" /> Add Certification</Button>}
+              isReorderable={true}
+              onMoveUp={() => handleMoveSection(sectionKey, 'up')}
+              onMoveDown={() => handleMoveSection(sectionKey, 'down')}
+              canMoveUp={canMoveUp}
+              canMoveDown={canMoveDown}
+            >
+              <FormSectionList
+                items={profileData.certifications}
+                renderItem={(item) => (
+                  <div key={item.id} className="flex justify-between items-center py-2">
+                    <div>
+                      <h4 className="font-semibold">{item.name}</h4>
+                      <p className="text-sm text-muted-foreground">{item.issuingOrganization} - {item.issueDate}</p>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button variant="outline" size="sm" onClick={() => handleEditCertification(item)}><Edit3 className="mr-2 h-4 w-4"/>Edit</Button>
+                      <Button variant="destructive" size="sm" onClick={() => handleDeleteCertification(item.id)}><Trash2 className="mr-2 h-4 w-4"/>Delete</Button>
+                    </div>
+                  </div>
+                )}
+                emptyState={<p className="text-sm text-muted-foreground">No certifications added yet.</p>}
+              />
+            </FormSection>
+          </AccordionItem>
+        );
+      case 'honorsAndAwards':
+          return (
+            <AccordionItem value={sectionKey} key={sectionKey} className="border-none">
+              <FormSection
+                id="honors-awards"
+                title={sectionTitle}
+                description="Showcase your honors and awards."
+                actions={<Button onClick={handleAddHonorAward}><PlusCircle className="mr-2 h-4 w-4" /> Add Honor/Award</Button>}
+                isReorderable={true}
+                onMoveUp={() => handleMoveSection(sectionKey, 'up')}
+                onMoveDown={() => handleMoveSection(sectionKey, 'down')}
+                canMoveUp={canMoveUp}
+                canMoveDown={canMoveDown}
+              >
+                <FormSectionList
+                  items={profileData.honorsAndAwards}
+                  renderItem={(item) => (
+                    <div key={item.id} className="flex justify-between items-center py-2">
+                      <div>
+                        <h4 className="font-semibold">{item.name}</h4>
+                        <p className="text-sm text-muted-foreground">
+                          {item.organization && <span>{item.organization}</span>}
+                          {item.organization && item.date && <span> - </span>}
+                          {item.date && <span>{item.date}</span>}
+                        </p>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button variant="outline" size="sm" onClick={() => handleEditHonorAward(item)}><Edit3 className="mr-2 h-4 w-4"/>Edit</Button>
+                        <Button variant="destructive" size="sm" onClick={() => handleDeleteHonorAward(item.id)}><Trash2 className="mr-2 h-4 w-4"/>Delete</Button>
+                      </div>
+                    </div>
+                  )}
+                  emptyState={<p className="text-sm text-muted-foreground">No honors or awards added yet.</p>}
+                />
+              </FormSection>
+            </AccordionItem>
+          );
+      case 'publications':
+        return (
+          <AccordionItem value={sectionKey} key={sectionKey} className="border-none">
+            <FormSection
+              id="publications"
+              title={sectionTitle}
+              description="List your publications."
+              actions={<Button onClick={handleAddPublication}><PlusCircle className="mr-2 h-4 w-4" /> Add Publication</Button>}
+              isReorderable={true}
+              onMoveUp={() => handleMoveSection(sectionKey, 'up')}
+              onMoveDown={() => handleMoveSection(sectionKey, 'down')}
+              canMoveUp={canMoveUp}
+              canMoveDown={canMoveDown}
+            >
+              <FormSectionList
+                items={profileData.publications}
+                renderItem={(item) => (
+                  <div key={item.id} className="flex justify-between items-center py-2">
+                    <div>
+                      <h4 className="font-semibold">{item.title}</h4>
+                      <p className="text-sm text-muted-foreground">
+                        {item.journalOrConference && <span>{item.journalOrConference}</span>}
+                        {item.journalOrConference && item.publicationDate && <span> - </span>}
+                        {item.publicationDate && <span>{item.publicationDate}</span>}
+                      </p>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button variant="outline" size="sm" onClick={() => handleEditPublication(item)}><Edit3 className="mr-2 h-4 w-4"/>Edit</Button>
+                      <Button variant="destructive" size="sm" onClick={() => handleDeletePublication(item.id)}><Trash2 className="mr-2 h-4 w-4"/>Delete</Button>
+                    </div>
+                  </div>
+                )}
+                emptyState={<p className="text-sm text-muted-foreground">No publications added yet.</p>}
+              />
+            </FormSection>
+          </AccordionItem>
+        );
+      case 'references':
+        return (
+          <AccordionItem value={sectionKey} key={sectionKey} className="border-none">
+            <FormSection
+              id="references"
+              title={sectionTitle}
+              description="Provide professional references if needed."
+              actions={<Button onClick={handleAddReference}><PlusCircle className="mr-2 h-4 w-4" /> Add Reference</Button>}
+              isReorderable={true}
+              onMoveUp={() => handleMoveSection(sectionKey, 'up')}
+              onMoveDown={() => handleMoveSection(sectionKey, 'down')}
+              canMoveUp={canMoveUp}
+              canMoveDown={canMoveDown}
+            >
+              <FormSectionList
+                items={profileData.references}
+                renderItem={(item) => (
+                  <div key={item.id} className="flex justify-between items-center py-2">
+                    <div>
+                      <h4 className="font-semibold">{item.name}</h4>
+                      <p className="text-sm text-muted-foreground">{item.titleAndCompany || item.contactDetailsOrNote}</p>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button variant="outline" size="sm" onClick={() => handleEditReference(item)}><Edit3 className="mr-2 h-4 w-4"/>Edit</Button>
+                      <Button variant="destructive" size="sm" onClick={() => handleDeleteReference(item.id)}><Trash2 className="mr-2 h-4 w-4"/>Delete</Button>
+                    </div>
+                  </div>
+                )}
+                emptyState={<p className="text-sm text-muted-foreground">No references added yet.</p>}
+              />
+            </FormSection>
+          </AccordionItem>
+        );
+      case 'customSections':
+        return (
+          <AccordionItem value={sectionKey} key={sectionKey} className="border-none">
+            <FormSection
+              id="custom-sections"
+              title={sectionTitle}
+              description="Add any other relevant sections to your profile."
+              actions={<Button onClick={handleAddCustomSection}><PlusCircle className="mr-2 h-4 w-4" /> Add Custom Section</Button>}
+              isReorderable={true}
+              onMoveUp={() => handleMoveSection(sectionKey, 'up')}
+              onMoveDown={() => handleMoveSection(sectionKey, 'down')}
+              canMoveUp={canMoveUp}
+              canMoveDown={canMoveDown}
+            >
+              <FormSectionList
+                items={profileData.customSections}
+                renderItem={(item) => (
+                  <div key={item.id} className="flex justify-between items-center py-2">
+                    <div>
+                      <h4 className="font-semibold">{item.heading}</h4>
+                      <p className="text-sm text-muted-foreground truncate max-w-md">{item.content}</p>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button variant="outline" size="sm" onClick={() => handleEditCustomSection(item)}><Edit3 className="mr-2 h-4 w-4"/>Edit</Button>
+                      <Button variant="destructive" size="sm" onClick={() => handleDeleteCustomSection(item.id)}><Trash2 className="mr-2 h-4 w-4"/>Delete</Button>
+                    </div>
+                  </div>
+                )}
+                emptyState={<p className="text-sm text-muted-foreground">No custom sections added yet.</p>}
+              />
+            </FormSection>
+          </AccordionItem>
+        );
+      default:
+        return null;
+    }
+  };
+
   return (
     <TooltipProvider>
     <div className="space-y-8">
@@ -711,7 +1028,7 @@ export default function ProfilePage() {
 
       <Accordion 
         type="multiple" 
-        defaultValue={['general-info', ...currentDisplayOrder.map(s => s.toLowerCase())]} 
+        defaultValue={['general-info', ...((profileData.sectionOrder && profileData.sectionOrder.length > 0) ? profileData.sectionOrder : DEFAULT_SECTION_ORDER).map(s => s.toLowerCase())]} 
         className="w-full space-y-4"
       >
         <AccordionItem value="general-info" className="border-none">
