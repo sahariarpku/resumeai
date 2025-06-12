@@ -29,6 +29,7 @@ import { extractJobDetails } from "@/ai/flows/extract-job-details-flow";
 import { extractTextFromHtml } from "@/ai/flows/extract-text-from-html-flow";
 import { profileToResumeText } from '@/lib/profile-utils';
 import { Separator } from '@/components/ui/separator';
+import { Label } from '@/components/ui/label';
 
 
 const fallbackInitialJds: JobDescriptionItem[] = [
@@ -366,8 +367,8 @@ export default function JobDescriptionsPage() {
             
             <div className="space-y-4 py-2">
                 <div className="flex items-end gap-2">
-                    <div className="flex-grow">
-                        <FormLabel htmlFor="jdUrlInput">Job Posting URL (Optional)</FormLabel>
+                    <div className="flex-grow space-y-1">
+                        <Label htmlFor="jdUrlInput">Job Posting URL (Optional)</Label>
                         <Input 
                             id="jdUrlInput"
                             placeholder="https://example.com/job-posting" 
