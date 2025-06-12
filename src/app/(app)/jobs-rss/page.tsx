@@ -10,8 +10,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { Rss, Search, Loader2, Briefcase, Building, FileText as FileTextIcon, CalendarDays, Percent, Sparkles as SparklesIcon, BarChart3, AlertTriangle, Tag, X, Plus } from "lucide-react";
+import { Rss, Search, Loader2, Briefcase, Building, FileText as FileTextIcon, CalendarDays, Percent, Sparkles as SparklesIcon, BarChart3, AlertTriangle, Tag, X, Plus, Link as LinkIcon } from "lucide-react";
 import { useRouter } from 'next/navigation';
+import NextLink from "next/link"; // Renamed to avoid conflict with LinkIcon
 import type { JobPostingItem, UserProfile, SimulatedJobPosting } from "@/lib/types";
 import { z } from "zod"; // Import Zod
 // import { FindJobsInputSchema, type FindJobsInput } from "@/lib/schemas"; // Keep for reference, but form might change
@@ -138,11 +139,11 @@ export default function JobsRssPage() {
 
   // Auto-search on load if keywords exist
   useEffect(() => {
-    if (isKeywordsLoaded && keywords.length > 0) {
+    if (isKeywordsLoaded && keywords.length > 0 && !isLoadingSearch && jobPostings.length === 0) { // Added checks to prevent re-search if already loading or has results
         searchJobsWithKeywords(keywords);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isKeywordsLoaded]); // Only run once after keywords are loaded. `keywords` and `searchJobsWithKeywords` can be dependencies if we want re-search on keyword change without button. For now, explicit search.
+  }, [isKeywordsLoaded, keywords]); // Simplified dependencies for initial load
 
 
   const calculateMatchForJob = useCallback(async (job: JobPostingItem, profileText: string) => {
@@ -330,7 +331,21 @@ export default function JobsRssPage() {
                 <TableBody>
                   {jobPostings.map((job) => (
                     <TableRow key={job.id}>
-                      <TableCell className="font-medium">{job.role}</TableCell>
+                      <TableCell className="font-medium">
+                        {job.jobUrl ? (
+                          <a 
+                            href={job.jobUrl} 
+                            target="_blank" 
+                            rel="noopener noreferrer" 
+                            className="hover:underline text-primary"
+                            title={`View job: ${job.role}`}
+                          >
+                            {job.role} <LinkIcon className="inline-block ml-1 h-3 w-3" />
+                          </a>
+                        ) : (
+                          job.role
+                        )}
+                      </TableCell>
                       <TableCell>{job.company}</TableCell>
                       <TableCell className="max-w-xs">
                          <Tooltip>
@@ -419,4 +434,3 @@ export default function JobsRssPage() {
   );
 }
 
-    

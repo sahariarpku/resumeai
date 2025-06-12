@@ -152,8 +152,8 @@ export interface SimulatedJobPosting {
   company: string;
   requirementsSummary: string;
   deadlineText: string; // e.g., "In 2 weeks", "2024-08-15"
-  // location?: string; // Optional, can be added later
-  // jobUrl?: string; // Optional, as it's simulated
+  location?: string; // Optional, can be added later
+  jobUrl?: string; // Optional, as it's simulated
 }
 
 export interface JobPostingItem extends SimulatedJobPosting {
@@ -163,3 +163,4 @@ export interface JobPostingItem extends SimulatedJobPosting {
   matchCategory?: 'Excellent Match' | 'Good Match' | 'Fair Match' | 'Poor Match';
   isCalculatingMatch?: boolean; // For UI loading state
 }
+

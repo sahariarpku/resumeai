@@ -185,11 +185,12 @@ const SimulatedJobPostingSchema = z.object({
   company: z.string().describe("The name of the company."),
   requirementsSummary: z.string().describe("A brief 1-3 sentence summary of the key requirements for the job."),
   deadlineText: z.string().describe("A textual representation of the application deadline (e.g., 'In 2 weeks', 'August 15, 2024', 'Open until filled')."),
-  // location: z.string().optional().describe("The location of the job (e.g., 'Remote', 'New York, NY')."),
-  // jobUrl: z.string().url().optional().describe("A fictional URL for the job posting."),
+  location: z.string().optional().describe("The location of the job (e.g., 'Remote', 'New York, NY')."),
+  jobUrl: z.string().url().optional().describe("A fictional URL for the job posting."),
 });
 
 export const FindJobsOutputSchema = z.object({
   jobPostings: z.array(SimulatedJobPostingSchema).describe("A list of simulated job postings found based on the keywords."),
 });
 export type FindJobsOutput = z.infer<typeof FindJobsOutputSchema>;
+
