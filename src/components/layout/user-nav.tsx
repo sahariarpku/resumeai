@@ -1,3 +1,4 @@
+
 "use client";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -40,21 +41,21 @@ export function UserNav() {
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
-          <Link href="/profile" passHref>
+          <Link href="/profile">
             <DropdownMenuItem>
               <User className="mr-2 h-4 w-4" />
               <span>Profile</span>
               <DropdownMenuShortcut>⇧⌘P</DropdownMenuShortcut>
             </DropdownMenuItem>
           </Link>
-          <Link href="/billing" passHref>
+          <Link href="/billing">
             <DropdownMenuItem>
               <CreditCard className="mr-2 h-4 w-4" />
               <span>Billing</span>
               <DropdownMenuShortcut>⌘B</DropdownMenuShortcut>
             </DropdownMenuItem>
           </Link>
-          <Link href="/settings" passHref>
+          <Link href="/settings">
             <DropdownMenuItem>
               <Settings className="mr-2 h-4 w-4" />
               <span>Settings</span>
@@ -63,7 +64,7 @@ export function UserNav() {
           </Link>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
-        <Link href="/support" passHref>
+        <Link href="/support">
           <DropdownMenuItem>
             <LifeBuoy className="mr-2 h-4 w-4" />
             <span>Support</span>
@@ -74,7 +75,7 @@ export function UserNav() {
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         {/* In a real app, this would trigger a signOut() function */}
-        <Link href="/" passHref>
+        <Link href="/">
           <DropdownMenuItem>
             <LogOut className="mr-2 h-4 w-4" />
             <span>Log out</span>

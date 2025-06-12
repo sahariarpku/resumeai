@@ -1,3 +1,4 @@
+
 "use client";
 
 import Link from "next/link";
@@ -54,7 +55,7 @@ export function MainNav() {
       <SidebarMenu className="flex-1 p-2">
         {navItems.map((item) => (
           <SidebarMenuItem key={item.href}>
-            <Link href={item.href} passHref legacyBehavior>
+            <Link href={item.href}>
               <SidebarMenuButton
                 variant="default"
                 size="default"
@@ -74,7 +75,7 @@ export function MainNav() {
                 <ul className="pl-6 mt-1 space-y-1 border-l border-sidebar-border ml-3">
                   {item.subItems.map(subItem => (
                     <li key={subItem.href}>
-                       <Link href={subItem.href} passHref legacyBehavior>
+                       <Link href={subItem.href}>
                         <SidebarMenuButton
                             variant="ghost"
                             size="sm"
@@ -94,7 +95,7 @@ export function MainNav() {
       </SidebarMenu>
       {open && (
         <div className="p-4 mt-auto border-t border-sidebar-border">
-             <Link href="/settings" passHref legacyBehavior>
+             <Link href="/settings">
                 <SidebarMenuButton
                     variant="ghost"
                     size="default"
