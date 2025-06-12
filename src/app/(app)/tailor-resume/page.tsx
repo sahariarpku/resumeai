@@ -58,7 +58,6 @@ export default function TailorResumePage() {
         setSuggestions(improveResult.suggestions);
       }
 
-
       if (tailorResult.tailoredResume) {
         toast({ title: "Resume Tailored!", description: "AI has customized your resume and provided suggestions." });
       } else {
@@ -103,6 +102,18 @@ export default function TailorResumePage() {
     document.body.removeChild(link);
     URL.revokeObjectURL(link.href);
     toast({title: "Download Started", description: `${filename} is downloading.`});
+  };
+
+  const handleSaveResume = () => {
+    // Placeholder for future save functionality
+    if (tailoredResume) {
+      toast({ title: "Save Resume", description: "Save functionality coming soon! For now, please download or copy your resume."});
+      // In the future, this would save to local storage or a backend,
+      // potentially linking to the "My Resumes" page.
+      // Example: saveToLocalStorage({ name: "Tailored Resume - " + new Date().toLocaleDateString(), content: tailoredResume });
+    } else {
+      toast({ title: "Nothing to Save", description: "Please generate a tailored resume first.", variant: "destructive"});
+    }
   };
   
   return (
@@ -195,11 +206,14 @@ export default function TailorResumePage() {
             <Card>
               <CardHeader>
                 <CardTitle className="font-headline flex items-center"><FileText className="mr-2 h-5 w-5 text-primary"/> Tailored Resume</CardTitle>
-                <div className="flex gap-2 pt-2">
+                <div className="flex gap-2 pt-2 flex-wrap">
                     <Button variant="outline" size="sm" onClick={() => handleCopyToClipboard(tailoredResume)}><Copy className="mr-2 h-4 w-4" />Copy</Button>
-                    <Button variant="outline" size="sm" onClick={() => handleDownload(tailoredResume, 'Tailored_Resume.txt')}><Download className="mr-2 h-4 w-4" />Download</Button>
-                    {/* TODO: Add Save Resume functionality */}
+                    <Button variant="outline" size="sm" onClick={() => handleDownload(tailoredResume, 'Tailored_Resume.txt')}><Download className="mr-2 h-4 w-4" />Download (.txt)</Button>
+                    <Button variant="secondary" size="sm" onClick={handleSaveResume}><Save className="mr-2 h-4 w-4" />Save Resume</Button>
                 </div>
+                <p className="text-xs text-muted-foreground pt-2">
+                  The tailored resume is provided as a .txt file. You can copy the content and paste it into your preferred editor (e.g., Word, Google Docs) to format it as a PDF or Word document.
+                </p>
               </CardHeader>
               <CardContent>
                 <pre className="whitespace-pre-wrap bg-muted/50 p-4 rounded-md text-sm font-mono max-h-[500px] overflow-y-auto">{tailoredResume}</pre>
