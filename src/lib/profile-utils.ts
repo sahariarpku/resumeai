@@ -160,7 +160,7 @@ export function profileToResumeText(profile: UserProfile): string {
       case 'customSections':
         if (profile.customSections && profile.customSections.length > 0) {
           profile.customSections.forEach((section: CustomSection) => {
-            resumeText += `## ${section.heading.toUpperCase()}\n`;
+            resumeText += `## ${section.heading.toUpperCase()}\n`; // Using toUpperCase for consistency with other section titles
             resumeText += `${section.content}\n\n`;
           });
         }
@@ -180,25 +180,100 @@ export function profileToResumeHtml(profile: UserProfile): string {
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
       <title>${profile.fullName ? `${profile.fullName} - Resume` : 'Resume'}</title>
       <style>
-        body { font-family: Arial, sans-serif; line-height: 1.6; margin: 0; padding: 0; color: #333; }
-        .container { max-width: 800px; margin: 20px auto; padding: 20px; border: 1px solid #ddd; }
-        h1 { font-size: 2em; margin-bottom: 0.2em; color: #111; }
-        h2 { font-size: 1.5em; margin-top: 1em; margin-bottom: 0.5em; border-bottom: 1px solid #eee; padding-bottom: 0.2em; color: #222; }
-        h3 { font-size: 1.2em; margin-top: 0.8em; margin-bottom: 0.3em; color: #333; }
-        p, li { margin-bottom: 0.5em; }
-        ul { padding-left: 20px; margin-top:0; }
-        .contact-info { margin-bottom: 1em; font-size: 0.9em; color: #555; }
-        .contact-info a { color: #007bff; text-decoration: none; }
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&display=swap');
+        
+        body { 
+          font-family: 'Source Serif 4', serif; 
+          line-height: 1.6; 
+          margin: 0; 
+          padding: 0; 
+          color: #333333; 
+          background-color: #ffffff;
+          font-size: 11pt;
+        }
+        .container { 
+          max-width: 8.5in; 
+          margin: 0.5in auto; 
+          padding: 0.75in; 
+          border: 1px solid #dcdcdc; 
+          box-shadow: 0 0 10px rgba(0,0,0,0.05);
+        }
+        
+        h1.main-name { 
+          font-family: 'Inter', sans-serif;
+          font-size: 24pt; 
+          font-weight: 700;
+          margin-bottom: 0.1em; 
+          color: #1a1a1a; 
+          text-align: center;
+          letter-spacing: 1px;
+        }
+        
+        .contact-info { 
+          text-align: center;
+          margin-bottom: 1.5em; 
+          font-size: 10pt; 
+          color: #4d4d4d; 
+          font-family: 'Inter', sans-serif;
+        }
+        .contact-info a { color: #0056b3; text-decoration: none; }
         .contact-info a:hover { text-decoration: underline; }
-        .section { margin-bottom: 1.5em; }
-        .item { margin-bottom: 1em; }
-        .item-title { font-weight: bold; }
-        .item-subtitle { font-style: italic; color: #555; font-size: 0.95em; }
-        .item-dates { font-style: italic; color: #555; font-size: 0.9em; }
-        .description { margin-top: 0.3em; }
-        .achievements { margin-top: 0.3em; }
-        .skills-category { margin-bottom: 0.5em; }
-        .skills-category strong { text-transform: capitalize; }
+        .contact-info span + span::before { content: " | "; margin: 0 0.5em; }
+
+        .section-title { 
+          font-family: 'Inter', sans-serif;
+          font-size: 14pt; 
+          font-weight: 600;
+          margin-top: 1.2em; 
+          margin-bottom: 0.6em; 
+          border-bottom: 1.5px solid #333333; 
+          padding-bottom: 0.25em; 
+          color: #1a1a1a;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+        }
+        .section-summary .section-title {
+          text-align: left; /* Summary title can be left-aligned */
+        }
+
+        .item { margin-bottom: 1.2em; }
+        .item-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.1em; }
+        .item-primary { font-family: 'Inter', sans-serif; font-size: 11pt; font-weight: 600; color: #2a2a2a; }
+        .item-secondary { font-family: 'Inter', sans-serif; font-size: 10pt; font-weight: 500; color: #4d4d4d; } /* For company, institution */
+        .item-dates { font-family: 'Inter', sans-serif; font-size: 10pt; color: #4d4d4d; text-align: right; white-space: nowrap; }
+        
+        .item-details p, .item-details ul { margin-top: 0.3em; margin-bottom: 0.3em; font-size: 10.5pt; }
+        .item-details ul { padding-left: 1.5em; list-style-type: disc; }
+        .item-details li { margin-bottom: 0.25em; }
+        
+        .description { font-size: 10.5pt; margin-top: 0.2em; }
+        
+        .skills-list { padding: 0; list-style-type: none; }
+        .skills-list li { margin-bottom: 0.4em; }
+        .skills-category strong { font-family: 'Inter', sans-serif; font-weight: 600; text-transform: none; }
+        
+        .publication-authors { font-style: italic; font-size: 10pt; margin-top: 0.1em; margin-bottom: 0.1em; }
+        .publication-source { font-size: 10pt; margin-bottom: 0.1em; }
+        
+        /* Print-specific styles */
+        @media print {
+          body { font-size: 10pt; }
+          .container { 
+            margin: 0; 
+            padding: 0.5in; 
+            border: none; 
+            box-shadow: none; 
+            max-width: 100%;
+          }
+          h1.main-name { font-size: 22pt; }
+          .section-title { font-size: 13pt; }
+          .item-primary, .item-secondary, .item-dates { font-size: 9.5pt; }
+          .item-details p, .item-details ul, .description { font-size: 9.5pt; }
+          .contact-info { font-size: 9pt; }
+          a { color: #000000 !important; text-decoration: none !important; } /* Ensure links are black for printing */
+          /* Attempt to avoid page breaks within items, though not always possible */
+          .item { page-break-inside: avoid; }
+        }
       </style>
     </head>
     <body>
@@ -206,19 +281,19 @@ export function profileToResumeHtml(profile: UserProfile): string {
   `;
 
   if (profile.fullName) {
-    html += `<h1>${profile.fullName}</h1>`;
-    let contactLine = "";
-    if (profile.email) contactLine += `<a href="mailto:${profile.email}">${profile.email}</a>`;
-    if (profile.phone) contactLine += `${contactLine ? ' | ' : ''}${profile.phone}`;
-    if (profile.address) contactLine += `${contactLine ? ' | ' : ''}${profile.address}`;
-    if (profile.linkedin) contactLine += `${contactLine ? ' | ' : ''}<a href="${profile.linkedin}" target="_blank">LinkedIn</a>`;
-    if (profile.github) contactLine += `${contactLine ? ' | ' : ''}<a href="${profile.github}" target="_blank">GitHub</a>`;
-    if (profile.portfolio) contactLine += `${contactLine ? ' | ' : ''}<a href="${profile.portfolio}" target="_blank">Portfolio</a>`;
-    if (contactLine) html += `<p class="contact-info">${contactLine}</p>`;
+    html += `<h1 class="main-name">${profile.fullName}</h1>`;
+    let contactParts: string[] = [];
+    if (profile.email) contactParts.push(`<a href="mailto:${profile.email}">${profile.email}</a>`);
+    if (profile.phone) contactParts.push(`<span>${profile.phone}</span>`);
+    if (profile.address) contactParts.push(`<span>${profile.address}</span>`);
+    if (profile.linkedin) contactParts.push(`<a href="${profile.linkedin}" target="_blank">LinkedIn</a>`);
+    if (profile.github) contactParts.push(`<a href="${profile.github}" target="_blank">GitHub</a>`);
+    if (profile.portfolio) contactParts.push(`<a href="${profile.portfolio}" target="_blank">Portfolio</a>`);
+    if (contactParts.length > 0) html += `<p class="contact-info">${contactParts.join('<span></span>')}</p>`; // Using empty span for separator styling
   }
 
   if (profile.summary) {
-    html += `<div class="section"><h2>Summary</h2><p>${profile.summary.replace(/\n/g, '<br>')}</p></div>`;
+    html += `<div class="section section-summary"><h2 class="section-title">Summary</h2><div class="item-details"><p>${profile.summary.replace(/\n/g, '<br>')}</p></div></div>`;
   }
 
   const sectionOrder = profile.sectionOrder || DEFAULT_SECTION_ORDER;
@@ -228,63 +303,76 @@ export function profileToResumeHtml(profile: UserProfile): string {
     switch (sectionKey) {
       case 'workExperiences':
         if (profile.workExperiences && profile.workExperiences.length > 0) {
-          html += `<h2>${formatSectionTitle(sectionKey)}</h2>`;
+          html += `<h2 class="section-title">${formatSectionTitle(sectionKey)}</h2>`;
           profile.workExperiences.forEach(exp => {
             html += `<div class="item">`;
-            html += `<p class="item-title">${exp.role} at ${exp.company}</p>`;
-            html += `<p class="item-dates">${exp.startDate} - ${exp.endDate || 'Present'}</p>`;
-            if (exp.description) html += `<p class="description">${exp.description.replace(/\n/g, '<br>')}</p>`;
+            html += `<div class="item-header">
+                        <div>
+                           <div class="item-primary">${exp.role}</div>
+                           <div class="item-secondary">${exp.company}</div>
+                        </div>
+                        <div class="item-dates">${exp.startDate} - ${exp.endDate || 'Present'}</div>
+                     </div>`;
+            html += `<div class="item-details">`;
+            if (exp.description) html += `<p>${exp.description.replace(/\n/g, '<br>')}</p>`;
             if (exp.achievements && exp.achievements.length > 0) {
-              html += `<ul class="achievements">`;
+              html += `<ul>`;
               exp.achievements.forEach(ach => html += `<li>${ach}</li>`);
               html += `</ul>`;
             }
-            html += `</div>`;
+            html += `</div></div>`;
           });
         }
         break;
       case 'education':
         if (profile.education && profile.education.length > 0) {
-          html += `<h2>${formatSectionTitle(sectionKey)}</h2>`;
+          html += `<h2 class="section-title">${formatSectionTitle(sectionKey)}</h2>`;
           profile.education.forEach(edu => {
             html += `<div class="item">`;
-            html += `<p class="item-title">${edu.degree} in ${edu.fieldOfStudy}</p>`;
-            html += `<p class="item-subtitle">${edu.institution}</p>`;
-            html += `<p class="item-dates">${edu.startDate} - ${edu.endDate || 'Expected'}</p>`;
+            html += `<div class="item-header">
+                        <div>
+                          <div class="item-primary">${edu.degree} in ${edu.fieldOfStudy}</div>
+                          <div class="item-secondary">${edu.institution}</div>
+                        </div>
+                        <div class="item-dates">${edu.startDate} - ${edu.endDate || 'Expected'}</div>
+                     </div>`;
+            html += `<div class="item-details">`;
             if (edu.gpa) html += `<p>GPA/Result: ${edu.gpa}</p>`;
             if (edu.thesisTitle) html += `<p>Thesis: ${edu.thesisTitle}</p>`;
             if (edu.relevantCourses && edu.relevantCourses.length > 0) {
               html += `<p>Relevant Courses: ${edu.relevantCourses.join(', ')}</p>`;
             }
-            if (edu.description) html += `<p class="description">Notes: ${edu.description.replace(/\n/g, '<br>')}</p>`;
-            html += `</div>`;
+            if (edu.description) html += `<p>${edu.description.replace(/\n/g, '<br>')}</p>`;
+            html += `</div></div>`;
           });
         }
         break;
       case 'projects':
         if (profile.projects && profile.projects.length > 0) {
-          html += `<h2>${formatSectionTitle(sectionKey)}</h2>`;
+          html += `<h2 class="section-title">${formatSectionTitle(sectionKey)}</h2>`;
           profile.projects.forEach(proj => {
             html += `<div class="item">`;
-            html += `<p class="item-title">${proj.name}`;
-            if (proj.link) html += ` | <a href="${proj.link}" target="_blank">Link</a>`;
-            html += `</p>`;
-            if (proj.description) html += `<p class="description">${proj.description.replace(/\n/g, '<br>')}</p>`;
+            html += `<div class="item-header">
+                          <div class="item-primary">${proj.name} ${proj.link ? `| <a href="${proj.link}" target="_blank">Link</a>` : ''}</div>
+                      </div>`;
+            html += `<div class="item-details">`;
+            if (proj.description) html += `<p>${proj.description.replace(/\n/g, '<br>')}</p>`;
             if (proj.technologies && proj.technologies.length > 0) {
               html += `<p><strong>Technologies:</strong> ${proj.technologies.join(', ')}</p>`;
             }
             if (proj.achievements && proj.achievements.length > 0) {
-              html += `<p><strong>Key Achievements:</strong></p><ul class="achievements">`;
+              html += `<p><strong>Key Achievements:</strong></p><ul>`;
               proj.achievements.forEach(ach => html += `<li>${ach}</li>`);
               html += `</ul>`;
             }
-            html += `</div>`;
+            html += `</div></div>`;
           });
         }
         break;
       case 'skills':
         if (profile.skills && profile.skills.length > 0) {
-          html += `<h2>${formatSectionTitle(sectionKey)}</h2>`;
+          html += `<h2 class="section-title">${formatSectionTitle(sectionKey)}</h2>`;
+          html += `<ul class="skills-list item-details">`;
           const categorizedSkills: { [key: string]: string[] } = {};
           const uncategorizedSkills: string[] = [];
           profile.skills.forEach(skill => {
@@ -299,71 +387,86 @@ export function profileToResumeHtml(profile: UserProfile): string {
             }
           });
           for (const category in categorizedSkills) {
-            html += `<p class="skills-category"><strong>${category}:</strong> ${categorizedSkills[category].join(', ')}</p>`;
+            html += `<li><span class="skills-category"><strong>${category}:</strong></span> ${categorizedSkills[category].join(', ')}</li>`;
           }
           if (uncategorizedSkills.length > 0) {
-            html += `<p class="skills-category"><strong>Other:</strong> ${uncategorizedSkills.join(', ')}</p>`;
+            html += `<li><span class="skills-category"><strong>Other:</strong></span> ${uncategorizedSkills.join(', ')}</li>`;
           }
+          html += `</ul>`;
         }
         break;
       case 'honorsAndAwards':
         if (profile.honorsAndAwards && profile.honorsAndAwards.length > 0) {
-          html += `<h2>${formatSectionTitle(sectionKey)}</h2>`;
+          html += `<h2 class="section-title">${formatSectionTitle(sectionKey)}</h2>`;
           profile.honorsAndAwards.forEach(item => {
             html += `<div class="item">`;
-            html += `<p class="item-title">${item.name}</p>`;
-            if (item.organization) html += `<p class="item-subtitle">${item.organization}</p>`;
-            if (item.date) html += `<p class="item-dates">${item.date}</p>`;
-            if (item.description) html += `<p class="description">${item.description.replace(/\n/g, '<br>')}</p>`;
+             html += `<div class="item-header">
+                        <div>
+                          <div class="item-primary">${item.name}</div>
+                          ${item.organization ? `<div class="item-secondary">${item.organization}</div>` : ''}
+                        </div>
+                        ${item.date ? `<div class="item-dates">${item.date}</div>` : ''}
+                     </div>`;
+            if (item.description) html += `<div class="item-details"><p>${item.description.replace(/\n/g, '<br>')}</p></div>`;
             html += `</div>`;
           });
         }
         break;
       case 'publications':
         if (profile.publications && profile.publications.length > 0) {
-          html += `<h2>${formatSectionTitle(sectionKey)}</h2>`;
+          html += `<h2 class="section-title">${formatSectionTitle(sectionKey)}</h2>`;
           profile.publications.forEach(item => {
             html += `<div class="item">`;
-            html += `<p class="item-title">${item.title}</p>`;
-            if (item.authors && item.authors.length > 0) html += `<p><strong>Authors:</strong> ${item.authors.join(', ')}</p>`;
-            if (item.journalOrConference) html += `<p class="item-subtitle">${item.journalOrConference}</p>`;
-            if (item.publicationDate) html += `<p class="item-dates">${item.publicationDate}</p>`;
+            html += `<div class="item-header">
+                          <div class="item-primary">${item.title}</div>
+                          ${item.publicationDate ? `<div class="item-dates">${item.publicationDate}</div>` : ''}
+                      </div>`;
+            html += `<div class="item-details">`;
+            if (item.authors && item.authors.length > 0) html += `<p class="publication-authors">${item.authors.join(', ')}</p>`;
+            if (item.journalOrConference) html += `<p class="publication-source">${item.journalOrConference}</p>`;
             if (item.doi) html += `<p>DOI: ${item.doi}</p>`;
-            if (item.link) html += `<p><a href="${item.link}" target="_blank">Publication Link</a></p>`;
-            if (item.description) html += `<p class="description">${item.description.replace(/\n/g, '<br>')}</p>`;
-            html += `</div>`;
+            if (item.link) html += `<p><a href="${item.link}" target="_blank">View Publication</a></p>`;
+            if (item.description) html += `<p>${item.description.replace(/\n/g, '<br>')}</p>`;
+            html += `</div></div>`;
           });
         }
         break;
       case 'certifications':
         if (profile.certifications && profile.certifications.length > 0) {
-          html += `<h2>${formatSectionTitle(sectionKey)}</h2>`;
+          html += `<h2 class="section-title">${formatSectionTitle(sectionKey)}</h2>`;
           profile.certifications.forEach(cert => {
             html += `<div class="item">`;
-            html += `<p class="item-title">${cert.name}</p>`;
-            html += `<p class="item-subtitle">${cert.issuingOrganization} - Issued: ${cert.issueDate}</p>`;
+            html += `<div class="item-header">
+                          <div>
+                            <div class="item-primary">${cert.name}</div>
+                            <div class="item-secondary">${cert.issuingOrganization}</div>
+                          </div>
+                          <div class="item-dates">Issued: ${cert.issueDate}</div>
+                      </div>`;
+            html += `<div class="item-details">`;
             if (cert.credentialId) html += `<p>Credential ID: ${cert.credentialId}</p>`;
             if (cert.credentialUrl) html += `<p><a href="${cert.credentialUrl}" target="_blank">Verify Credential</a></p>`;
-            html += `</div>`;
+            html += `</div></div>`;
           });
         }
         break;
       case 'references':
          if (profile.references && profile.references.length > 0) {
-          html += `<h2>${formatSectionTitle(sectionKey)}</h2>`;
+          html += `<h2 class="section-title">${formatSectionTitle(sectionKey)}</h2>`;
           profile.references.forEach(ref => {
             html += `<div class="item">`;
-            html += `<p class="item-title">${ref.name}</p>`;
-            if (ref.titleAndCompany) html += `<p class="item-subtitle">${ref.titleAndCompany}</p>`;
+            html += `<div class="item-primary">${ref.name}</div>`;
+            html += `<div class="item-details">`;
+            if (ref.titleAndCompany) html += `<p class="item-secondary">${ref.titleAndCompany}</p>`;
             if (ref.contactDetailsOrNote) html += `<p>${ref.contactDetailsOrNote.replace(/\n/g, '<br>')}</p>`;
-            html += `</div>`;
+            html += `</div></div>`;
           });
         }
         break;
       case 'customSections':
         if (profile.customSections && profile.customSections.length > 0) {
           profile.customSections.forEach((section: CustomSection) => {
-            html += `<div class="section"><h2>${section.heading.toUpperCase()}</h2><p>${section.content.replace(/\n/g, '<br>')}</p></div>`;
+            html += `<h2 class="section-title">${section.heading.toUpperCase()}</h2><div class="item-details"><p>${section.content.replace(/\n/g, '<br>')}</p></div>`;
           });
         }
         break;
