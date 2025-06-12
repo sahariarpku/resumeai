@@ -19,6 +19,8 @@ import { useRouter } from 'next/navigation';
 import type { JobPostingRssItem, UserProfile } from "@/lib/types";
 import { z } from "zod"; 
 import { extractJobDetailsFromRssItem, type ExtractRssItemOutput } from "@/ai/flows/extract-rss-item-flow";
+import { extractTextFromHtml } from "@/ai/flows/extract-text-from-html-flow"; // Added
+import { extractJobDetails } from "@/ai/flows/extract-job-details-flow"; // Added
 import { calculateProfileJdMatch } from "@/ai/flows/calculate-profile-jd-match-flow";
 import { profileToResumeText } from '@/lib/profile-utils';
 import { Badge } from '@/components/ui/badge';
@@ -68,8 +70,7 @@ function parseBasicRssItem(itemXml: string, id: string): JobPostingRssItem {
     link: getTagValue('link', itemXml) || '#',
     pubDate: getTagValue('pubDate', itemXml),
     rssItemXml: itemXml, 
-    requirementsSummary: description.substring(0, 250) + (description.length > 250 ? '...' : ''), // Store a snippet initially
-    // company, location, full requirementsSummary will be populated by AI later
+    requirementsSummary: description.substring(0, 250) + (description.length > 250 ? '...' : ''), 
   };
 }
 
@@ -265,7 +266,8 @@ export default function JobsRssPage() {
     watchedKeywords     
   ]);
 
-  const fetchJobDetailsAndSetState = async (jobId: string): Promise<JobPostingRssItem | null> => {
+  // Fetches details for a single job using its RSS XML (AI call)
+  const fetchAndSetJobDetailsFromRssXml = async (jobId: string): Promise<JobPostingRssItem | null> => {
     let updatedJob = null;
     setJobPostings(prev => prev.map(j => j.id === jobId ? { ...j, isProcessingDetails: true } : j));
     const jobToProcess = jobPostings.find(j => j.id === jobId);
@@ -315,9 +317,9 @@ export default function JobsRssPage() {
       let jobData = jobPostings.find(j => j.id === jobId);
       if (!jobData) continue;
 
-      // Fetch details if not already fetched (e.g. company is a good indicator of fetched details)
-      if (!jobData.company) {
-        jobData = await fetchJobDetailsAndSetState(jobId);
+      // Fetch details from RSS XML if not already fetched
+      if (!jobData.company && jobData.rssItemXml) { // Using company as an indicator details were fetched
+        jobData = await fetchAndSetJobDetailsFromRssXml(jobId);
       }
       
       if (jobData && jobData.requirementsSummary && jobData.requirementsSummary.trim().length > 10) {
@@ -330,7 +332,7 @@ export default function JobsRssPage() {
            setJobPostings(prev => prev.map(j => j.id === jobId ? { ...j, isCalculatingMatch: false, matchSummary: "Error calculating match." } : j));
            toast({ title: "Match Error", description: `Could not calculate match for ${jobData.title}.`, variant: "destructive" });
         }
-      } else if (jobData) { // jobData exists but no summary for matching
+      } else if (jobData) { 
         setJobPostings(prev => prev.map(j => j.id === jobId ? { ...j, matchSummary: "Requirements summary missing or too short for matching.", matchCategory: "Poor Match", matchPercentage: 0, isCalculatingMatch: false } : j));
       }
       processedCount++;
@@ -371,25 +373,53 @@ export default function JobsRssPage() {
   const handleTailorCvForJob = async (jobId: string) => {
     setTailoringJobId(jobId);
     let job = jobPostings.find(j => j.id === jobId);
-    if (!job) {
-      toast({ title: "Error", description: "Job not found.", variant: "destructive" });
+    if (!job || !job.link) {
+      toast({ title: "Error", description: "Job link not found for this item.", variant: "destructive" });
       setTailoringJobId(null);
       return;
     }
 
-    // Fetch full details if not already present (indicated by presence of 'company' field)
-    if (!job.company || !job.requirementsSummary || job.requirementsSummary.endsWith("...")) {
-      toast({ title: "Fetching Full Job Details...", description: `Preparing ${job.title} for tailoring.`, variant: "default" });
-      job = await fetchJobDetailsAndSetState(jobId);
-      if (!job || !job.requirementsSummary) {
-        toast({ title: "Error", description: "Could not fetch full details for tailoring.", variant: "destructive" });
+    toast({ title: "Fetching Full Job Posting...", description: `Accessing ${job.link} for details.`, variant: "default" });
+
+    try {
+      // 1. Fetch HTML content from job.link
+      const fetchHtmlResponse = await fetch(`/api/fetch-url-content?url=${encodeURIComponent(job.link)}`);
+      if (!fetchHtmlResponse.ok) {
+        const errorData = await fetchHtmlResponse.json().catch(() => ({error: "Failed to parse API error response."}));
+        throw new Error(errorData.error || `Failed to fetch job URL: ${fetchHtmlResponse.statusText}`);
+      }
+      const { htmlContent } = await fetchHtmlResponse.json();
+
+      if (!htmlContent) {
+        toast({ title: "No Content Fetched", description: "The job URL did not return any HTML content.", variant: "default" });
         setTailoringJobId(null);
         return;
       }
-    }
+      
+      // 2. Extract text from HTML using AI
+      toast({ title: "Extracting Text...", description: `AI is processing the job page content.`, variant: "default" });
+      const textExtractionResult = await extractTextFromHtml({ htmlContent });
+      
+      if (!textExtractionResult.extractedText || textExtractionResult.extractedText.trim().length === 0) {
+        toast({ title: "No Text Extracted", description: "AI could not extract meaningful job description text from the URL.", variant: "default" });
+        setTailoringJobId(null);
+        return;
+      }
+      const detailedJobDescription = textExtractionResult.extractedText;
 
-    // Prepare for tailoring
-    try {
+      // 3. (Optional but good) Extract Title/Company from the new detailed text
+      const detailsExtractionResult = await extractJobDetails({ jobDescriptionText: detailedJobDescription });
+      
+      // Update the job item in the local state with the new, more detailed information
+      setJobPostings(prev => prev.map(j => j.id === jobId ? { 
+        ...j, 
+        requirementsSummary: detailedJobDescription, // Use the most detailed description
+        role: detailsExtractionResult.jobTitle || j.role, // Update if AI found a better one
+        company: detailsExtractionResult.companyName || j.company, // Update if AI found a better one
+      } : j));
+
+
+      // 4. Prepare for tailoring
       const storedProfileString = localStorage.getItem(USER_PROFILE_STORAGE_KEY);
       if (!storedProfileString) {
         toast({ title: "Profile Not Found", description: "Please complete your profile first.", variant: "default" });
@@ -408,12 +438,14 @@ export default function JobsRssPage() {
       }
       
       localStorage.setItem(TAILOR_RESUME_PREFILL_RESUME_KEY, baseResumeText);
-      localStorage.setItem(TAILOR_RESUME_PREFILL_JD_KEY, job.requirementsSummary!);
+      localStorage.setItem(TAILOR_RESUME_PREFILL_JD_KEY, detailedJobDescription); // Use the detailed one from URL
 
+      toast({ title: "Ready to Tailor!", description: "Full job description loaded.", variant: "default" });
       router.push('/tailor-resume');
+
     } catch (error) {
-      console.error("Error preparing for resume tailoring:", error);
-      toast({ title: "Error", description: "Could not prepare data for resume tailoring.", variant: "destructive" });
+      console.error("Error preparing for resume tailoring by fetching URL:", error);
+      toast({ title: "Tailoring Prep Error", description: `Could not process job URL for tailoring: ${error instanceof Error ? error.message : 'Unknown error'}.`, variant: "destructive" });
     } finally {
       setTailoringJobId(null);
     }
@@ -435,8 +467,8 @@ export default function JobsRssPage() {
       let jobData = jobPostings.find(j => j.id === jobId);
       if (!jobData) return;
 
-      if (!jobData.company) { // Indicator that full details haven't been fetched
-          jobData = await fetchJobDetailsAndSetState(jobId);
+      if (!jobData.company && jobData.rssItemXml) { // Indicator that full details haven't been fetched from RSS XML
+          jobData = await fetchAndSetJobDetailsFromRssXml(jobId);
       }
 
       if (jobData && jobData.requirementsSummary && jobData.requirementsSummary.trim().length > 10) {
@@ -636,8 +668,8 @@ export default function JobsRssPage() {
                         <TooltipContent>Select/Deselect All</TooltipContent>
                        </Tooltip>
                     </TableHead>
-                    <TableHead><Briefcase className="inline-block mr-1 h-4 w-4" />Role</TableHead>
-                    <TableHead><FileTextIcon className="inline-block mr-1 h-4 w-4" />Summary (from RSS)</TableHead>
+                    <TableHead><Briefcase className="inline-block mr-1 h-4 w-4" />Role & Details</TableHead>
+                    <TableHead><FileTextIcon className="inline-block mr-1 h-4 w-4" />Summary (from RSS/AI)</TableHead>
                     <TableHead className="text-center"><Percent className="inline-block mr-1 h-4 w-4" />CV Match</TableHead>
                     <TableHead className="text-center">Actions</TableHead>
                   </TableRow>
@@ -654,33 +686,35 @@ export default function JobsRssPage() {
                         />
                       </TableCell>
                       <TableCell className="font-medium max-w-xs">
-                        <span id={`job-title-${job.id}`}>{job.role || job.title || <span className="text-muted-foreground/70 text-xs">N/A</span>}</span>
-                        {job.link && (
-                          <a 
-                            href={job.link} 
-                            target="_blank" 
-                            rel="noopener noreferrer" 
-                            className="hover:underline text-primary/80 flex items-center group text-xs ml-1"
-                            title={`View original posting for: ${job.role || job.title}`}
-                          >
-                            <ExternalLink className="inline-block mr-1 h-3 w-3 opacity-70 flex-shrink-0" /> Source
-                          </a>
-                        )}
-                         {job.company && <p className="text-xs text-muted-foreground mt-1">Company: {job.company}</p>}
-                         {job.location && <p className="text-xs text-muted-foreground">Location: {job.location}</p>}
-                         {job.deadlineText && <p className="text-xs text-muted-foreground">Deadline: {job.deadlineText}</p>}
+                        <div className="flex items-center">
+                            <span id={`job-title-${job.id}`} className="font-semibold">{job.role || job.title || <span className="text-muted-foreground/70 text-xs">N/A</span>}</span>
+                            {job.link && (
+                            <a 
+                                href={job.link} 
+                                target="_blank" 
+                                rel="noopener noreferrer" 
+                                className="hover:underline text-primary/80 flex items-center group text-xs ml-2"
+                                title={`View original posting for: ${job.role || job.title}`}
+                            >
+                                <ExternalLink className="inline-block mr-1 h-3 w-3 opacity-70 flex-shrink-0" /> Source
+                            </a>
+                            )}
+                        </div>
+                         {job.company && <p className="text-xs text-muted-foreground mt-1"><Building className="inline-block mr-1 h-3 w-3" />{job.company}</p>}
+                         {job.location && <p className="text-xs text-muted-foreground"><MapPin className="inline-block mr-1 h-3 w-3" />{job.location}</p>}
+                         {job.deadlineText && <p className="text-xs text-muted-foreground"><CalendarDays className="inline-block mr-1 h-3 w-3" />{job.deadlineText}</p>}
                       </TableCell>
                       <TableCell className="max-w-md">
                          <Tooltip>
                             <TooltipTrigger asChild>
                                 <p className="text-xs whitespace-pre-wrap">
-                                  {job.requirementsSummary || <span className="text-muted-foreground/70">N/A</span>}
+                                  {job.requirementsSummary || <span className="text-muted-foreground/70">N/A (Process to load)</span>}
                                 </p>
                             </TooltipTrigger>
                             <TooltipContent side="bottom" className="max-w-md p-2 bg-popover text-popover-foreground">
-                                <p className="text-sm font-medium">RSS Description Snippet/Summary:</p>
+                                <p className="text-sm font-medium">RSS Description Snippet/AI Summary:</p>
                                 <p className="text-xs whitespace-pre-wrap">{job.requirementsSummary || "Not available."}</p>
-                                {(!job.company && !job.isProcessingDetails && !job.isCalculatingMatch) && <p className="text-xs mt-1 italic">Select and process, or click 'Tailor CV' for full summary & details.</p>}
+                                {(!job.company && !job.isProcessingDetails && !job.isCalculatingMatch && !job.requirementsSummary?.endsWith('...')) && <p className="text-xs mt-1 italic">This is a snippet. Select and process, or click 'Tailor CV' for full summary & details from source.</p>}
                             </TooltipContent>
                         </Tooltip>
                       </TableCell>
@@ -712,7 +746,7 @@ export default function JobsRssPage() {
                                 <SparklesIcon className="h-4 w-4 text-muted-foreground/70 hover:text-primary" />
                               </Button>
                             </TooltipTrigger>
-                            <TooltipContent><p className="text-xs">Fetch details & calculate CV match</p></TooltipContent>
+                            <TooltipContent><p className="text-xs">Fetch details (from RSS XML) & calculate CV match</p></TooltipContent>
                           </Tooltip>
                         )}
                       </TableCell>
@@ -721,9 +755,9 @@ export default function JobsRssPage() {
                             variant="outline"
                             size="sm"
                             onClick={() => handleTailorCvForJob(job.id)}
-                            disabled={tailoringJobId === job.id || !!job.isCalculatingMatch}
+                            disabled={tailoringJobId === job.id || !!job.isCalculatingMatch || !job.link || job.link === '#'}
                         >
-                            {tailoringJobId === job.id || (job.isProcessingDetails && tailoringJobId === job.id) ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ArrowRight className="mr-2 h-4 w-4" /> }
+                            {tailoringJobId === job.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ArrowRight className="mr-2 h-4 w-4" /> }
                             Tailor CV
                         </Button>
                       </TableCell>
