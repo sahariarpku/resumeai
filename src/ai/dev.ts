@@ -8,3 +8,4 @@ import '@/ai/flows/extract-job-details-flow.ts';
 import '@/ai/flows/extract-text-from-html-flow.ts';
 import '@/ai/flows/calculate-profile-jd-match-flow.ts';
 import '@/ai/flows/polish-text-flow.ts'; // Added new flow
+import '@/ai/flows/generate-cover-letter-flow.ts'; // Added cover letter flow

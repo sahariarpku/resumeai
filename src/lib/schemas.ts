@@ -127,3 +127,16 @@ export const polishTextOutputSchema = z.object({
   polishedText: z.string(),
 });
 export type PolishTextOutputSchema = z.infer<typeof polishTextOutputSchema>;
+
+// Schemas for Cover Letter Flow
+export const GenerateCoverLetterInputSchema = z.object({
+  resumeText: z.string().describe("The full text of the user's resume or professional profile."),
+  jobDescriptionText: z.string().describe("The full text of the job description the user is applying for."),
+  userName: z.string().optional().describe("The user's full name, if available."),
+});
+export type GenerateCoverLetterInput = z.infer<typeof GenerateCoverLetterInputSchema>;
+
+export const GenerateCoverLetterOutputSchema = z.object({
+  coverLetterText: z.string().describe("The generated cover letter text, formatted professionally."),
+});
+export type GenerateCoverLetterOutput = z.infer<typeof GenerateCoverLetterOutputSchema>;

@@ -170,6 +170,112 @@ export function profileToResumeText(profile: UserProfile): string {
   return resumeText.trim();
 }
 
+const PROFESSIONAL_DOCUMENT_STYLES = `
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&display=swap');
+    
+    body { 
+      font-family: 'Source Serif 4', serif; 
+      line-height: 1.6; 
+      margin: 0; 
+      padding: 0; 
+      color: #333333; 
+      background-color: #ffffff;
+      font-size: 11pt;
+    }
+    .container { 
+      max-width: 8.5in; 
+      margin: 0.5in auto; 
+      padding: 0.75in; 
+      border: 1px solid #dcdcdc; 
+      box-shadow: 0 0 10px rgba(0,0,0,0.05);
+    }
+    
+    h1.main-name { 
+      font-family: 'Inter', sans-serif;
+      font-size: 24pt; 
+      font-weight: 700;
+      margin-bottom: 0.1em; 
+      color: #1a1a1a; 
+      text-align: center;
+      letter-spacing: 1px;
+    }
+    
+    .contact-info { 
+      text-align: center;
+      margin-bottom: 1.5em; 
+      font-size: 10pt; 
+      color: #4d4d4d; 
+      font-family: 'Inter', sans-serif;
+    }
+    .contact-info a { color: #0056b3; text-decoration: none; }
+    .contact-info a:hover { text-decoration: underline; }
+    .contact-info span + span::before { content: " | "; margin: 0 0.5em; }
+
+    .section-title { 
+      font-family: 'Inter', sans-serif;
+      font-size: 14pt; 
+      font-weight: 600;
+      margin-top: 1.2em; 
+      margin-bottom: 0.6em; 
+      border-bottom: 1.5px solid #333333; 
+      padding-bottom: 0.25em; 
+      color: #1a1a1a;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .section-summary .section-title { /* Summary specific title styling */
+      text-align: left; 
+    }
+    .cover-letter-body .section-title { /* Cover letter title specific styling, if any */
+       border-bottom: none; /* No border for cover letter main content heading if not desired */
+       text-align: left;
+       margin-bottom: 1em; /* More space after cover letter intro title */
+    }
+
+
+    .item { margin-bottom: 1.2em; }
+    .item-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.1em; }
+    .item-primary { font-family: 'Inter', sans-serif; font-size: 11pt; font-weight: 600; color: #2a2a2a; }
+    .item-secondary { font-family: 'Inter', sans-serif; font-size: 10pt; font-weight: 500; color: #4d4d4d; } /* For company, institution */
+    .item-dates { font-family: 'Inter', sans-serif; font-size: 10pt; color: #4d4d4d; text-align: right; white-space: nowrap; }
+    
+    .item-details p, .item-details ul { margin-top: 0.3em; margin-bottom: 0.3em; font-size: 10.5pt; }
+    .item-details ul { padding-left: 1.5em; list-style-type: disc; }
+    .item-details li { margin-bottom: 0.25em; }
+    
+    .description { font-size: 10.5pt; margin-top: 0.2em; }
+    
+    .skills-list { padding: 0; list-style-type: none; }
+    .skills-list li { margin-bottom: 0.4em; }
+    .skills-category strong { font-family: 'Inter', sans-serif; font-weight: 600; text-transform: none; }
+    
+    .publication-authors { font-style: italic; font-size: 10pt; margin-top: 0.1em; margin-bottom: 0.1em; }
+    .publication-source { font-size: 10pt; margin-bottom: 0.1em; }
+    
+    .cover-letter-body p { margin-bottom: 1em; } /* Spacing for cover letter paragraphs */
+
+    /* Print-specific styles */
+    @media print {
+      body { font-size: 10pt; }
+      .container { 
+        margin: 0; 
+        padding: 0.5in; 
+        border: none; 
+        box-shadow: none; 
+        max-width: 100%;
+      }
+      h1.main-name { font-size: 22pt; }
+      .section-title { font-size: 13pt; }
+      .item-primary, .item-secondary, .item-dates { font-size: 9.5pt; }
+      .item-details p, .item-details ul, .description { font-size: 9.5pt; }
+      .contact-info { font-size: 9pt; }
+      a { color: #000000 !important; text-decoration: none !important; } /* Ensure links are black for printing */
+      .item { page-break-inside: avoid; }
+    }
+  </style>
+`;
+
 
 export function profileToResumeHtml(profile: UserProfile): string {
   let html = `
@@ -179,102 +285,7 @@ export function profileToResumeHtml(profile: UserProfile): string {
       <meta charset="UTF-8">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
       <title>${profile.fullName ? `${profile.fullName} - Resume` : 'Resume'}</title>
-      <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&display=swap');
-        
-        body { 
-          font-family: 'Source Serif 4', serif; 
-          line-height: 1.6; 
-          margin: 0; 
-          padding: 0; 
-          color: #333333; 
-          background-color: #ffffff;
-          font-size: 11pt;
-        }
-        .container { 
-          max-width: 8.5in; 
-          margin: 0.5in auto; 
-          padding: 0.75in; 
-          border: 1px solid #dcdcdc; 
-          box-shadow: 0 0 10px rgba(0,0,0,0.05);
-        }
-        
-        h1.main-name { 
-          font-family: 'Inter', sans-serif;
-          font-size: 24pt; 
-          font-weight: 700;
-          margin-bottom: 0.1em; 
-          color: #1a1a1a; 
-          text-align: center;
-          letter-spacing: 1px;
-        }
-        
-        .contact-info { 
-          text-align: center;
-          margin-bottom: 1.5em; 
-          font-size: 10pt; 
-          color: #4d4d4d; 
-          font-family: 'Inter', sans-serif;
-        }
-        .contact-info a { color: #0056b3; text-decoration: none; }
-        .contact-info a:hover { text-decoration: underline; }
-        .contact-info span + span::before { content: " | "; margin: 0 0.5em; }
-
-        .section-title { 
-          font-family: 'Inter', sans-serif;
-          font-size: 14pt; 
-          font-weight: 600;
-          margin-top: 1.2em; 
-          margin-bottom: 0.6em; 
-          border-bottom: 1.5px solid #333333; 
-          padding-bottom: 0.25em; 
-          color: #1a1a1a;
-          text-transform: uppercase;
-          letter-spacing: 0.5px;
-        }
-        .section-summary .section-title {
-          text-align: left; /* Summary title can be left-aligned */
-        }
-
-        .item { margin-bottom: 1.2em; }
-        .item-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.1em; }
-        .item-primary { font-family: 'Inter', sans-serif; font-size: 11pt; font-weight: 600; color: #2a2a2a; }
-        .item-secondary { font-family: 'Inter', sans-serif; font-size: 10pt; font-weight: 500; color: #4d4d4d; } /* For company, institution */
-        .item-dates { font-family: 'Inter', sans-serif; font-size: 10pt; color: #4d4d4d; text-align: right; white-space: nowrap; }
-        
-        .item-details p, .item-details ul { margin-top: 0.3em; margin-bottom: 0.3em; font-size: 10.5pt; }
-        .item-details ul { padding-left: 1.5em; list-style-type: disc; }
-        .item-details li { margin-bottom: 0.25em; }
-        
-        .description { font-size: 10.5pt; margin-top: 0.2em; }
-        
-        .skills-list { padding: 0; list-style-type: none; }
-        .skills-list li { margin-bottom: 0.4em; }
-        .skills-category strong { font-family: 'Inter', sans-serif; font-weight: 600; text-transform: none; }
-        
-        .publication-authors { font-style: italic; font-size: 10pt; margin-top: 0.1em; margin-bottom: 0.1em; }
-        .publication-source { font-size: 10pt; margin-bottom: 0.1em; }
-        
-        /* Print-specific styles */
-        @media print {
-          body { font-size: 10pt; }
-          .container { 
-            margin: 0; 
-            padding: 0.5in; 
-            border: none; 
-            box-shadow: none; 
-            max-width: 100%;
-          }
-          h1.main-name { font-size: 22pt; }
-          .section-title { font-size: 13pt; }
-          .item-primary, .item-secondary, .item-dates { font-size: 9.5pt; }
-          .item-details p, .item-details ul, .description { font-size: 9.5pt; }
-          .contact-info { font-size: 9pt; }
-          a { color: #000000 !important; text-decoration: none !important; } /* Ensure links are black for printing */
-          /* Attempt to avoid page breaks within items, though not always possible */
-          .item { page-break-inside: avoid; }
-        }
-      </style>
+      ${PROFESSIONAL_DOCUMENT_STYLES}
     </head>
     <body>
       <div class="container">
@@ -289,7 +300,7 @@ export function profileToResumeHtml(profile: UserProfile): string {
     if (profile.linkedin) contactParts.push(`<a href="${profile.linkedin}" target="_blank">LinkedIn</a>`);
     if (profile.github) contactParts.push(`<a href="${profile.github}" target="_blank">GitHub</a>`);
     if (profile.portfolio) contactParts.push(`<a href="${profile.portfolio}" target="_blank">Portfolio</a>`);
-    if (contactParts.length > 0) html += `<p class="contact-info">${contactParts.join('<span></span>')}</p>`; // Using empty span for separator styling
+    if (contactParts.length > 0) html += `<p class="contact-info">${contactParts.join('<span></span>')}</p>`;
   }
 
   if (profile.summary) {
@@ -299,7 +310,7 @@ export function profileToResumeHtml(profile: UserProfile): string {
   const sectionOrder = profile.sectionOrder || DEFAULT_SECTION_ORDER;
 
   for (const sectionKey of sectionOrder) {
-    html += `<div class="section">`;
+    html += `<div class="section">`; // Each section gets a wrapper
     switch (sectionKey) {
       case 'workExperiences':
         if (profile.workExperiences && profile.workExperiences.length > 0) {
@@ -320,7 +331,7 @@ export function profileToResumeHtml(profile: UserProfile): string {
               exp.achievements.forEach(ach => html += `<li>${ach}</li>`);
               html += `</ul>`;
             }
-            html += `</div></div>`;
+            html += `</div></div>`; // Close item
           });
         }
         break;
@@ -343,7 +354,7 @@ export function profileToResumeHtml(profile: UserProfile): string {
               html += `<p>Relevant Courses: ${edu.relevantCourses.join(', ')}</p>`;
             }
             if (edu.description) html += `<p>${edu.description.replace(/\n/g, '<br>')}</p>`;
-            html += `</div></div>`;
+            html += `</div></div>`; // Close item
           });
         }
         break;
@@ -365,14 +376,14 @@ export function profileToResumeHtml(profile: UserProfile): string {
               proj.achievements.forEach(ach => html += `<li>${ach}</li>`);
               html += `</ul>`;
             }
-            html += `</div></div>`;
+            html += `</div></div>`; // Close item
           });
         }
         break;
       case 'skills':
         if (profile.skills && profile.skills.length > 0) {
           html += `<h2 class="section-title">${formatSectionTitle(sectionKey)}</h2>`;
-          html += `<ul class="skills-list item-details">`;
+          html += `<ul class="skills-list item-details">`; // item-details for consistent font size
           const categorizedSkills: { [key: string]: string[] } = {};
           const uncategorizedSkills: string[] = [];
           profile.skills.forEach(skill => {
@@ -408,7 +419,7 @@ export function profileToResumeHtml(profile: UserProfile): string {
                         ${item.date ? `<div class="item-dates">${item.date}</div>` : ''}
                      </div>`;
             if (item.description) html += `<div class="item-details"><p>${item.description.replace(/\n/g, '<br>')}</p></div>`;
-            html += `</div>`;
+            html += `</div>`; // Close item
           });
         }
         break;
@@ -427,7 +438,7 @@ export function profileToResumeHtml(profile: UserProfile): string {
             if (item.doi) html += `<p>DOI: ${item.doi}</p>`;
             if (item.link) html += `<p><a href="${item.link}" target="_blank">View Publication</a></p>`;
             if (item.description) html += `<p>${item.description.replace(/\n/g, '<br>')}</p>`;
-            html += `</div></div>`;
+            html += `</div></div>`; // Close item
           });
         }
         break;
@@ -446,7 +457,7 @@ export function profileToResumeHtml(profile: UserProfile): string {
             html += `<div class="item-details">`;
             if (cert.credentialId) html += `<p>Credential ID: ${cert.credentialId}</p>`;
             if (cert.credentialUrl) html += `<p><a href="${cert.credentialUrl}" target="_blank">Verify Credential</a></p>`;
-            html += `</div></div>`;
+            html += `</div></div>`; // Close item
           });
         }
         break;
@@ -459,19 +470,20 @@ export function profileToResumeHtml(profile: UserProfile): string {
             html += `<div class="item-details">`;
             if (ref.titleAndCompany) html += `<p class="item-secondary">${ref.titleAndCompany}</p>`;
             if (ref.contactDetailsOrNote) html += `<p>${ref.contactDetailsOrNote.replace(/\n/g, '<br>')}</p>`;
-            html += `</div></div>`;
+            html += `</div></div>`; // Close item
           });
         }
         break;
       case 'customSections':
         if (profile.customSections && profile.customSections.length > 0) {
           profile.customSections.forEach((section: CustomSection) => {
+            // Wrap custom section in its own div.section for consistent spacing if needed
             html += `<h2 class="section-title">${section.heading.toUpperCase()}</h2><div class="item-details"><p>${section.content.replace(/\n/g, '<br>')}</p></div>`;
           });
         }
         break;
     }
-    html += `</div>`;
+    html += `</div>`; // Close section wrapper
   }
 
   html += `
@@ -480,4 +492,30 @@ export function profileToResumeHtml(profile: UserProfile): string {
     </html>
   `;
   return html;
+}
+
+
+export function textToProfessionalHtml(text: string, documentTitle: string): string {
+  const paragraphs = text.split('\n').map(p => `<p>${p}</p>`).join('');
+  return `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>${documentTitle}</title>
+      ${PROFESSIONAL_DOCUMENT_STYLES}
+    </head>
+    <body>
+      <div class="container">
+        <div class="section cover-letter-body">
+          <h2 class="section-title">${documentTitle}</h2>
+          <div class="item-details">
+            ${paragraphs}
+          </div>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
 }
