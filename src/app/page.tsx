@@ -1,166 +1,87 @@
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Sparkles, UserCircle, CheckCircle, Zap } from "lucide-react"; // Added Zap for consistency if Sparkles is used elsewhere.
+import { Separator } from "@/components/ui/separator";
+import { Github } from "lucide-react";
 import Link from "next/link";
-import Image from "next/image";
-import { ResumeForgeLogo } from "@/components/resume-forge-logo";
+
+// Simple Google Icon SVG
+const GoogleIcon = () => (
+  <svg className="mr-2 h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+    <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+    <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+    <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+    <path d="M1 1h22v22H1z" fill="none"/>
+  </svg>
+);
 
 export default function LandingPage() {
   return (
-    <div className="flex flex-col min-h-screen bg-background">
-      <header className="px-4 lg:px-6 h-16 flex items-center border-b sticky top-0 z-50 bg-background/95 backdrop-blur-sm">
-        <Link href="/" className="flex items-center justify-center" prefetch={false}>
-          <ResumeForgeLogo />
-          <span className="sr-only">ResumeForge</span>
+    <div className="flex flex-col min-h-screen bg-gray-900 text-white font-body">
+      <header className="absolute top-0 left-0 p-6 md:p-8 z-10">
+        <Link href="/" className="text-2xl font-bold font-headline text-gray-100 hover:text-gray-300 transition-colors">
+          Resume-AI
         </Link>
-        <nav className="ml-auto flex gap-4 sm:gap-6 items-center">
-          <Link
-            href="#features"
-            className="text-sm font-medium hover:underline underline-offset-4 text-foreground"
-            prefetch={false}
-          >
-            Features
-          </Link>
-          <Button asChild variant="ghost" size="sm">
-            <Link href="/auth/signin" prefetch={false}>
-              Sign In
-            </Link>
-          </Button>
-          <Button asChild size="sm">
-            <Link href="/auth/signup" prefetch={false}>
-              Get Started
-            </Link>
-          </Button>
-        </nav>
       </header>
-      <main className="flex-1">
-        <section className="w-full py-12 md:py-24 lg:py-32 xl:py-40 bg-gradient-to-br from-primary/5 via-background to-accent/5">
-          <div className="container px-4 md:px-6">
-            <div className="grid gap-8 lg:grid-cols-[1fr_500px] lg:gap-12 xl:grid-cols-[1fr_600px]">
-              <div className="flex flex-col justify-center space-y-6">
-                <div className="space-y-3">
-                  <h1 className="font-headline text-4xl font-bold tracking-tighter sm:text-5xl xl:text-6xl/none bg-clip-text text-transparent bg-gradient-to-r from-primary to-accent">
-                    Forge Your Future: AI-Powered Resumes, Perfectly Tailored.
-                  </h1>
-                  <p className="max-w-[600px] text-muted-foreground md:text-xl">
-                    Stop guessing, start impressing. ResumeForge uses AI to craft compelling resumes that get noticed by employers.
-                  </p>
-                </div>
-                <div className="flex flex-col gap-3 min-[400px]:flex-row">
-                  <Button size="lg" asChild className="shadow-lg hover:shadow-xl transition-shadow">
-                    <Link href="/auth/signup" prefetch={false}>
-                      Start Building Free
-                    </Link>
-                  </Button>
-                  <Button size="lg" variant="outline" asChild>
-                     <Link href="#features" prefetch={false}>
-                        Learn More
-                     </Link>
-                  </Button>
-                </div>
-              </div>
-              <Image
-                src="https://placehold.co/600x500.png" // Adjusted aspect ratio slightly
-                width="600"
-                height="500"
-                alt="Modern resume builder interface showing a polished resume"
-                data-ai-hint="modern workspace resume" // Keep hint
-                className="mx-auto aspect-[6/5] overflow-hidden rounded-xl object-cover object-center sm:w-full lg:order-last shadow-xl"
-              />
-            </div>
+
+      <main className="flex flex-1 items-center justify-center p-4">
+        <div className="grid md:grid-cols-2 gap-12 md:gap-24 items-center max-w-5xl w-full">
+          <div className="space-y-5 text-center md:text-left">
+            <h1 className="text-4xl sm:text-5xl font-bold font-headline leading-tight">
+              Welcome Back to <br className="hidden sm:inline" /> Resume-AI
+            </h1>
+            <p className="text-lg text-gray-300">
+              Sign In To Unlock The Full Potential Of AI-driven Resumes and Job Matching.
+            </p>
+            <p className="text-lg text-gray-300">
+              Elevate Your Career, One Tailored Resume at a Time.
+            </p>
           </div>
-        </section>
-        <section id="features" className="w-full py-12 md:py-24 lg:py-32">
-          <div className="container px-4 md:px-6">
-            <div className="flex flex-col items-center justify-center space-y-4 text-center mb-12">
-              <div className="inline-block rounded-lg bg-muted px-3 py-1 text-sm font-medium text-primary">
-                Core Benefits
-              </div>
-              <h2 className="font-headline text-3xl font-bold tracking-tighter sm:text-5xl">
-                Unlock Your Career Potential
-              </h2>
-              <p className="max-w-[900px] text-muted-foreground md:text-xl/relaxed lg:text-base/relaxed xl:text-xl/relaxed">
-                Our intelligent tools streamline your job application process from start to finish.
-              </p>
-            </div>
-            <div className="mx-auto grid max-w-5xl items-start gap-8 sm:grid-cols-2 md:gap-12 lg:grid-cols-3 lg:max-w-none">
-              <Card className="hover:shadow-lg transition-shadow duration-300 border-border/80">
-                <CardHeader className="pb-4">
-                  <div className="p-3 bg-primary/10 rounded-full w-fit mb-3">
-                    <Sparkles className="h-6 w-6 text-primary" />
-                  </div>
-                  <CardTitle className="font-headline text-xl">Intelligent AI Tailoring</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-muted-foreground">
-                    Instantly adapt your resume to any job description, highlighting your most relevant skills and experiences. ATS-friendly.
-                  </p>
-                </CardContent>
-              </Card>
-              <Card className="hover:shadow-lg transition-shadow duration-300 border-border/80">
-                <CardHeader className="pb-4">
-                  <div className="p-3 bg-primary/10 rounded-full w-fit mb-3">
-                     <UserCircle className="h-6 w-6 text-primary" />
-                  </div>
-                  <CardTitle className="font-headline text-xl">Centralized Profile Hub</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-muted-foreground">
-                    Manage all your career details—experience, education, projects, and skills—in one organized and easily accessible place.
-                  </p>
-                </CardContent>
-              </Card>
-              <Card className="hover:shadow-lg transition-shadow duration-300 border-border/80">
-                <CardHeader className="pb-4">
-                  <div className="p-3 bg-primary/10 rounded-full w-fit mb-3">
-                     <CheckCircle className="h-6 w-6 text-primary" />
-                  </div>
-                  <CardTitle className="font-headline text-xl">Effortless Application Prep</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-muted-foreground">
-                    Generate tailored resumes and cover letters quickly, so you can focus on applying, networking, and landing interviews.
-                  </p>
-                </CardContent>
-              </Card>
-            </div>
-          </div>
-        </section>
-        <section id="cta" className="w-full py-12 md:py-24 lg:py-32 bg-muted/50">
-          <div className="container grid items-center justify-center gap-4 px-4 text-center md:px-6">
-            <div className="space-y-4">
-              <h2 className="font-headline text-3xl font-bold tracking-tighter md:text-4xl/tight">
-                Ready to Forge Your Next Career Move?
-              </h2>
-              <p className="mx-auto max-w-[600px] text-muted-foreground md:text-xl/relaxed lg:text-base/relaxed xl:text-xl/relaxed">
-                Join ResumeForge today and experience the power of AI in your job search.
-              </p>
-            </div>
-            <div className="mx-auto w-full max-w-sm space-y-2">
-              <Button size="lg" className="w-full shadow-md hover:shadow-lg" asChild>
-                <Link href="/auth/signup" prefetch={false}>
-                  Sign Up for Free
+
+          <div className="bg-gray-800 p-8 rounded-xl shadow-2xl w-full max-w-sm mx-auto">
+            <div className="space-y-6">
+              <p className="text-sm text-center text-gray-400">Use your social account to sign in</p>
+              
+              {/* Placeholder: Link to signup or a dedicated social auth page if implemented */}
+              <Button className="w-full bg-white text-gray-800 hover:bg-gray-100 transition-colors" asChild>
+                <Link href="/auth/signup"> 
+                  <GoogleIcon /> Sign in with Google
                 </Link>
               </Button>
-            </div>
-             <p className="text-xs text-muted-foreground pt-2">
-                Get started in minutes. No credit card required.
+              
+              {/* Placeholder: Link to signup or a dedicated social auth page if implemented */}
+              <Button className="w-full bg-slate-700 text-white hover:bg-slate-600 transition-colors" asChild>
+                <Link href="/auth/signup">
+                  <Github className="mr-2 h-5 w-5" /> Sign in with GitHub
+                </Link>
+              </Button>
+              
+              <p className="text-xs text-center text-gray-500">
+                By signing in, you agree to our{' '}
+                <Link href="#" className="underline hover:text-gray-300 transition-colors">Privacy Policy</Link> and{' '}
+                <Link href="#" className="underline hover:text-gray-300 transition-colors">Terms of Service</Link>.
               </p>
+
+              <div className="flex items-center space-x-2">
+                <Separator className="flex-1 bg-gray-700" />
+                <span className="text-xs text-gray-500">OR</span>
+                <Separator className="flex-1 bg-gray-700" />
+              </div>
+              
+              <Button variant="outline" className="w-full border-gray-600 hover:bg-gray-700 hover:text-gray-100 transition-colors" asChild>
+                 <Link href="/auth/signin">Sign In with Email</Link>
+              </Button>
+
+              <p className="text-sm text-center text-gray-400">
+                New to Resume-AI?{' '}
+                <Link href="/auth/signup" className="font-medium text-primary hover:underline hover:text-purple-400 transition-colors">
+                  Create an account
+                </Link>
+              </p>
+            </div>
           </div>
-        </section>
+        </div>
       </main>
-      <footer className="flex flex-col gap-2 sm:flex-row py-6 w-full shrink-0 items-center px-4 md:px-6 border-t">
-        <p className="text-xs text-muted-foreground">&copy; {new Date().getFullYear()} ResumeForge. All rights reserved.</p>
-        <nav className="sm:ml-auto flex gap-4 sm:gap-6">
-          <Link href="#" className="text-xs hover:underline underline-offset-4 text-muted-foreground" prefetch={false}>
-            Terms of Service
-          </Link>
-          <Link href="#" className="text-xs hover:underline underline-offset-4 text-muted-foreground" prefetch={false}>
-            Privacy Policy
-          </Link>
-        </nav>
-      </footer>
     </div>
   );
 }
