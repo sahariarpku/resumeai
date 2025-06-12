@@ -1,6 +1,7 @@
+
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { PlusCircle, FileText, Briefcase, Sparkles, ArrowRight } from "lucide-react";
+import { PlusCircle, FileText, Briefcase, Sparkles, ArrowRight, ClipboardList } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 
@@ -27,7 +28,7 @@ export default function DashboardPage() {
           <CardHeader>
             <CardTitle className="font-headline text-2xl">Tailor a New Resume</CardTitle>
             <CardDescription className="text-primary-foreground/80">
-              Craft a resume perfectly matched to a specific job description using AI.
+              Craft a resume perfectly matched to a specific job using AI.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -56,13 +57,13 @@ export default function DashboardPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="font-headline">Job Descriptions</CardTitle>
-            <CardDescription>Manage your saved job descriptions.</CardDescription>
+            <CardTitle className="font-headline">Jobs to Apply</CardTitle>
+            <CardDescription>Manage jobs you&apos;re targeting.</CardDescription>
           </CardHeader>
           <CardContent>
             <Button variant="outline" className="w-full" asChild>
               <Link href="/job-descriptions">
-                View JDs <ArrowRight className="ml-2 h-4 w-4" />
+                View Jobs <ArrowRight className="ml-2 h-4 w-4" />
               </Link>
             </Button>
           </CardContent>
@@ -100,9 +101,9 @@ export default function DashboardPage() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="font-headline">Saved Job Descriptions</CardTitle>
+            <CardTitle className="font-headline">Saved Jobs</CardTitle>
             <Button variant="ghost" size="sm" asChild>
-              <Link href="/job-descriptions">View All <ArrowRight className="ml-2 h-4 w-4" /></Link>
+              <Link href="/job-descriptions">View All Jobs <ArrowRight className="ml-2 h-4 w-4" /></Link>
             </Button>
           </CardHeader>
           <CardContent>
@@ -121,7 +122,7 @@ export default function DashboardPage() {
                 ))}
               </ul>
             ) : (
-              <p className="text-sm text-muted-foreground">No saved job descriptions.</p>
+              <p className="text-sm text-muted-foreground">No saved jobs.</p>
             )}
           </CardContent>
         </Card>

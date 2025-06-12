@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
-import { PlusCircle, Briefcase, ArrowRight, Trash2, Edit3, FileSearch, Sparkles, Loader2, Link as LinkIcon, DownloadCloud, BarChart3, Info } from "lucide-react";
+import { PlusCircle, Briefcase, ArrowRight, Trash2, Edit3, FileSearch, Sparkles, Loader2, Link as LinkIcon, DownloadCloud, BarChart3, Info, ClipboardList } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from 'next/navigation';
 import type { JobDescriptionItem, UserProfile } from "@/lib/types";
@@ -77,7 +77,7 @@ export default function JobDescriptionsPage() {
       console.error("Failed to load JDs from localStorage:", error);
       toast({
         title: "Load Error",
-        description: "Could not load job descriptions from local storage.",
+        description: "Could not load job applications from local storage.",
         variant: "destructive",
       });
       setJds(fallbackInitialJds); 
@@ -93,7 +93,7 @@ export default function JobDescriptionsPage() {
         console.error("Failed to save JDs to localStorage:", error);
         toast({
           title: "Save Error",
-          description: "Could not save job descriptions to local storage.",
+          description: "Could not save job applications to local storage.",
           variant: "destructive",
         });
       }
@@ -113,7 +113,7 @@ export default function JobDescriptionsPage() {
   const handleAddOrEditJd = (data: JobDescriptionFormData) => {
     if (editingJd) {
       setJds(prevJds => prevJds.map(jd => jd.id === editingJd.id ? { ...jd, ...data } : jd)); // Preserve match score
-      toast({ title: "Job Description Updated!" });
+      toast({ title: "Job Application Updated!" });
     } else {
       const newJd: JobDescriptionItem = {
         id: `jd-${Date.now()}`,
@@ -121,7 +121,7 @@ export default function JobDescriptionsPage() {
         createdAt: new Date().toISOString(),
       };
       setJds(prevJds => [newJd, ...prevJds]);
-      toast({ title: "Job Description Saved!" });
+      toast({ title: "Job Application Saved!" });
     }
     setIsModalOpen(false);
     setEditingJd(null);
@@ -145,7 +145,7 @@ export default function JobDescriptionsPage() {
 
   const handleDeleteJd = (id: string) => {
     setJds(prevJds => prevJds.filter(jd => jd.id !== id));
-    toast({ title: "Job Description Deleted", variant: "destructive" });
+    toast({ title: "Job Application Deleted", variant: "destructive" });
   };
 
   const handleExtractDetailsFromText = async () => {
@@ -331,7 +331,7 @@ export default function JobDescriptionsPage() {
 
       const currentJd = jds.find(jd => jd.id === jdId);
       if (!currentJd) {
-        toast({ title: "Error", description: "Job description not found.", variant: "destructive" });
+        toast({ title: "Error", description: "Job application not found.", variant: "destructive" });
         setCalculatingMatchId(null);
         return;
       }
@@ -369,7 +369,7 @@ export default function JobDescriptionsPage() {
     return (
       <div className="container mx-auto py-8 text-center">
         <Loader2 className="mx-auto h-12 w-12 animate-spin text-primary" />
-        <p className="mt-4 text-muted-foreground">Loading job descriptions...</p>
+        <p className="mt-4 text-muted-foreground">Loading job applications...</p>
       </div>
     );
   }
@@ -390,28 +390,28 @@ export default function JobDescriptionsPage() {
     <div className="container mx-auto py-8 space-y-8">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="font-headline text-3xl font-bold">Job Descriptions</h1>
+          <h1 className="font-headline text-3xl font-bold">Jobs to Apply</h1>
           <p className="text-muted-foreground">
-            Manage saved JDs, tailor resumes, and see profile match scores.
+            Manage saved job applications, tailor resumes, and see profile match scores.
           </p>
         </div>
         <Button onClick={openAddModal} size="lg">
-          <PlusCircle className="mr-2 h-5 w-5" /> Add New JD
+          <PlusCircle className="mr-2 h-5 w-5" /> Add New Job
         </Button>
       </div>
 
       {jds.length === 0 ? (
         <Card className="text-center py-12">
           <CardHeader>
-            <FileSearch className="mx-auto h-16 w-16 text-muted-foreground mb-4" />
-            <CardTitle className="font-headline text-2xl">No Job Descriptions Yet</CardTitle>
+            <ClipboardList className="mx-auto h-16 w-16 text-muted-foreground mb-4" />
+            <CardTitle className="font-headline text-2xl">No Jobs Added Yet</CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-muted-foreground mb-4">
-              Start by adding a job description to tailor your resume.
+              Start by adding a job you want to apply for to tailor your resume.
             </p>
             <Button onClick={openAddModal}>
-              <PlusCircle className="mr-2 h-4 w-4" /> Add Your First JD
+              <PlusCircle className="mr-2 h-4 w-4" /> Add Your First Job
             </Button>
           </CardContent>
         </Card>
@@ -470,9 +470,9 @@ export default function JobDescriptionsPage() {
       <Dialog open={isModalOpen} onOpenChange={(isOpen) => { setIsModalOpen(isOpen); if (!isOpen) setJdUrl(""); }}>
         <DialogContent className="sm:max-w-2xl">
             <DialogHeader>
-            <DialogTitle className="font-headline">{editingJd ? "Edit Job Description" : "Add New Job Description"}</DialogTitle>
+            <DialogTitle className="font-headline">{editingJd ? "Edit Job Application" : "Add New Job Application"}</DialogTitle>
             <DialogDescription>
-                {editingJd ? "Update the details of this job description." : "Save a job description to tailor resumes for it later. You can paste a URL to try and auto-fill the description."}
+                {editingJd ? "Update the details of this job application." : "Save a job application to tailor resumes for it later. You can paste a URL to try and auto-fill the description."}
             </DialogDescription>
             </DialogHeader>
             
@@ -559,7 +559,7 @@ export default function JobDescriptionsPage() {
                   <DialogClose asChild>
                     <Button type="button" variant="outline">Cancel</Button>
                   </DialogClose>
-                  <Button type="submit" disabled={isProcessingUrl || isExtractingDetails}>{editingJd ? "Save Changes" : "Add Job Description"}</Button>
+                  <Button type="submit" disabled={isProcessingUrl || isExtractingDetails}>{editingJd ? "Save Changes" : "Add Job Application"}</Button>
                 </DialogFooter>
             </form>
             </Form>
@@ -569,5 +569,3 @@ export default function JobDescriptionsPage() {
     </TooltipProvider>
   );
 }
-
-    
