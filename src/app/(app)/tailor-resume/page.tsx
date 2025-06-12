@@ -4,25 +4,30 @@
 import React, { useState } from 'react';
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useRouter } from 'next/navigation'; // Import useRouter
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
-import { Sparkles, Download, Copy, FileText, Brain, Lightbulb, Loader2, Save } from "lucide-react";
+import { Sparkles, Download, Copy, FileText, Brain, Lightbulb, Loader2, Save, ListChecks } from "lucide-react";
 import { tailorResumeFormSchema, type TailorResumeFormData } from "@/lib/schemas";
 import { tailorResumeToJobDescription } from "@/ai/flows/tailor-resume-to-job-description";
 import { improveResume } from "@/ai/flows/improve-resume-based-on-job-description";
+import type { StoredResume } from "@/lib/types"; // Import StoredResume type
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Separator } from '@/components/ui/separator';
 
 export default function TailorResumePage() {
   const { toast } = useToast();
+  const router = useRouter(); // Initialize router
   const [isLoading, setIsLoading] = useState(false);
   const [tailoredResume, setTailoredResume] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [jobTitleForSave, setJobTitleForSave] = useState<string>("");
+
 
   const form = useForm<TailorResumeFormData>({
     resolver: zodResolver(tailorResumeFormSchema),
@@ -39,8 +44,19 @@ export default function TailorResumePage() {
     setSuggestions(null);
     setError(null);
 
+    // Try to extract a job title from the job description for naming the resume
+    const jdLines = data.jobDescription.split('\n');
+    const titleLine = jdLines.find(line => /title/i.test(line) && !/job title/i.test(line) && line.length < 100);
+    let extractedTitle = "Untitled Job";
+    if (titleLine) {
+      extractedTitle = titleLine.replace(/.*title\s*[:=-]?\s*/i, '').trim();
+    } else if (jdLines[0] && jdLines[0].length < 100) {
+      extractedTitle = jdLines[0].trim();
+    }
+    setJobTitleForSave(extractedTitle);
+
+
     try {
-      // Fetch tailored resume and suggestions in parallel
       const [tailorResult, improveResult] = await Promise.all([
         tailorResumeToJobDescription({ resume: data.resumeContent, jobDescription: data.jobDescription }),
         improveResume({ resume: data.resumeContent, jobDescription: data.jobDescription })
@@ -59,7 +75,9 @@ export default function TailorResumePage() {
       }
 
       if (tailorResult.tailoredResume) {
-        toast({ title: "Resume Tailored!", description: "AI has customized your resume and provided suggestions." });
+        toast({ title: "Resume Tailored!", description: "AI has customized your resume. You can now save it." });
+        // Automatically save after successful tailoring
+        handleSaveResume(tailorResult.tailoredResume, tailorResult.analysis, improveResult.suggestions, extractedTitle);
       } else {
          toast({ title: "Suggestions Provided", description: "AI has provided suggestions for your resume." });
       }
@@ -104,13 +122,34 @@ export default function TailorResumePage() {
     toast({title: "Download Started", description: `${filename} is downloading.`});
   };
 
-  const handleSaveResume = () => {
-    // Placeholder for future save functionality
-    if (tailoredResume) {
-      toast({ title: "Save Resume", description: "Save functionality coming soon! For now, please download or copy your resume."});
-      // In the future, this would save to local storage or a backend,
-      // potentially linking to the "My Resumes" page.
-      // Example: saveToLocalStorage({ name: "Tailored Resume - " + new Date().toLocaleDateString(), content: tailoredResume });
+  const handleSaveResume = (
+    currentTailoredResume: string | null,
+    currentAnalysis: string | null,
+    currentSuggestions: string | null,
+    title: string
+  ) => {
+    if (currentTailoredResume) {
+      const newResume: StoredResume = {
+        id: `resume-${Date.now()}`,
+        name: `${title} (Tailored ${new Date().toLocaleDateString()})`,
+        tailoredContent: currentTailoredResume,
+        aiAnalysis: currentAnalysis || undefined,
+        aiSuggestions: currentSuggestions || undefined,
+        createdAt: new Date().toISOString(),
+        // jobDescriptionId could be added if we link JDs
+      };
+
+      try {
+        const existingResumesString = localStorage.getItem("resumes");
+        const existingResumes: StoredResume[] = existingResumesString ? JSON.parse(existingResumesString) : [];
+        existingResumes.unshift(newResume); // Add to the beginning
+        localStorage.setItem("resumes", JSON.stringify(existingResumes));
+        toast({ title: "Resume Saved!", description: "Your tailored resume has been saved."});
+        // router.push('/resumes'); // Optionally navigate, or let user click the "View Resumes" button
+      } catch (e) {
+        console.error("Failed to save resume to localStorage:", e);
+        toast({ title: "Save Error", description: "Could not save resume to local storage.", variant: "destructive"});
+      }
     } else {
       toast({ title: "Nothing to Save", description: "Please generate a tailored resume first.", variant: "destructive"});
     }
@@ -177,7 +216,7 @@ export default function TailorResumePage() {
             </CardContent>
           </Card>
           
-          <div className="lg:col-span-2 flex justify-center">
+          <div className="lg:col-span-2 flex flex-col sm:flex-row justify-center items-center gap-4">
             <Button type="submit" size="lg" disabled={isLoading} className="min-w-[200px]">
               {isLoading ? (
                 <Loader2 className="mr-2 h-5 w-5 animate-spin" />
@@ -186,6 +225,12 @@ export default function TailorResumePage() {
               )}
               Forge My Resume
             </Button>
+            {tailoredResume && (
+                <Button type="button" size="lg" variant="outline" onClick={() => router.push('/resumes')} className="min-w-[200px]">
+                    <ListChecks className="mr-2 h-5 w-5" />
+                    View My Resumes
+                </Button>
+            )}
           </div>
         </form>
       </Form>
@@ -209,10 +254,12 @@ export default function TailorResumePage() {
                 <div className="flex gap-2 pt-2 flex-wrap">
                     <Button variant="outline" size="sm" onClick={() => handleCopyToClipboard(tailoredResume)}><Copy className="mr-2 h-4 w-4" />Copy</Button>
                     <Button variant="outline" size="sm" onClick={() => handleDownload(tailoredResume, 'Tailored_Resume.txt')}><Download className="mr-2 h-4 w-4" />Download (.txt)</Button>
-                    <Button variant="secondary" size="sm" onClick={handleSaveResume}><Save className="mr-2 h-4 w-4" />Save Resume</Button>
+                    {/* Save button is now part of the flow, or could be a manual save if preferred */}
+                    {/* <Button variant="secondary" size="sm" onClick={() => handleSaveResume(tailoredResume, analysis, suggestions, jobTitleForSave)}><Save className="mr-2 h-4 w-4" />Save Resume</Button> */}
                 </div>
                 <p className="text-xs text-muted-foreground pt-2">
                   The tailored resume is provided as a .txt file. You can copy the content and paste it into your preferred editor (e.g., Word, Google Docs) to format it as a PDF or Word document.
+                  Your resume has been automatically saved.
                 </p>
               </CardHeader>
               <CardContent>

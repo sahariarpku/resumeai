@@ -1,11 +1,11 @@
 
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react'; // Import useEffect
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { FileText, Download, Trash2, Eye, PlusCircle, Edit3, FileSearch } from "lucide-react";
+import { FileText, Download, Trash2, Eye, PlusCircle, Edit3, FileSearch, Info } from "lucide-react";
 import Link from "next/link";
 import type { StoredResume } from "@/lib/types";
 import {
@@ -19,19 +19,59 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
-const initialResumes: StoredResume[] = [
-  { id: "resume1", name: "Software Engineer - Google (Tailored)", tailoredContent: "...", createdAt: new Date().toISOString(), jobDescriptionId: "jd1", aiAnalysis: "Good match.", aiSuggestions: "Add more keywords." },
-  { id: "resume2", name: "UX Designer - Microsoft (Draft)", tailoredContent: "...", createdAt: new Date().toISOString() },
-];
+
+// Remove initialResumes, will be loaded from localStorage
+// const initialResumes: StoredResume[] = [
+//   { id: "resume1", name: "Software Engineer - Google (Tailored)", tailoredContent: "...", createdAt: new Date().toISOString(), jobDescriptionId: "jd1", aiAnalysis: "Good match.", aiSuggestions: "Add more keywords." },
+//   { id: "resume2", name: "UX Designer - Microsoft (Draft)", tailoredContent: "...", createdAt: new Date().toISOString() },
+// ];
+
+const LOCAL_STORAGE_KEY = "resumes";
 
 export default function MyResumesPage() {
   const { toast } = useToast();
-  const [resumes, setResumes] = useState<StoredResume[]>(initialResumes);
+  const [resumes, setResumes] = useState<StoredResume[]>([]);
+
+  useEffect(() => {
+    try {
+      const storedResumesString = localStorage.getItem(LOCAL_STORAGE_KEY);
+      if (storedResumesString) {
+        const storedResumes = JSON.parse(storedResumesString) as StoredResume[];
+        setResumes(storedResumes);
+      }
+    } catch (error) {
+      console.error("Failed to load resumes from localStorage:", error);
+      toast({
+        title: "Load Error",
+        description: "Could not load resumes from local storage.",
+        variant: "destructive",
+      });
+    }
+  }, [toast]);
 
   const handleDeleteResume = (id: string) => {
-    setResumes(resumes.filter(resume => resume.id !== id));
-    toast({ title: "Resume Deleted", variant: "destructive" });
+    const updatedResumes = resumes.filter(resume => resume.id !== id);
+    setResumes(updatedResumes);
+    try {
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updatedResumes));
+      toast({ title: "Resume Deleted", variant: "destructive" });
+    } catch (error) {
+      console.error("Failed to save updated resumes to localStorage:", error);
+      toast({
+        title: "Save Error",
+        description: "Could not update resumes in local storage after deletion.",
+        variant: "destructive",
+      });
+      // Optionally revert state if save fails, or handle more gracefully
+      // setResumes(resumes); 
+    }
   };
 
   const handleDownload = (content: string, filename: string) => {
@@ -47,6 +87,7 @@ export default function MyResumesPage() {
   };
 
   return (
+    <TooltipProvider>
     <div className="container mx-auto py-8 space-y-8">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
@@ -70,7 +111,7 @@ export default function MyResumesPage() {
           </CardHeader>
           <CardContent>
             <p className="text-muted-foreground mb-4">
-              Tailor your first resume to see it appear here.
+              Tailor your first resume to see it appear here. It will be saved automatically.
             </p>
             <Button asChild>
               <Link href="/tailor-resume">
@@ -86,8 +127,19 @@ export default function MyResumesPage() {
               <CardHeader>
                 <div className="flex justify-between items-start">
                     <FileText className="h-8 w-8 text-primary mb-2" />
-                     {/* Edit functionality can be added later if resumes are editable post-generation */}
-                     {/* <Button variant="ghost" size="icon"><Edit3 className="h-4 w-4" /></Button> */}
+                    {(resume.aiAnalysis || resume.aiSuggestions) && (
+                       <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-primary">
+                            <Info className="h-4 w-4" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent side="top" className="max-w-xs">
+                          {resume.aiAnalysis && <p className="text-xs mb-1"><strong>Analysis:</strong> {resume.aiAnalysis.substring(0,100)}...</p>}
+                          {resume.aiSuggestions && <p className="text-xs"><strong>Suggestions:</strong> {resume.aiSuggestions.substring(0,100)}...</p>}
+                        </TooltipContent>
+                      </Tooltip>
+                    )}
                 </div>
                 <CardTitle className="font-headline text-xl">{resume.name}</CardTitle>
                 <CardDescription>
@@ -98,20 +150,14 @@ export default function MyResumesPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="flex-grow">
-                {/* Optionally show a snippet or stats */}
                 <p className="text-sm text-muted-foreground line-clamp-3">
-                  {resume.aiAnalysis || "Ready to be tailored or downloaded."}
+                  {resume.tailoredContent.substring(0, 150)}...
                 </p>
               </CardContent>
               <CardFooter className="grid grid-cols-2 gap-2">
                 <Button variant="outline" onClick={() => handleDownload(resume.tailoredContent, `${resume.name.replace(/\s+/g, '_')}.txt`)}>
                   <Download className="mr-2 h-4 w-4" /> Download
                 </Button>
-                {/* <Button variant="secondary" asChild>
-                  <Link href={`/resumes/${resume.id}/view`}> Link to a view/edit page
-                    <Eye className="mr-2 h-4 w-4" /> View/Edit
-                  </Link>
-                </Button> */}
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
                     <Button variant="destructive" className="w-full">
@@ -140,5 +186,6 @@ export default function MyResumesPage() {
         </div>
       )}
     </div>
+    </TooltipProvider>
   );
 }
