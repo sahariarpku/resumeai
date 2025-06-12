@@ -2,6 +2,25 @@
 # https://firebase.google.com/docs/app-hosting/configure
 
 runConfig:
-  # Increase this value if you'd like to automatically spin up
-  # more instances in response to increased traffic.
+  # User-defined max instances. Default is 100.
   maxInstances: 1
+
+# Defines environment variables for the backend.
+# These will be set during the build and serving phases.
+# Values are taken from your .env file.
+# For production, consider using Firebase Secret Manager for sensitive keys.
+env:
+  - variable: NEXT_PUBLIC_FIREBASE_API_KEY
+    value: AIzaSyBz0PpzsIoStvCGNobvUZD8CTf6XseXUAA
+  - variable: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+    value: resumeai-29368.firebaseapp.com
+  - variable: NEXT_PUBLIC_FIREBASE_PROJECT_ID
+    value: resumeai-29368
+  - variable: NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+    value: resumeai-29368.firebasestorage.app
+  - variable: NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+    value: "487405937975"
+  - variable: NEXT_PUBLIC_FIREBASE_APP_ID
+    value: "1:487405937975:web:0dd9cf81d821d77fb0e6b2"
+  - variable: NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
+    value: G-B63LL5XVX6
