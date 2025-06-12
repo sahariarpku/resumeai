@@ -1,1 +1,5 @@
-// Flows will be imported for their side effects in this file.
+import { config } from 'dotenv';
+config();
+
+import '@/ai/flows/improve-resume-based-on-job-description.ts';
+import '@/ai/flows/tailor-resume-to-job-description.ts';
