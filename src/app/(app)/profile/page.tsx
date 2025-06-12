@@ -30,15 +30,17 @@ import {
   DialogClose,
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { PlusCircle, Edit3, Trash2, Save, UserCircle, Briefcase, FolderKanban, GraduationCap, Wrench, Award, Loader2, Sparkles } from "lucide-react";
-import type { UserProfile, WorkExperience, Project, Education, Skill, Certification } from "@/lib/types";
+import { PlusCircle, Edit3, Trash2, Save, UserCircle, Briefcase, FolderKanban, GraduationCap, Wrench, Award, Loader2, Sparkles, Trophy, BookOpen } from "lucide-react";
+import type { UserProfile, WorkExperience, Project, Education, Skill, Certification, HonorAward, Publication } from "@/lib/types";
 import { 
     userProfileSchema, UserProfileFormData,
     workExperienceSchema, WorkExperienceFormData,
     projectSchema, ProjectFormData,
     educationSchema, EducationFormData,
     skillSchema, SkillFormData,
-    certificationSchema, CertificationFormData
+    certificationSchema, CertificationFormData,
+    honorAwardSchema, HonorAwardFormData,
+    publicationSchema, PublicationFormData
 } from "@/lib/schemas";
 import { FormSection, FormSectionList } from '@/components/forms/form-section';
 import { WorkExperienceFormFields } from '@/components/forms/work-experience-form-fields';
@@ -46,6 +48,8 @@ import { ProjectFormFields } from '@/components/forms/project-form-fields';
 import { EducationFormFields } from '@/components/forms/education-form-fields';
 import { SkillFormFields } from '@/components/forms/skill-form-fields';
 import { CertificationFormFields } from '@/components/forms/certification-form-fields';
+import { HonorAwardFormFields } from '@/components/forms/honor-award-form-fields';
+import { PublicationFormFields } from '@/components/forms/publication-form-fields';
 import { polishText } from '@/ai/flows/polish-text-flow';
 import { TooltipProvider } from '@/components/ui/tooltip';
 
@@ -62,6 +66,8 @@ const fallbackInitialProfileData: UserProfile = {
   education: [],
   skills: [],
   certifications: [],
+  honorsAndAwards: [],
+  publications: [],
 };
 
 
@@ -84,6 +90,12 @@ export default function ProfilePage() {
 
   const [isCertificationModalOpen, setIsCertificationModalOpen] = useState(false);
   const [editingCertification, setEditingCertification] = useState<Certification | null>(null);
+
+  const [isHonorAwardModalOpen, setIsHonorAwardModalOpen] = useState(false);
+  const [editingHonorAward, setEditingHonorAward] = useState<HonorAward | null>(null);
+
+  const [isPublicationModalOpen, setIsPublicationModalOpen] = useState(false);
+  const [editingPublication, setEditingPublication] = useState<Publication | null>(null);
   
   const [polishingField, setPolishingField] = useState<string | null>(null);
 
@@ -95,9 +107,11 @@ export default function ProfilePage() {
 
   const workExperienceForm = useForm<WorkExperienceFormData>({ resolver: zodResolver(workExperienceSchema), defaultValues: {} });
   const projectForm = useForm<ProjectFormData>({ resolver: zodResolver(projectSchema), defaultValues: {} });
-  const educationForm = useForm<EducationFormData>({ resolver: zodResolver(educationSchema), defaultValues: {} });
+  const educationForm = useForm<EducationFormData>({ resolver: zodResolver(educationSchema), defaultValues: { relevantCourses: '', description: '', thesisTitle: '', gpa: ''} });
   const skillForm = useForm<SkillFormData>({ resolver: zodResolver(skillSchema), defaultValues: {} });
   const certificationForm = useForm<CertificationFormData>({ resolver: zodResolver(certificationSchema), defaultValues: {} });
+  const honorAwardForm = useForm<HonorAwardFormData>({ resolver: zodResolver(honorAwardSchema), defaultValues: {} });
+  const publicationForm = useForm<PublicationFormData>({ resolver: zodResolver(publicationSchema), defaultValues: {} });
 
 
   useEffect(() => {
@@ -105,16 +119,21 @@ export default function ProfilePage() {
       const storedProfileString = localStorage.getItem(USER_PROFILE_STORAGE_KEY);
       if (storedProfileString) {
         const storedProfile = JSON.parse(storedProfileString) as UserProfile;
-        setProfileData(storedProfile);
+        // Ensure new fields have default empty arrays if not present in old stored data
+        const updatedProfile = {
+            ...fallbackInitialProfileData, // provides default empty arrays
+            ...storedProfile, // overwrites with stored data
+        };
+        setProfileData(updatedProfile);
         generalInfoForm.reset({
-            fullName: storedProfile.fullName || "",
-            email: storedProfile.email || "user@example.com",
-            phone: storedProfile.phone || "",
-            address: storedProfile.address || "",
-            linkedin: storedProfile.linkedin || "",
-            github: storedProfile.github || "",
-            portfolio: storedProfile.portfolio || "",
-            summary: storedProfile.summary || "",
+            fullName: updatedProfile.fullName || "",
+            email: updatedProfile.email || "user@example.com",
+            phone: updatedProfile.phone || "",
+            address: updatedProfile.address || "",
+            linkedin: updatedProfile.linkedin || "",
+            github: updatedProfile.github || "",
+            portfolio: updatedProfile.portfolio || "",
+            summary: updatedProfile.summary || "",
         });
       } else {
         setProfileData(fallbackInitialProfileData);
@@ -123,7 +142,7 @@ export default function ProfilePage() {
       }
     } catch (error) {
       console.error("Failed to load profile from localStorage:", error);
-      setProfileData(fallbackInitialProfileData);
+      setProfileData(fallbackInitialProfileData); // Fallback to initial on error
       generalInfoForm.reset(fallbackInitialProfileData);
       toast({
         title: "Load Error",
@@ -177,10 +196,10 @@ export default function ProfilePage() {
 
   // --- Work Experience ---
   const handleAddWorkExperience = () => { setEditingWorkExperience(null); workExperienceForm.reset({ achievements: '' }); setIsWorkExperienceModalOpen(true); };
-  const handleEditWorkExperience = (experience: WorkExperience) => { setEditingWorkExperience(experience); workExperienceForm.reset({ ...experience, achievements: experience.achievements?.join(', ') || '' }); setIsWorkExperienceModalOpen(true); };
+  const handleEditWorkExperience = (experience: WorkExperience) => { setEditingWorkExperience(experience); workExperienceForm.reset({ ...experience, achievements: experience.achievements?.join('\n') || '' }); setIsWorkExperienceModalOpen(true); };
   const handleDeleteWorkExperience = (id: string) => { saveProfile({ ...profileData, workExperiences: profileData.workExperiences.filter(exp => exp.id !== id) }); toast({ title: "Work Experience Removed", variant: "destructive" }); };
   const onWorkExperienceSubmit = (data: WorkExperienceFormData) => {
-    const achievementsArray = data.achievements?.split(',').map(s => s.trim()).filter(Boolean);
+    const achievementsArray = data.achievements?.split('\n').map(s => s.trim()).filter(Boolean);
     let updatedExperiences;
     if (editingWorkExperience) {
       updatedExperiences = profileData.workExperiences.map(exp => exp.id === editingWorkExperience.id ? { ...exp, ...data, achievements: achievementsArray, id: exp.id } : exp);
@@ -195,11 +214,11 @@ export default function ProfilePage() {
 
   // --- Projects ---
   const handleAddProject = () => { setEditingProject(null); projectForm.reset({ name: '', description: '', technologies: '', achievements: '', link: '' }); setIsProjectModalOpen(true); };
-  const handleEditProject = (project: Project) => { setEditingProject(project); projectForm.reset({ ...project, technologies: project.technologies?.join(', ') || '', achievements: project.achievements?.join(', ') || '' }); setIsProjectModalOpen(true); };
+  const handleEditProject = (project: Project) => { setEditingProject(project); projectForm.reset({ ...project, technologies: project.technologies?.join(', ') || '', achievements: project.achievements?.join('\n') || '' }); setIsProjectModalOpen(true); };
   const handleDeleteProject = (id: string) => { saveProfile({ ...profileData, projects: profileData.projects.filter(p => p.id !== id) }); toast({ title: "Project Removed", variant: "destructive" }); };
   const onProjectSubmit = (data: ProjectFormData) => {
     const techArray = data.technologies?.split(',').map(s => s.trim()).filter(Boolean);
-    const achievementsArray = data.achievements?.split(',').map(s => s.trim()).filter(Boolean);
+    const achievementsArray = data.achievements?.split('\n').map(s => s.trim()).filter(Boolean);
     let updatedProjects;
     if (editingProject) {
       updatedProjects = profileData.projects.map(p => p.id === editingProject.id ? { ...p, ...data, technologies: techArray, achievements: achievementsArray, id: p.id } : p);
@@ -213,16 +232,17 @@ export default function ProfilePage() {
   };
 
   // --- Education ---
-  const handleAddEducation = () => { setEditingEducation(null); educationForm.reset({}); setIsEducationModalOpen(true); };
-  const handleEditEducation = (edu: Education) => { setEditingEducation(edu); educationForm.reset(edu); setIsEducationModalOpen(true); };
+  const handleAddEducation = () => { setEditingEducation(null); educationForm.reset({ relevantCourses: '', description: '', thesisTitle: '', gpa: '' }); setIsEducationModalOpen(true); };
+  const handleEditEducation = (edu: Education) => { setEditingEducation(edu); educationForm.reset({...edu, relevantCourses: edu.relevantCourses?.join(', ') || '', description: edu.description || '', thesisTitle: edu.thesisTitle || '', gpa: edu.gpa || '' }); setIsEducationModalOpen(true); };
   const handleDeleteEducation = (id: string) => { saveProfile({ ...profileData, education: profileData.education.filter(e => e.id !== id) }); toast({ title: "Education Entry Removed", variant: "destructive" }); };
   const onEducationSubmit = (data: EducationFormData) => {
+    const coursesArray = data.relevantCourses?.split(',').map(s => s.trim()).filter(Boolean);
     let updatedEducation;
     if (editingEducation) {
-      updatedEducation = profileData.education.map(e => e.id === editingEducation.id ? { ...e, ...data, id: e.id } : e);
+      updatedEducation = profileData.education.map(e => e.id === editingEducation.id ? { ...e, ...data, relevantCourses: coursesArray, id: e.id } : e);
       toast({ title: "Education Updated" });
     } else {
-      updatedEducation = [...profileData.education, { ...data, id: `edu-${Date.now()}` }];
+      updatedEducation = [...profileData.education, { ...data, relevantCourses: coursesArray, id: `edu-${Date.now()}` }];
       toast({ title: "Education Added" });
     }
     saveProfile({ ...profileData, education: updatedEducation });
@@ -262,6 +282,42 @@ export default function ProfilePage() {
     saveProfile({ ...profileData, certifications: updatedCerts });
     setIsCertificationModalOpen(false); setEditingCertification(null);
   };
+
+  // --- Honors & Awards ---
+  const handleAddHonorAward = () => { setEditingHonorAward(null); honorAwardForm.reset({}); setIsHonorAwardModalOpen(true); };
+  const handleEditHonorAward = (item: HonorAward) => { setEditingHonorAward(item); honorAwardForm.reset(item); setIsHonorAwardModalOpen(true); };
+  const handleDeleteHonorAward = (id: string) => { saveProfile({ ...profileData, honorsAndAwards: profileData.honorsAndAwards.filter(item => item.id !== id) }); toast({ title: "Honor/Award Removed", variant: "destructive" }); };
+  const onHonorAwardSubmit = (data: HonorAwardFormData) => {
+    let updatedItems;
+    if (editingHonorAward) {
+      updatedItems = profileData.honorsAndAwards.map(item => item.id === editingHonorAward.id ? { ...item, ...data, id: item.id } : item);
+      toast({ title: "Honor/Award Updated" });
+    } else {
+      updatedItems = [...profileData.honorsAndAwards, { ...data, id: `ha-${Date.now()}` }];
+      toast({ title: "Honor/Award Added" });
+    }
+    saveProfile({ ...profileData, honorsAndAwards: updatedItems });
+    setIsHonorAwardModalOpen(false); setEditingHonorAward(null);
+  };
+
+  // --- Publications ---
+  const handleAddPublication = () => { setEditingPublication(null); publicationForm.reset({ authors: '' }); setIsPublicationModalOpen(true); };
+  const handleEditPublication = (item: Publication) => { setEditingPublication(item); publicationForm.reset({ ...item, authors: item.authors?.join(', ') || '' }); setIsPublicationModalOpen(true); };
+  const handleDeletePublication = (id: string) => { saveProfile({ ...profileData, publications: profileData.publications.filter(item => item.id !== id) }); toast({ title: "Publication Removed", variant: "destructive" }); };
+  const onPublicationSubmit = (data: PublicationFormData) => {
+    const authorsArray = data.authors?.split(',').map(s => s.trim()).filter(Boolean);
+    let updatedItems;
+    if (editingPublication) {
+      updatedItems = profileData.publications.map(item => item.id === editingPublication.id ? { ...item, ...data, authors: authorsArray, id: item.id } : item);
+      toast({ title: "Publication Updated" });
+    } else {
+      updatedItems = [...profileData.publications, { ...data, authors: authorsArray, id: `pub-${Date.now()}` }];
+      toast({ title: "Publication Added" });
+    }
+    saveProfile({ ...profileData, publications: updatedItems });
+    setIsPublicationModalOpen(false); setEditingPublication(null);
+  };
+
   
   if (!isProfileLoaded) {
     return <div className="container mx-auto py-8 text-center flex justify-center items-center min-h-[200px]"><Loader2 className="h-8 w-8 animate-spin text-primary" /> <span className="ml-2">Loading profile...</span></div>;
@@ -277,7 +333,7 @@ export default function ProfilePage() {
         </p>
       </div>
 
-      <Accordion type="multiple" defaultValue={['general-info', 'work-experience']} className="w-full space-y-4">
+      <Accordion type="multiple" defaultValue={['general-info', 'work-experience', 'education']} className="w-full space-y-4">
         <AccordionItem value="general-info" className="border-none">
             <FormSection
               title="General Information"
@@ -316,7 +372,6 @@ export default function ProfilePage() {
             </FormSection>
         </AccordionItem>
 
-        {/* Work Experience Section */}
         <AccordionItem value="work-experience" id="work-experience" className="border-none">
             <FormSection
               title="Work Experience"
@@ -346,7 +401,6 @@ export default function ProfilePage() {
             </FormSection>
         </AccordionItem>
         
-        {/* Projects Section */}
         <AccordionItem value="projects" id="projects" className="border-none">
             <FormSection
               title="Projects"
@@ -377,11 +431,10 @@ export default function ProfilePage() {
             </FormSection>
         </AccordionItem>
 
-        {/* Education Section */}
         <AccordionItem value="education" id="education" className="border-none">
             <FormSection
               title="Education"
-              description="List your academic qualifications."
+              description="List your academic qualifications and achievements."
               actions={<Button onClick={handleAddEducation} variant="outline"><PlusCircle className="mr-2 h-4 w-4" /> Add Education</Button>}
             >
               <FormSectionList
@@ -393,6 +446,10 @@ export default function ProfilePage() {
                             <h4 className="font-semibold">{edu.degree} in {edu.fieldOfStudy}</h4>
                             <p className="text-sm text-muted-foreground">{edu.institution}</p>
                             <p className="text-xs text-muted-foreground">{edu.startDate} - {edu.endDate || 'Expected'}</p>
+                            {edu.gpa && <p className="text-xs text-muted-foreground">GPA/Result: {edu.gpa}</p>}
+                            {edu.thesisTitle && <p className="text-xs text-muted-foreground mt-1">Thesis: {edu.thesisTitle}</p>}
+                            {edu.relevantCourses && edu.relevantCourses.length > 0 && <p className="text-xs text-muted-foreground mt-1">Courses: {edu.relevantCourses.join(', ')}</p>}
+                            {edu.description && <p className="text-xs text-muted-foreground mt-1 whitespace-pre-line">Notes: {edu.description}</p>}
                         </div>
                         <div className="flex gap-1">
                             <Button variant="ghost" size="icon" onClick={() => handleEditEducation(edu)}><Edit3 className="h-4 w-4" /></Button>
@@ -406,7 +463,67 @@ export default function ProfilePage() {
             </FormSection>
         </AccordionItem>
 
-        {/* Skills Section */}
+        <AccordionItem value="honors-awards" id="honors-awards" className="border-none">
+            <FormSection
+              title="Honors &amp; Awards"
+              description="List your recognitions and accolades."
+              actions={<Button onClick={handleAddHonorAward} variant="outline"><PlusCircle className="mr-2 h-4 w-4" /> Add Honor/Award</Button>}
+            >
+              <FormSectionList
+                items={profileData.honorsAndAwards}
+                renderItem={(item) => (
+                  <div key={item.id} className="p-4 rounded-md border bg-card/50">
+                    <div className="flex justify-between items-start">
+                        <div>
+                            <h4 className="font-semibold">{item.name}</h4>
+                            {item.organization && <p className="text-sm text-muted-foreground">{item.organization}</p>}
+                            {item.date && <p className="text-xs text-muted-foreground">Date: {item.date}</p>}
+                            {item.description && <p className="text-xs text-muted-foreground mt-1 whitespace-pre-line">{item.description}</p>}
+                        </div>
+                        <div className="flex gap-1">
+                            <Button variant="ghost" size="icon" onClick={() => handleEditHonorAward(item)}><Edit3 className="h-4 w-4" /></Button>
+                            <Button variant="ghost" size="icon" onClick={() => handleDeleteHonorAward(item.id)} className="text-destructive hover:text-destructive"><Trash2 className="h-4 w-4" /></Button>
+                        </div>
+                    </div>
+                  </div>
+                )}
+                emptyState={<p className="text-sm text-muted-foreground">No honors or awards added yet.</p>}
+              />
+            </FormSection>
+        </AccordionItem>
+
+        <AccordionItem value="publications" id="publications" className="border-none">
+            <FormSection
+              title="Publications"
+              description="Showcase your published work."
+              actions={<Button onClick={handleAddPublication} variant="outline"><PlusCircle className="mr-2 h-4 w-4" /> Add Publication</Button>}
+            >
+              <FormSectionList
+                items={profileData.publications}
+                renderItem={(item) => (
+                  <div key={item.id} className="p-4 rounded-md border bg-card/50">
+                    <div className="flex justify-between items-start">
+                        <div>
+                            <h4 className="font-semibold">{item.title}</h4>
+                            {item.authors && item.authors.length > 0 && <p className="text-sm text-muted-foreground">Authors: {item.authors.join(', ')}</p>}
+                            {item.journalOrConference && <p className="text-sm text-muted-foreground">{item.journalOrConference}</p>}
+                            {item.publicationDate && <p className="text-xs text-muted-foreground">Date: {item.publicationDate}</p>}
+                            {item.doi && <p className="text-xs text-muted-foreground">DOI: {item.doi}</p>}
+                            {item.link && <a href={item.link} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline block">View Publication</a>}
+                            {item.description && <p className="text-xs text-muted-foreground mt-1 whitespace-pre-line">{item.description}</p>}
+                        </div>
+                        <div className="flex gap-1">
+                            <Button variant="ghost" size="icon" onClick={() => handleEditPublication(item)}><Edit3 className="h-4 w-4" /></Button>
+                            <Button variant="ghost" size="icon" onClick={() => handleDeletePublication(item.id)} className="text-destructive hover:text-destructive"><Trash2 className="h-4 w-4" /></Button>
+                        </div>
+                    </div>
+                  </div>
+                )}
+                emptyState={<p className="text-sm text-muted-foreground">No publications added yet.</p>}
+              />
+            </FormSection>
+        </AccordionItem>
+
         <AccordionItem value="skills" id="skills" className="border-none">
             <FormSection
               title="Skills"
@@ -435,7 +552,6 @@ export default function ProfilePage() {
             </FormSection>
         </AccordionItem>
 
-        {/* Certifications Section */}
         <AccordionItem value="certifications" id="certifications" className="border-none">
             <FormSection
               title="Certifications"
@@ -501,14 +617,46 @@ export default function ProfilePage() {
 
       {/* Education Modal */}
       <Dialog open={isEducationModalOpen} onOpenChange={setIsEducationModalOpen}>
-        <DialogContent className="sm:max-w-xl">
-          <DialogHeader><DialogTitle className="font-headline">{editingEducation ? 'Edit Education' : 'Add New Education'}</DialogTitle><DialogDescription>Provide your educational qualifications.</DialogDescription></DialogHeader>
+        <DialogContent className="sm:max-w-2xl"> {/* Increased width for more fields */}
+          <DialogHeader><DialogTitle className="font-headline">{editingEducation ? 'Edit Education' : 'Add New Education'}</DialogTitle><DialogDescription>Provide your educational qualifications and details.</DialogDescription></DialogHeader>
           <Form {...educationForm}>
             <form onSubmit={educationForm.handleSubmit(onEducationSubmit)} className="space-y-6 py-4">
-              <EducationFormFields control={educationForm.control} />
+              <EducationFormFields control={educationForm.control} onPolishRequest={(fieldName) => handleAIPolish(fieldName, educationForm)} polishingField={polishingField as keyof EducationFormData | null} isSubmitting={educationForm.formState.isSubmitting} />
               <DialogFooter>
                 <DialogClose asChild><Button type="button" variant="outline">Cancel</Button></DialogClose>
                 <Button type="submit" disabled={educationForm.formState.isSubmitting}><Save className="mr-2 h-4 w-4"/>{educationForm.formState.isSubmitting ? <Loader2 className="animate-spin"/> : (editingEducation ? 'Save Changes' : 'Add Education')}</Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Honor/Award Modal */}
+      <Dialog open={isHonorAwardModalOpen} onOpenChange={setIsHonorAwardModalOpen}>
+        <DialogContent className="sm:max-w-xl">
+          <DialogHeader><DialogTitle className="font-headline">{editingHonorAward ? 'Edit Honor/Award' : 'Add New Honor/Award'}</DialogTitle><DialogDescription>Detail your honors and awards.</DialogDescription></DialogHeader>
+          <Form {...honorAwardForm}>
+            <form onSubmit={honorAwardForm.handleSubmit(onHonorAwardSubmit)} className="space-y-6 py-4">
+              <HonorAwardFormFields control={honorAwardForm.control} onPolishRequest={(fieldName) => handleAIPolish(fieldName, honorAwardForm)} polishingField={polishingField as keyof HonorAwardFormData | null} isSubmitting={honorAwardForm.formState.isSubmitting} />
+              <DialogFooter>
+                <DialogClose asChild><Button type="button" variant="outline">Cancel</Button></DialogClose>
+                <Button type="submit" disabled={honorAwardForm.formState.isSubmitting}><Save className="mr-2 h-4 w-4"/>{honorAwardForm.formState.isSubmitting ? <Loader2 className="animate-spin"/> : (editingHonorAward ? 'Save Changes' : 'Add Honor/Award')}</Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Publication Modal */}
+      <Dialog open={isPublicationModalOpen} onOpenChange={setIsPublicationModalOpen}>
+        <DialogContent className="sm:max-w-2xl"> {/* Increased width */}
+          <DialogHeader><DialogTitle className="font-headline">{editingPublication ? 'Edit Publication' : 'Add New Publication'}</DialogTitle><DialogDescription>Detail your published work.</DialogDescription></DialogHeader>
+          <Form {...publicationForm}>
+            <form onSubmit={publicationForm.handleSubmit(onPublicationSubmit)} className="space-y-6 py-4">
+              <PublicationFormFields control={publicationForm.control} onPolishRequest={(fieldName) => handleAIPolish(fieldName, publicationForm)} polishingField={polishingField as keyof PublicationFormData | null} isSubmitting={publicationForm.formState.isSubmitting} />
+              <DialogFooter>
+                <DialogClose asChild><Button type="button" variant="outline">Cancel</Button></DialogClose>
+                <Button type="submit" disabled={publicationForm.formState.isSubmitting}><Save className="mr-2 h-4 w-4"/>{publicationForm.formState.isSubmitting ? <Loader2 className="animate-spin"/> : (editingPublication ? 'Save Changes' : 'Add Publication')}</Button>
               </DialogFooter>
             </form>
           </Form>

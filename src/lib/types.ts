@@ -25,6 +25,10 @@ export interface Education {
   fieldOfStudy: string;
   startDate: string;
   endDate: string; // Can be "Present" or expected graduation
+  gpa?: string; // e.g., "3.8/4.0" or "First Class"
+  thesisTitle?: string;
+  relevantCourses?: string[]; // Stored as array, handled as comma-separated in form
+  description?: string; // For additional notes, achievements during education
 }
 
 export interface Skill {
@@ -43,6 +47,25 @@ export interface Certification {
   credentialUrl?: string;
 }
 
+export interface HonorAward {
+  id: string;
+  name: string;
+  organization?: string;
+  date?: string; // YYYY or YYYY-MM
+  description?: string;
+}
+
+export interface Publication {
+  id: string;
+  title: string;
+  authors?: string[]; // Stored as array, handled as comma-separated in form
+  journalOrConference?: string;
+  publicationDate?: string; // YYYY or YYYY-MM
+  link?: string;
+  doi?: string;
+  description?: string; // Abstract or summary
+}
+
 export interface UserProfile {
   id: string;
   fullName?: string;
@@ -58,6 +81,8 @@ export interface UserProfile {
   education: Education[];
   skills: Skill[];
   certifications: Certification[];
+  honorsAndAwards: HonorAward[];
+  publications: Publication[];
 }
 
 export interface JobDescriptionItem {

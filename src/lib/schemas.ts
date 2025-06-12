@@ -29,7 +29,11 @@ export const educationSchema = z.object({
   degree: z.string().min(1, "Degree is required"),
   fieldOfStudy: z.string().min(1, "Field of study is required"),
   startDate: z.string().min(1, "Start date is required (YYYY-MM)"),
-  endDate: z.string(), // Allow empty for "Present" or expected (YYYY-MM)
+  endDate: z.string().optional(), // Allow empty for "Present" or expected (YYYY-MM)
+  gpa: z.string().optional(),
+  thesisTitle: z.string().max(500, "Thesis title is too long").optional(),
+  relevantCourses: z.string().optional(), // Comma-separated
+  description: z.string().max(1000, "Description is too long").optional(), // For notes/achievements
 });
 export type EducationFormData = z.infer<typeof educationSchema>;
 
@@ -50,6 +54,28 @@ export const certificationSchema = z.object({
   credentialUrl: z.string().url("Must be a valid URL").optional().or(z.literal('')),
 });
 export type CertificationFormData = z.infer<typeof certificationSchema>;
+
+export const honorAwardSchema = z.object({
+  id: z.string().optional(),
+  name: z.string().min(1, "Award/Honor name is required"),
+  organization: z.string().optional(),
+  date: z.string().optional(), // YYYY or YYYY-MM
+  description: z.string().max(1000, "Description is too long").optional(),
+});
+export type HonorAwardFormData = z.infer<typeof honorAwardSchema>;
+
+export const publicationSchema = z.object({
+  id: z.string().optional(),
+  title: z.string().min(1, "Publication title is required"),
+  authors: z.string().optional(), // Comma-separated
+  journalOrConference: z.string().optional(),
+  publicationDate: z.string().optional(), // YYYY or YYYY-MM
+  link: z.string().url("Must be a valid URL").optional().or(z.literal('')),
+  doi: z.string().optional(),
+  description: z.string().max(2000, "Description/Abstract is too long").optional(),
+});
+export type PublicationFormData = z.infer<typeof publicationSchema>;
+
 
 export const userProfileSchema = z.object({
   fullName: z.string().min(1, "Full name is required").optional(),

@@ -17,15 +17,16 @@ import {
   FileText, 
   Sparkles,
   Settings,
-  BookUser,
   GraduationCap,
   Wrench,
-  Award,
+  Award as CertificationIcon, // Renamed to avoid conflict
   Lightbulb,
-  FolderKanban
+  FolderKanban,
+  Trophy, // For Honors & Awards
+  BookOpen // For Publications
 } from "lucide-react";
 import { ResumeForgeLogo } from "../resume-forge-logo";
-import React, { useEffect, useState } from "react"; // Import React
+import React, { useEffect, useState } from "react"; 
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -34,8 +35,10 @@ const navItems = [
         { href: "/profile#work-experience", label: "Work Experience", icon: Briefcase },
         { href: "/profile#projects", label: "Projects", icon: FolderKanban },
         { href: "/profile#education", label: "Education", icon: GraduationCap },
+        { href: "/profile#honors-awards", label: "Honors & Awards", icon: Trophy },
+        { href: "/profile#publications", label: "Publications", icon: BookOpen },
         { href: "/profile#skills", label: "Skills", icon: Wrench },
-        { href: "/profile#certifications", label: "Certifications", icon: Award },
+        { href: "/profile#certifications", label: "Certifications", icon: CertificationIcon },
     ]
   },
   { href: "/job-descriptions", label: "Job Descriptions", icon: Briefcase },
@@ -49,23 +52,22 @@ export function MainNav() {
   const [currentClientHref, setCurrentClientHref] = useState("");
 
   useEffect(() => {
-    // This effect runs only on the client, after initial hydration
     if (typeof window !== "undefined") {
       const updateClientHref = () => {
         setCurrentClientHref(window.location.pathname + window.location.hash);
       };
 
-      updateClientHref(); // Initial set
+      updateClientHref(); 
 
       window.addEventListener('hashchange', updateClientHref);
-      window.addEventListener('popstate', updateClientHref); // For browser back/forward that changes path/hash
+      window.addEventListener('popstate', updateClientHref); 
 
       return () => {
         window.removeEventListener('hashchange', updateClientHref);
         window.removeEventListener('popstate', updateClientHref);
       };
     }
-  }, [pathname]); // Re-run if pathname changes, to ensure hash is correctly associated
+  }, [pathname]); 
 
 
   return (
@@ -78,11 +80,11 @@ export function MainNav() {
         {navItems.map((item) => {
           const isMainActive = item.href === "/dashboard" 
             ? pathname === item.href 
-            : pathname.startsWith(item.href);
+            : pathname.startsWith(item.href.split('#')[0]);
 
           return (
             <SidebarMenuItem key={item.href}>
-              <Link href={item.href}>
+              <Link href={item.href} passHref legacyBehavior={item.subItems ? undefined : false}>
                 <span>
                   <SidebarMenuButton
                     variant="default"
@@ -99,12 +101,11 @@ export function MainNav() {
                   </SidebarMenuButton>
                 </span>
               </Link>
-               {/* Render sub-items if they exist, sidebar is open, and the main path matches */}
                {open && item.subItems && pathname.startsWith(item.href.split('#')[0]) && (
                   <ul className="pl-6 mt-1 space-y-1 border-l border-sidebar-border ml-3">
                     {item.subItems.map(subItem => (
                       <li key={subItem.href}>
-                         <Link href={subItem.href}>
+                         <Link href={subItem.href} passHref legacyBehavior={false}>
                           <span>
                             <SidebarMenuButton
                                 variant="ghost"
@@ -127,7 +128,7 @@ export function MainNav() {
       </SidebarMenu>
       {open && (
         <div className="p-4 mt-auto border-t border-sidebar-border">
-             <Link href="/settings">
+             <Link href="/settings" passHref legacyBehavior={false}>
                 <span>
                   <SidebarMenuButton
                       variant="ghost"

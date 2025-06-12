@@ -1,5 +1,5 @@
 
-import type { UserProfile, WorkExperience, Project, Education, Skill, Certification } from './types';
+import type { UserProfile } from './types';
 
 export function profileToResumeText(profile: UserProfile): string {
   let resumeText = "";
@@ -9,7 +9,7 @@ export function profileToResumeText(profile: UserProfile): string {
     let contactLine = "";
     if (profile.email) contactLine += `${profile.email}`;
     if (profile.phone) contactLine += `${contactLine ? ' | ' : ''}${profile.phone}`;
-    if (profile.address) contactLine += `${contactLine ? ' | ' : ''}${profile.address}`; // Added address
+    if (profile.address) contactLine += `${contactLine ? ' | ' : ''}${profile.address}`;
     if (profile.linkedin) contactLine += `${contactLine ? ' | ' : ''}LinkedIn: ${profile.linkedin}`;
     if (profile.github) contactLine += `${contactLine ? ' | ' : ''}GitHub: ${profile.github}`;
     if (profile.portfolio) contactLine += `${contactLine ? ' | ' : ''}Portfolio: ${profile.portfolio}`;
@@ -31,26 +31,7 @@ export function profileToResumeText(profile: UserProfile): string {
       resumeText += `${exp.startDate} - ${exp.endDate || 'Present'}\n`;
       if (exp.description) resumeText += `${exp.description}\n`;
       if (exp.achievements && exp.achievements.length > 0) {
-        // resumeText += "Key Achievements:\n";
         exp.achievements.forEach(ach => resumeText += `- ${ach}\n`);
-      }
-      resumeText += "\n";
-    });
-  }
-
-  if (profile.projects && profile.projects.length > 0) {
-    resumeText += "PROJECTS\n";
-    resumeText += "--------------------\n";
-    profile.projects.forEach(proj => {
-      resumeText += `${proj.name.toUpperCase()}\n`;
-      if (proj.description) resumeText += `${proj.description}\n`;
-      if (proj.technologies && proj.technologies.length > 0) {
-        resumeText += `Technologies: ${proj.technologies.join(', ')}\n`;
-      }
-      if (proj.link) resumeText += `Link: ${proj.link}\n`;
-      if (proj.achievements && proj.achievements.length > 0) {
-        // resumeText += "Key Highlights:\n";
-        proj.achievements.forEach(ach => resumeText += `- ${ach}\n`);
       }
       resumeText += "\n";
     });
@@ -62,7 +43,31 @@ export function profileToResumeText(profile: UserProfile): string {
     profile.education.forEach(edu => {
       resumeText += `${edu.degree} in ${edu.fieldOfStudy}\n`;
       resumeText += `${edu.institution}\n`;
-      resumeText += `${edu.startDate} - ${edu.endDate || 'Expected'}\n\n`;
+      resumeText += `${edu.startDate} - ${edu.endDate || 'Expected'}\n`;
+      if (edu.gpa) resumeText += `GPA/Result: ${edu.gpa}\n`;
+      if (edu.thesisTitle) resumeText += `Thesis: ${edu.thesisTitle}\n`;
+      if (edu.relevantCourses && edu.relevantCourses.length > 0) {
+        resumeText += `Relevant Courses: ${edu.relevantCourses.join(', ')}\n`;
+      }
+      if (edu.description) resumeText += `Notes: ${edu.description}\n`;
+      resumeText += "\n";
+    });
+  }
+  
+  if (profile.projects && profile.projects.length > 0) {
+    resumeText += "PROJECTS\n";
+    resumeText += "--------------------\n";
+    profile.projects.forEach(proj => {
+      resumeText += `${proj.name.toUpperCase()}\n`;
+      if (proj.description) resumeText += `${proj.description}\n`;
+      if (proj.technologies && proj.technologies.length > 0) {
+        resumeText += `Technologies: ${proj.technologies.join(', ')}\n`;
+      }
+      if (proj.link) resumeText += `Link: ${proj.link}\n`;
+      if (proj.achievements && proj.achievements.length > 0) {
+        proj.achievements.forEach(ach => resumeText += `- ${ach}\n`);
+      }
+      resumeText += "\n";
     });
   }
 
@@ -93,6 +98,33 @@ export function profileToResumeText(profile: UserProfile): string {
     }
     resumeText += "\n";
   }
+  
+  if (profile.honorsAndAwards && profile.honorsAndAwards.length > 0) {
+    resumeText += "HONORS & AWARDS\n";
+    resumeText += "--------------------\n";
+    profile.honorsAndAwards.forEach(item => {
+      resumeText += `${item.name}\n`;
+      if (item.organization) resumeText += `From: ${item.organization}\n`;
+      if (item.date) resumeText += `Date: ${item.date}\n`;
+      if (item.description) resumeText += `${item.description}\n`;
+      resumeText += "\n";
+    });
+  }
+
+  if (profile.publications && profile.publications.length > 0) {
+    resumeText += "PUBLICATIONS\n";
+    resumeText += "--------------------\n";
+    profile.publications.forEach(item => {
+      resumeText += `${item.title}\n`;
+      if (item.authors && item.authors.length > 0) resumeText += `Authors: ${item.authors.join(', ')}\n`;
+      if (item.journalOrConference) resumeText += `Venue: ${item.journalOrConference}\n`;
+      if (item.publicationDate) resumeText += `Date: ${item.publicationDate}\n`;
+      if (item.doi) resumeText += `DOI: ${item.doi}\n`;
+      if (item.link) resumeText += `Link: ${item.link}\n`;
+      if (item.description) resumeText += `Abstract/Summary: ${item.description}\n`;
+      resumeText += "\n";
+    });
+  }
 
   if (profile.certifications && profile.certifications.length > 0) {
     resumeText += "CERTIFICATIONS\n";
@@ -107,5 +139,3 @@ export function profileToResumeText(profile: UserProfile): string {
 
   return resumeText.trim();
 }
-
-    
