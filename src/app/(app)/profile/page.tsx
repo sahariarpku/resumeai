@@ -63,7 +63,11 @@ const fallbackInitialProfileData: UserProfile = {
   id: "user123",
   fullName: "Jane Doe",
   email: "jane.doe@example.com",
+  phone: "",
   address: "123 Main St, Anytown, USA",
+  linkedin: "",
+  github: "",
+  portfolio: "",
   summary: "A passionate software engineer with 5 years of experience.",
   workExperiences: [],
   projects: [],
@@ -117,15 +121,15 @@ export default function ProfilePage() {
     defaultValues: fallbackInitialProfileData,
   });
 
-  const workExperienceForm = useForm<WorkExperienceFormData>({ resolver: zodResolver(workExperienceSchema), defaultValues: {} });
-  const projectForm = useForm<ProjectFormData>({ resolver: zodResolver(projectSchema), defaultValues: {} });
-  const educationForm = useForm<EducationFormData>({ resolver: zodResolver(educationSchema), defaultValues: { relevantCourses: '', description: '', thesisTitle: '', gpa: ''} });
-  const skillForm = useForm<SkillFormData>({ resolver: zodResolver(skillSchema), defaultValues: {} });
-  const certificationForm = useForm<CertificationFormData>({ resolver: zodResolver(certificationSchema), defaultValues: {} });
-  const honorAwardForm = useForm<HonorAwardFormData>({ resolver: zodResolver(honorAwardSchema), defaultValues: {} });
-  const publicationForm = useForm<PublicationFormData>({ resolver: zodResolver(publicationSchema), defaultValues: {} });
-  const referenceForm = useForm<ReferenceFormData>({ resolver: zodResolver(referenceSchema), defaultValues: {} });
-  const customSectionForm = useForm<CustomSectionFormData>({ resolver: zodResolver(customSectionSchema), defaultValues: {} });
+  const workExperienceForm = useForm<WorkExperienceFormData>({ resolver: zodResolver(workExperienceSchema), defaultValues: { company: '', role: '', startDate: '', endDate: '', description: '', achievements: ''} });
+  const projectForm = useForm<ProjectFormData>({ resolver: zodResolver(projectSchema), defaultValues: { name: '', description: '', technologies: '', achievements: '', link: ''} });
+  const educationForm = useForm<EducationFormData>({ resolver: zodResolver(educationSchema), defaultValues: { institution: '', degree: '', fieldOfStudy: '', startDate: '', endDate: '', gpa: '', thesisTitle: '', relevantCourses: '', description: ''} });
+  const skillForm = useForm<SkillFormData>({ resolver: zodResolver(skillSchema), defaultValues: { name: '', category: '', proficiency: undefined } });
+  const certificationForm = useForm<CertificationFormData>({ resolver: zodResolver(certificationSchema), defaultValues: { name: '', issuingOrganization: '', issueDate: '', credentialId: '', credentialUrl: ''} });
+  const honorAwardForm = useForm<HonorAwardFormData>({ resolver: zodResolver(honorAwardSchema), defaultValues: { name: '', organization: '', date: '', description: ''} });
+  const publicationForm = useForm<PublicationFormData>({ resolver: zodResolver(publicationSchema), defaultValues: { title: '', authors: '', journalOrConference: '', publicationDate: '', link: '', doi: '', description: '' } });
+  const referenceForm = useForm<ReferenceFormData>({ resolver: zodResolver(referenceSchema), defaultValues: { name: '', titleAndCompany: '', contactDetailsOrNote: ''} });
+  const customSectionForm = useForm<CustomSectionFormData>({ resolver: zodResolver(customSectionSchema), defaultValues: { heading: '', content: ''} });
 
 
   useEffect(() => {
@@ -133,10 +137,9 @@ export default function ProfilePage() {
       const storedProfileString = localStorage.getItem(USER_PROFILE_STORAGE_KEY);
       if (storedProfileString) {
         const storedProfile = JSON.parse(storedProfileString) as UserProfile;
-        // Ensure new fields have default empty arrays if not present in old stored data
         const updatedProfile = {
-            ...fallbackInitialProfileData, // provides default empty arrays
-            ...storedProfile, // overwrites with stored data
+            ...fallbackInitialProfileData, 
+            ...storedProfile, 
         };
         setProfileData(updatedProfile);
         generalInfoForm.reset({
@@ -156,7 +159,7 @@ export default function ProfilePage() {
       }
     } catch (error) {
       console.error("Failed to load profile from localStorage:", error);
-      setProfileData(fallbackInitialProfileData); // Fallback to initial on error
+      setProfileData(fallbackInitialProfileData); 
       generalInfoForm.reset(fallbackInitialProfileData);
       toast({
         title: "Load Error",
@@ -188,7 +191,6 @@ export default function ProfilePage() {
     toast({ title: "Profile Updated", description: "Your general information has been saved." });
   };
 
-  // Generic AI Polish Handler
   const handleAIPolish = async (fieldName: string, formInstance: ReturnType<typeof useForm<any>>) => {
     const currentValue = formInstance.getValues(fieldName);
     if (typeof currentValue !== 'string' || !currentValue.trim()) {
@@ -209,8 +211,8 @@ export default function ProfilePage() {
   };
 
   // --- Work Experience ---
-  const handleAddWorkExperience = () => { setEditingWorkExperience(null); workExperienceForm.reset({ achievements: '' }); setIsWorkExperienceModalOpen(true); };
-  const handleEditWorkExperience = (experience: WorkExperience) => { setEditingWorkExperience(experience); workExperienceForm.reset({ ...experience, achievements: experience.achievements?.join('\n') || '' }); setIsWorkExperienceModalOpen(true); };
+  const handleAddWorkExperience = () => { setEditingWorkExperience(null); workExperienceForm.reset({ company: '', role: '', startDate: '', endDate: '', description: '', achievements: '' }); setIsWorkExperienceModalOpen(true); };
+  const handleEditWorkExperience = (experience: WorkExperience) => { setEditingWorkExperience(experience); workExperienceForm.reset({ ...experience, company: experience.company || '', role: experience.role || '', startDate: experience.startDate || '', endDate: experience.endDate || '', description: experience.description || '', achievements: experience.achievements?.join('\n') || '' }); setIsWorkExperienceModalOpen(true); };
   const handleDeleteWorkExperience = (id: string) => { saveProfile({ ...profileData, workExperiences: profileData.workExperiences.filter(exp => exp.id !== id) }); toast({ title: "Work Experience Removed", variant: "destructive" }); };
   const onWorkExperienceSubmit = (data: WorkExperienceFormData) => {
     const achievementsArray = data.achievements?.split('\n').map(s => s.trim()).filter(Boolean);
@@ -228,7 +230,7 @@ export default function ProfilePage() {
 
   // --- Projects ---
   const handleAddProject = () => { setEditingProject(null); projectForm.reset({ name: '', description: '', technologies: '', achievements: '', link: '' }); setIsProjectModalOpen(true); };
-  const handleEditProject = (project: Project) => { setEditingProject(project); projectForm.reset({ ...project, technologies: project.technologies?.join(', ') || '', achievements: project.achievements?.join('\n') || '' }); setIsProjectModalOpen(true); };
+  const handleEditProject = (project: Project) => { setEditingProject(project); projectForm.reset({ ...project, name: project.name || '', description: project.description || '', technologies: project.technologies?.join(', ') || '', achievements: project.achievements?.join('\n') || '', link: project.link || '' }); setIsProjectModalOpen(true); };
   const handleDeleteProject = (id: string) => { saveProfile({ ...profileData, projects: profileData.projects.filter(p => p.id !== id) }); toast({ title: "Project Removed", variant: "destructive" }); };
   const onProjectSubmit = (data: ProjectFormData) => {
     const techArray = data.technologies?.split(',').map(s => s.trim()).filter(Boolean);
@@ -246,8 +248,8 @@ export default function ProfilePage() {
   };
 
   // --- Education ---
-  const handleAddEducation = () => { setEditingEducation(null); educationForm.reset({ relevantCourses: '', description: '', thesisTitle: '', gpa: '' }); setIsEducationModalOpen(true); };
-  const handleEditEducation = (edu: Education) => { setEditingEducation(edu); educationForm.reset({...edu, relevantCourses: edu.relevantCourses?.join(', ') || '', description: edu.description || '', thesisTitle: edu.thesisTitle || '', gpa: edu.gpa || '' }); setIsEducationModalOpen(true); };
+  const handleAddEducation = () => { setEditingEducation(null); educationForm.reset({ institution: '', degree: '', fieldOfStudy: '', startDate: '', endDate: '', gpa: '', thesisTitle: '', relevantCourses: '', description: '' }); setIsEducationModalOpen(true); };
+  const handleEditEducation = (edu: Education) => { setEditingEducation(edu); educationForm.reset({...edu, institution: edu.institution || '', degree: edu.degree || '', fieldOfStudy: edu.fieldOfStudy || '', startDate: edu.startDate || '', endDate: edu.endDate || '', gpa: edu.gpa || '', thesisTitle: edu.thesisTitle || '', relevantCourses: edu.relevantCourses?.join(', ') || '', description: edu.description || '' }); setIsEducationModalOpen(true); };
   const handleDeleteEducation = (id: string) => { saveProfile({ ...profileData, education: profileData.education.filter(e => e.id !== id) }); toast({ title: "Education Entry Removed", variant: "destructive" }); };
   const onEducationSubmit = (data: EducationFormData) => {
     const coursesArray = data.relevantCourses?.split(',').map(s => s.trim()).filter(Boolean);
@@ -264,8 +266,8 @@ export default function ProfilePage() {
   };
 
   // --- Skills ---
-  const handleAddSkill = () => { setEditingSkill(null); skillForm.reset({}); setIsSkillModalOpen(true); };
-  const handleEditSkill = (skill: Skill) => { setEditingSkill(skill); skillForm.reset(skill); setIsSkillModalOpen(true); };
+  const handleAddSkill = () => { setEditingSkill(null); skillForm.reset({ name: '', category: '', proficiency: undefined }); setIsSkillModalOpen(true); };
+  const handleEditSkill = (skill: Skill) => { setEditingSkill(skill); skillForm.reset({ ...skill, name: skill.name || '', category: skill.category || '', proficiency: skill.proficiency || undefined }); setIsSkillModalOpen(true); };
   const handleDeleteSkill = (id: string) => { saveProfile({ ...profileData, skills: profileData.skills.filter(s => s.id !== id) }); toast({ title: "Skill Removed", variant: "destructive" }); };
   const onSkillSubmit = (data: SkillFormData) => {
     let updatedSkills;
@@ -281,8 +283,8 @@ export default function ProfilePage() {
   };
 
   // --- Certifications ---
-  const handleAddCertification = () => { setEditingCertification(null); certificationForm.reset({}); setIsCertificationModalOpen(true); };
-  const handleEditCertification = (cert: Certification) => { setEditingCertification(cert); certificationForm.reset(cert); setIsCertificationModalOpen(true); };
+  const handleAddCertification = () => { setEditingCertification(null); certificationForm.reset({ name: '', issuingOrganization: '', issueDate: '', credentialId: '', credentialUrl: '' }); setIsCertificationModalOpen(true); };
+  const handleEditCertification = (cert: Certification) => { setEditingCertification(cert); certificationForm.reset({ ...cert, name: cert.name || '', issuingOrganization: cert.issuingOrganization || '', issueDate: cert.issueDate || '', credentialId: cert.credentialId || '', credentialUrl: cert.credentialUrl || ''}); setIsCertificationModalOpen(true); };
   const handleDeleteCertification = (id: string) => { saveProfile({ ...profileData, certifications: profileData.certifications.filter(c => c.id !== id) }); toast({ title: "Certification Removed", variant: "destructive" }); };
   const onCertificationSubmit = (data: CertificationFormData) => {
     let updatedCerts;
@@ -298,8 +300,8 @@ export default function ProfilePage() {
   };
 
   // --- Honors & Awards ---
-  const handleAddHonorAward = () => { setEditingHonorAward(null); honorAwardForm.reset({}); setIsHonorAwardModalOpen(true); };
-  const handleEditHonorAward = (item: HonorAward) => { setEditingHonorAward(item); honorAwardForm.reset(item); setIsHonorAwardModalOpen(true); };
+  const handleAddHonorAward = () => { setEditingHonorAward(null); honorAwardForm.reset({ name: '', organization: '', date: '', description: '' }); setIsHonorAwardModalOpen(true); };
+  const handleEditHonorAward = (item: HonorAward) => { setEditingHonorAward(item); honorAwardForm.reset({ ...item, name: item.name || '', organization: item.organization || '', date: item.date || '', description: item.description || '' }); setIsHonorAwardModalOpen(true); };
   const handleDeleteHonorAward = (id: string) => { saveProfile({ ...profileData, honorsAndAwards: profileData.honorsAndAwards.filter(item => item.id !== id) }); toast({ title: "Honor/Award Removed", variant: "destructive" }); };
   const onHonorAwardSubmit = (data: HonorAwardFormData) => {
     let updatedItems;
@@ -315,8 +317,8 @@ export default function ProfilePage() {
   };
 
   // --- Publications ---
-  const handleAddPublication = () => { setEditingPublication(null); publicationForm.reset({ authors: '' }); setIsPublicationModalOpen(true); };
-  const handleEditPublication = (item: Publication) => { setEditingPublication(item); publicationForm.reset({ ...item, authors: item.authors?.join(', ') || '' }); setIsPublicationModalOpen(true); };
+  const handleAddPublication = () => { setEditingPublication(null); publicationForm.reset({ title: '', authors: '', journalOrConference: '', publicationDate: '', link: '', doi: '', description: '' }); setIsPublicationModalOpen(true); };
+  const handleEditPublication = (item: Publication) => { setEditingPublication(item); publicationForm.reset({ ...item, title: item.title || '', authors: item.authors?.join(', ') || '', journalOrConference: item.journalOrConference || '', publicationDate: item.publicationDate || '', link: item.link || '', doi: item.doi || '', description: item.description || '' }); setIsPublicationModalOpen(true); };
   const handleDeletePublication = (id: string) => { saveProfile({ ...profileData, publications: profileData.publications.filter(item => item.id !== id) }); toast({ title: "Publication Removed", variant: "destructive" }); };
   const onPublicationSubmit = (data: PublicationFormData) => {
     const authorsArray = data.authors?.split(',').map(s => s.trim()).filter(Boolean);
@@ -333,8 +335,8 @@ export default function ProfilePage() {
   };
 
   // --- References ---
-  const handleAddReference = () => { setEditingReference(null); referenceForm.reset({}); setIsReferenceModalOpen(true); };
-  const handleEditReference = (item: Reference) => { setEditingReference(item); referenceForm.reset(item); setIsReferenceModalOpen(true); };
+  const handleAddReference = () => { setEditingReference(null); referenceForm.reset({ name: '', titleAndCompany: '', contactDetailsOrNote: '' }); setIsReferenceModalOpen(true); };
+  const handleEditReference = (item: Reference) => { setEditingReference(item); referenceForm.reset({ ...item, name: item.name || '', titleAndCompany: item.titleAndCompany || '', contactDetailsOrNote: item.contactDetailsOrNote || '' }); setIsReferenceModalOpen(true); };
   const handleDeleteReference = (id: string) => { saveProfile({ ...profileData, references: profileData.references.filter(item => item.id !== id) }); toast({ title: "Reference Removed", variant: "destructive" }); };
   const onReferenceSubmit = (data: ReferenceFormData) => {
     let updatedItems;
@@ -350,8 +352,8 @@ export default function ProfilePage() {
   };
 
   // --- Custom Sections ---
-  const handleAddCustomSection = () => { setEditingCustomSection(null); customSectionForm.reset({}); setIsCustomSectionModalOpen(true); };
-  const handleEditCustomSection = (item: CustomSection) => { setEditingCustomSection(item); customSectionForm.reset(item); setIsCustomSectionModalOpen(true); };
+  const handleAddCustomSection = () => { setEditingCustomSection(null); customSectionForm.reset({ heading: '', content: '' }); setIsCustomSectionModalOpen(true); };
+  const handleEditCustomSection = (item: CustomSection) => { setEditingCustomSection(item); customSectionForm.reset({ ...item, heading: item.heading || '', content: item.content || ''}); setIsCustomSectionModalOpen(true); };
   const handleDeleteCustomSection = (id: string) => { saveProfile({ ...profileData, customSections: profileData.customSections.filter(item => item.id !== id) }); toast({ title: "Custom Section Removed", variant: "destructive" }); };
   const onCustomSectionSubmit = (data: CustomSectionFormData) => {
     let updatedItems;
@@ -720,7 +722,7 @@ export default function ProfilePage() {
 
       {/* Education Modal */}
       <Dialog open={isEducationModalOpen} onOpenChange={setIsEducationModalOpen}>
-        <DialogContent className="sm:max-w-2xl"> {/* Increased width for more fields */}
+        <DialogContent className="sm:max-w-2xl"> 
           <DialogHeader><DialogTitle className="font-headline">{editingEducation ? 'Edit Education' : 'Add New Education'}</DialogTitle><DialogDescription>Provide your educational qualifications and details.</DialogDescription></DialogHeader>
           <Form {...educationForm}>
             <form onSubmit={educationForm.handleSubmit(onEducationSubmit)} className="space-y-6 py-4">
@@ -752,7 +754,7 @@ export default function ProfilePage() {
 
       {/* Publication Modal */}
       <Dialog open={isPublicationModalOpen} onOpenChange={setIsPublicationModalOpen}>
-        <DialogContent className="sm:max-w-2xl"> {/* Increased width */}
+        <DialogContent className="sm:max-w-2xl"> 
           <DialogHeader><DialogTitle className="font-headline">{editingPublication ? 'Edit Publication' : 'Add New Publication'}</DialogTitle><DialogDescription>Detail your published work.</DialogDescription></DialogHeader>
           <Form {...publicationForm}>
             <form onSubmit={publicationForm.handleSubmit(onPublicationSubmit)} className="space-y-6 py-4">
