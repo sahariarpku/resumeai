@@ -48,6 +48,7 @@ export interface UserProfile {
   fullName?: string;
   email?: string; // Usually from auth
   phone?: string;
+  address?: string; // Added address field
   linkedin?: string;
   github?: string;
   portfolio?: string;

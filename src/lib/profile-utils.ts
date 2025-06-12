@@ -9,6 +9,7 @@ export function profileToResumeText(profile: UserProfile): string {
     let contactLine = "";
     if (profile.email) contactLine += `${profile.email}`;
     if (profile.phone) contactLine += `${contactLine ? ' | ' : ''}${profile.phone}`;
+    if (profile.address) contactLine += `${contactLine ? ' | ' : ''}${profile.address}`; // Added address
     if (profile.linkedin) contactLine += `${contactLine ? ' | ' : ''}LinkedIn: ${profile.linkedin}`;
     if (profile.github) contactLine += `${contactLine ? ' | ' : ''}GitHub: ${profile.github}`;
     if (profile.portfolio) contactLine += `${contactLine ? ' | ' : ''}Portfolio: ${profile.portfolio}`;

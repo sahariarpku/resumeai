@@ -54,6 +54,7 @@ export const userProfileSchema = z.object({
   fullName: z.string().min(1, "Full name is required").optional(),
   email: z.string().email("Invalid email address").optional(),
   phone: z.string().optional(),
+  address: z.string().optional(), // Added address field
   linkedin: z.string().url("Invalid LinkedIn URL").optional().or(z.literal('')),
   github: z.string().url("Invalid GitHub URL").optional().or(z.literal('')),
   portfolio: z.string().url("Invalid Portfolio URL").optional().or(z.literal('')),
@@ -74,3 +75,4 @@ export const tailorResumeFormSchema = z.object({
   resumeContent: z.string().min(100, "Resume content must be at least 100 characters"),
 });
 export type TailorResumeFormData = z.infer<typeof tailorResumeFormSchema>;
+

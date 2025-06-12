@@ -33,7 +33,7 @@ import {
   DialogClose,
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { PlusCircle, Edit3, Trash2, Save, UserCircle, Briefcase, FolderKanban, GraduationCap, Wrench, Award } from "lucide-react";
+import { PlusCircle, Edit3, Trash2, Save, UserCircle, Briefcase, FolderKanban, GraduationCap, Wrench, Award, Home } from "lucide-react";
 import type { UserProfile, WorkExperience } from "@/lib/types";
 import { userProfileSchema, workExperienceSchema, UserProfileFormData, WorkExperienceFormData } from "@/lib/schemas";
 import { FormSection, FormSectionList } from '@/components/forms/form-section';
@@ -46,6 +46,7 @@ const fallbackInitialProfileData: UserProfile = {
   id: "user123",
   fullName: "Jane Doe",
   email: "jane.doe@example.com", // This will be overwritten by localStorage if available
+  address: "123 Main St, Anytown, USA",
   summary: "A passionate software engineer with 5 years of experience.",
   workExperiences: [
     { id: "we1", company: "Tech Solutions Inc.", role: "Senior Developer", startDate: "2020-01", endDate: "Present", description: "Developed awesome things.", achievements: ["Led a team", "Launched a product"] },
@@ -72,6 +73,7 @@ export default function ProfilePage() {
       fullName: "",
       email: "", 
       phone: "",
+      address: "",
       linkedin: "",
       github: "",
       portfolio: "",
@@ -94,6 +96,7 @@ export default function ProfilePage() {
             fullName: storedProfile.fullName || "",
             email: storedProfile.email || "user@example.com", // Ensure email field has a default
             phone: storedProfile.phone || "",
+            address: storedProfile.address || "",
             linkedin: storedProfile.linkedin || "",
             github: storedProfile.github || "",
             portfolio: storedProfile.portfolio || "",
@@ -106,6 +109,7 @@ export default function ProfilePage() {
             fullName: fallbackInitialProfileData.fullName || "",
             email: fallbackInitialProfileData.email || "user@example.com",
             phone: fallbackInitialProfileData.phone || "",
+            address: fallbackInitialProfileData.address || "",
             linkedin: fallbackInitialProfileData.linkedin || "",
             github: fallbackInitialProfileData.github || "",
             portfolio: fallbackInitialProfileData.portfolio || "",
@@ -121,6 +125,7 @@ export default function ProfilePage() {
             fullName: fallbackInitialProfileData.fullName || "",
             email: fallbackInitialProfileData.email || "user@example.com",
             phone: fallbackInitialProfileData.phone || "",
+            address: fallbackInitialProfileData.address || "",
             linkedin: fallbackInitialProfileData.linkedin || "",
             github: fallbackInitialProfileData.github || "",
             portfolio: fallbackInitialProfileData.portfolio || "",
@@ -251,6 +256,17 @@ export default function ProfilePage() {
                         <FormItem>
                           <FormLabel>Phone (Optional)</FormLabel>
                           <FormControl><Input {...field} /></FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={generalInfoForm.control}
+                      name="address"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Address (Optional)</FormLabel>
+                          <FormControl><Input placeholder="e.g. 123 Main St, Anytown, USA" {...field} /></FormControl>
                           <FormMessage />
                         </FormItem>
                       )}
