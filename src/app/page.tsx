@@ -1,8 +1,12 @@
 
+"use client"; // Added "use client" for useAuth hook
+
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { Github } from "lucide-react";
+import { Github, Loader2 } from "lucide-react"; // Added Loader2
 import Link from "next/link";
+import { useAuth } from "@/contexts/auth-context"; // Import useAuth
+import React from "react"; // Import React for potential use with Fragment or state
 
 // Simple Google Icon SVG
 const GoogleIcon = () => (
@@ -16,6 +20,8 @@ const GoogleIcon = () => (
 );
 
 export default function LandingPage() {
+  const { signInWithGoogle, signInWithGitHub, loading: authLoading } = useAuth();
+
   return (
     <div className="flex flex-col min-h-screen bg-gray-900 text-white font-body">
       <header className="absolute top-0 left-0 p-6 md:p-8 z-10">
@@ -42,18 +48,22 @@ export default function LandingPage() {
             <div className="space-y-6">
               <p className="text-sm text-center text-gray-400">Use your social account to sign in</p>
               
-              {/* Placeholder: Link to signup or a dedicated social auth page if implemented */}
-              <Button className="w-full bg-white text-gray-800 hover:bg-gray-100 transition-colors" asChild>
-                <Link href="/auth/signup"> 
-                  <GoogleIcon /> Sign in with Google
-                </Link>
+              <Button 
+                className="w-full bg-white text-gray-800 hover:bg-gray-100 transition-colors" 
+                onClick={signInWithGoogle}
+                disabled={authLoading}
+              >
+                {authLoading ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <GoogleIcon />} 
+                Sign in with Google
               </Button>
               
-              {/* Placeholder: Link to signup or a dedicated social auth page if implemented */}
-              <Button className="w-full bg-slate-700 text-white hover:bg-slate-600 transition-colors" asChild>
-                <Link href="/auth/signup">
-                  <Github className="mr-2 h-5 w-5" /> Sign in with GitHub
-                </Link>
+              <Button 
+                className="w-full bg-slate-700 text-white hover:bg-slate-600 transition-colors" 
+                onClick={signInWithGitHub}
+                disabled={authLoading}
+              >
+                {authLoading ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Github className="mr-2 h-5 w-5" />} 
+                Sign in with GitHub
               </Button>
               
               <p className="text-xs text-center text-gray-500">
