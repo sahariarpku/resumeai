@@ -1,5 +1,6 @@
 
 import { z } from "zod";
+import type { ProfileSectionKey } from "./types"; // Ensure this is imported
 
 export const workExperienceSchema = z.object({
   id: z.string().optional(),
@@ -140,3 +141,35 @@ export const GenerateCoverLetterOutputSchema = z.object({
   coverLetterText: z.string().describe("The generated cover letter text, formatted professionally."),
 });
 export type GenerateCoverLetterOutput = z.infer<typeof GenerateCoverLetterOutputSchema>;
+
+// Schemas for CV Section Reordering Flow
+const ProfileSectionKeyEnum = z.enum([
+  'workExperiences', 'projects', 'education', 'skills', 
+  'certifications', 'honorsAndAwards', 'publications', 'references', 'customSections'
+]);
+
+export const SuggestCvSectionOrderInputSchema = z.object({
+  userPreference: z.string().describe("User's stated preference for the CV type or focus, e.g., 'academic CV', 'chronological work-focused', 'skills-based for tech'. An empty string means suggest a general default order."),
+  currentSectionOrder: z.array(ProfileSectionKeyEnum).describe("The current order of sections in the user's profile."),
+  availableSections: z.array(ProfileSectionKeyEnum).describe("All available sections that can be ordered."),
+});
+export type SuggestCvSectionOrderInput = z.infer<typeof SuggestCvSectionOrderInputSchema>;
+
+export const SuggestCvSectionOrderOutputSchema = z.object({
+  newSectionOrder: z.array(ProfileSectionKeyEnum).describe("The AI-suggested new order of sections. This should include all sections from 'availableSections', just reordered."),
+  reasoning: z.string().optional().describe("A brief explanation for the suggested order, if applicable."),
+});
+export type SuggestCvSectionOrderOutput = z.infer<typeof SuggestCvSectionOrderOutputSchema>;
+
+
+// Schemas for LaTeX CV Generation Flow
+export const GenerateLatexCvInputSchema = z.object({
+  profileAsText: z.string().describe("The complete resume content as a plain text string. This text should be well-structured, ideally with Markdown-like headings for sections."),
+  cvStylePreference: z.string().optional().describe("Optional user preference for the LaTeX CV style, e.g., 'Oxford style', 'modern', 'classic two-column'.")
+});
+export type GenerateLatexCvInput = z.infer<typeof GenerateLatexCvInputSchema>;
+
+export const GenerateLatexCvOutputSchema = z.object({
+  latexCode: z.string().describe("The generated LaTeX code for the CV. This should be a complete, compilable LaTeX document."),
+});
+export type GenerateLatexCvOutput = z.infer<typeof GenerateLatexCvOutputSchema>;
