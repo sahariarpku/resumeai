@@ -151,6 +151,14 @@ export default function ProfilePage() {
         loadedProfile = {
             ...fallbackInitialProfileData, 
             ...parsedProfile,
+            fullName: parsedProfile.fullName || "",
+            email: parsedProfile.email || "user@example.com",
+            phone: parsedProfile.phone || "",
+            address: parsedProfile.address || "",
+            linkedin: parsedProfile.linkedin || "",
+            github: parsedProfile.github || "",
+            portfolio: parsedProfile.portfolio || "",
+            summary: parsedProfile.summary || "",
             workExperiences: parsedProfile.workExperiences || [],
             projects: parsedProfile.projects || [],
             education: parsedProfile.education || [],
@@ -401,17 +409,18 @@ export default function ProfilePage() {
     toast({ title: "Markdown Download Started" });
   };
 
-  const handleDownloadHtml = () => {
+  const handleDownloadDocx = () => {
     const resumeHtml = profileToResumeHtml(profileData);
-    const blob = new Blob([resumeHtml], { type: 'text/html;charset=utf-8' });
+    // The content type for .docx. For .doc, use 'application/msword'.
+    const blob = new Blob([resumeHtml], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document;charset=utf-8' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = `${(profileData.fullName || 'resume').replace(/\s+/g, '_')}.html`;
+    link.download = `${(profileData.fullName || 'resume').replace(/\s+/g, '_')}.docx`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(link.href);
-    toast({ title: "HTML Download Started" });
+    toast({ title: "Word (.docx) Download Started" });
   };
   
   const handlePrintToPdf = () => {
@@ -423,7 +432,7 @@ export default function ProfilePage() {
       printWindow.focus(); 
       setTimeout(() => {
         printWindow.print();
-      }, 500);
+      }, 500); // Timeout to ensure content is loaded before print dialog
       toast({ title: "Preparing PDF for Print" });
     } else {
       toast({ title: "Print Error", description: "Could not open print window. Check pop-up blocker.", variant: "destructive" });
@@ -442,12 +451,14 @@ export default function ProfilePage() {
     const currentOrder = [...(profileData.sectionOrder || DEFAULT_SECTION_ORDER)];
     const currentIndex = currentOrder.indexOf(sectionKey);
   
-    if (currentIndex === -1) return; 
+    if (currentIndex === -1) return; // Should not happen if sectionKey is valid
   
     const newIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
   
+    // Check if the new index is within bounds
     if (newIndex < 0 || newIndex >= currentOrder.length) return; 
   
+    // Swap elements
     const itemToMove = currentOrder.splice(currentIndex, 1)[0];
     currentOrder.splice(newIndex, 0, itemToMove);
   
@@ -461,9 +472,10 @@ export default function ProfilePage() {
   }
 
   const renderSection = (sectionKey: ProfileSectionKey, index: number) => {
+    // Determine if section can be moved up or down
     const totalReorderableSections = (profileData.sectionOrder || DEFAULT_SECTION_ORDER).length;
-    const canMoveUp = index > 0;
-    const canMoveDown = index < totalReorderableSections - 1;
+    const canMoveUp = index > 0; // First item (index 0) cannot move up
+    const canMoveDown = index < totalReorderableSections - 1; // Last item cannot move down
 
     switch (sectionKey) {
       case 'workExperiences':
@@ -818,8 +830,8 @@ export default function ProfilePage() {
                 <DropdownMenuItem onClick={handleDownloadMd}>
                     <FileText className="mr-2 h-4 w-4" /> Download as .md
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={handleDownloadHtml}>
-                    <FileText className="mr-2 h-4 w-4" /> Download as .html
+                <DropdownMenuItem onClick={handleDownloadDocx}>
+                    <FileText className="mr-2 h-4 w-4" /> Download as Word (.docx)
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={handlePrintToPdf}>
                     <Printer className="mr-2 h-4 w-4" /> Print to PDF...
