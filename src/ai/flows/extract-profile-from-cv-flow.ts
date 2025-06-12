@@ -36,7 +36,7 @@ const AiProjectSchema = z.object({
   description: z.string().optional().describe("Description of the project."),
   technologies: z.array(z.string()).optional().describe("List of technologies used."),
   achievements: z.array(z.string()).optional().describe("List of key achievements or features as bullet points/strings."),
-  link: z.string().url().optional().describe("URL link to the project if available."),
+  link: z.string().optional().describe("URL link to the project if available."),
 });
 
 const AiSkillSchema = z.object({
@@ -50,7 +50,7 @@ const AiCertificationSchema = z.object({
   issuingOrganization: z.string().optional().describe("Organization that issued the certification."),
   issueDate: z.string().optional().describe("Date the certification was issued, e.g., YYYY-MM."),
   credentialId: z.string().optional().describe("Credential ID if available."),
-  credentialUrl: z.string().url().optional().describe("URL to verify the credential."),
+  credentialUrl: z.string().optional().describe("URL to verify the credential."),
 });
 
 const AiHonorAwardSchema = z.object({
@@ -65,7 +65,7 @@ const AiPublicationSchema = z.object({
   authors: z.array(z.string()).optional().describe("List of authors."),
   journalOrConference: z.string().optional().describe("Name of the journal or conference."),
   publicationDate: z.string().optional().describe("Date of publication, e.g., YYYY-MM."),
-  link: z.string().url().optional().describe("URL link to the publication."),
+  link: z.string().optional().describe("URL link to the publication."),
   doi: z.string().optional().describe("Digital Object Identifier (DOI)."),
   description: z.string().optional().describe("Brief abstract or description."),
 });
@@ -89,12 +89,12 @@ export type ExtractProfileFromCvInput = z.infer<typeof ExtractProfileFromCvInput
 
 const ExtractProfileFromCvOutputSchema = z.object({
   fullName: z.string().optional().describe("Full name of the person."),
-  email: z.string().email().optional().describe("Email address."),
+  email: z.string().optional().describe("Email address."),
   phone: z.string().optional().describe("Phone number."),
   address: z.string().optional().describe("Physical address or city/country."),
-  linkedin: z.string().url().optional().describe("URL to LinkedIn profile."),
-  github: z.string().url().optional().describe("URL to GitHub profile."),
-  portfolio: z.string().url().optional().describe("URL to personal portfolio website."),
+  linkedin: z.string().optional().describe("URL to LinkedIn profile."),
+  github: z.string().optional().describe("URL to GitHub profile."),
+  portfolio: z.string().optional().describe("URL to personal portfolio website."),
   summary: z.string().optional().describe("Professional summary or objective statement."),
   workExperiences: z.array(AiWorkExperienceSchema).optional().describe("Array of work experiences."),
   projects: z.array(AiProjectSchema).optional().describe("Array of projects."),
@@ -171,3 +171,4 @@ const extractProfileFromCvFlow = ai.defineFlow(
     return output;
   }
 );
+
