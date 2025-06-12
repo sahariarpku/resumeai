@@ -411,8 +411,7 @@ export default function ProfilePage() {
 
   const handleDownloadDocx = () => {
     const resumeHtml = profileToResumeHtml(profileData);
-    // The content type for .docx. For .doc, use 'application/msword'.
-    const blob = new Blob([resumeHtml], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document;charset=utf-8' });
+    const blob = new Blob([resumeHtml], { type: 'application/msword;charset=utf-8' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
     link.download = `${(profileData.fullName || 'resume').replace(/\s+/g, '_')}.docx`;
@@ -432,7 +431,7 @@ export default function ProfilePage() {
       printWindow.focus(); 
       setTimeout(() => {
         printWindow.print();
-      }, 500); // Timeout to ensure content is loaded before print dialog
+      }, 500); 
       toast({ title: "Preparing PDF for Print" });
     } else {
       toast({ title: "Print Error", description: "Could not open print window. Check pop-up blocker.", variant: "destructive" });
@@ -440,7 +439,6 @@ export default function ProfilePage() {
   };
   
   const formatSectionTitleLocal = (key: ProfileSectionKey): string => {
-    // A simple formatter for toast messages if not importing from profile-utils
     return key
       .replace(/([A-Z])/g, ' $1')
       .replace(/^./, (str) => str.toUpperCase())
@@ -451,14 +449,12 @@ export default function ProfilePage() {
     const currentOrder = [...(profileData.sectionOrder || DEFAULT_SECTION_ORDER)];
     const currentIndex = currentOrder.indexOf(sectionKey);
   
-    if (currentIndex === -1) return; // Should not happen if sectionKey is valid
+    if (currentIndex === -1) return; 
   
     const newIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
   
-    // Check if the new index is within bounds
     if (newIndex < 0 || newIndex >= currentOrder.length) return; 
   
-    // Swap elements
     const itemToMove = currentOrder.splice(currentIndex, 1)[0];
     currentOrder.splice(newIndex, 0, itemToMove);
   
@@ -472,10 +468,9 @@ export default function ProfilePage() {
   }
 
   const renderSection = (sectionKey: ProfileSectionKey, index: number) => {
-    // Determine if section can be moved up or down
     const totalReorderableSections = (profileData.sectionOrder || DEFAULT_SECTION_ORDER).length;
-    const canMoveUp = index > 0; // First item (index 0) cannot move up
-    const canMoveDown = index < totalReorderableSections - 1; // Last item cannot move down
+    const canMoveUp = index > 0; 
+    const canMoveDown = index < totalReorderableSections - 1; 
 
     switch (sectionKey) {
       case 'workExperiences':
@@ -849,7 +844,7 @@ export default function ProfilePage() {
             <FormSection
               title="General Information"
               description="Basic contact and summary details."
-              isReorderable={false} // General Info is not reorderable
+              isReorderable={false} 
             >
               <Form {...generalInfoForm}>
                 <form onSubmit={generalInfoForm.handleSubmit(onGeneralInfoSubmit)} className="space-y-6">
@@ -1037,3 +1032,5 @@ export default function ProfilePage() {
     </TooltipProvider>
   );
 }
+
+    
