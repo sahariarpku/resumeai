@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
-import { PlusCircle, Briefcase, ArrowRight, Trash2, Edit3, FileSearch, Sparkles, Loader2, Link as LinkIcon, DownloadCloud } from "lucide-react";
+import { PlusCircle, Briefcase, ArrowRight, Trash2, Edit3, FileSearch, Sparkles, Loader2, Link as LinkIcon, DownloadCloud, BarChart3, Info } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from 'next/navigation';
 import type { JobDescriptionItem, UserProfile } from "@/lib/types";
@@ -27,9 +27,17 @@ import {
 } from "@/components/ui/dialog";
 import { extractJobDetails } from "@/ai/flows/extract-job-details-flow";
 import { extractTextFromHtml } from "@/ai/flows/extract-text-from-html-flow";
+import { calculateProfileJdMatch } from "@/ai/flows/calculate-profile-jd-match-flow";
 import { profileToResumeText } from '@/lib/profile-utils';
 import { Separator } from '@/components/ui/separator';
 import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 
 const fallbackInitialJds: JobDescriptionItem[] = [
@@ -53,6 +61,7 @@ export default function JobDescriptionsPage() {
   const [isProcessingUrl, setIsProcessingUrl] = useState(false);
   const [jdUrl, setJdUrl] = useState("");
   const [isLoaded, setIsLoaded] = useState(false);
+  const [calculatingMatchId, setCalculatingMatchId] = useState<string | null>(null);
 
 
   useEffect(() => {
@@ -103,7 +112,7 @@ export default function JobDescriptionsPage() {
 
   const handleAddOrEditJd = (data: JobDescriptionFormData) => {
     if (editingJd) {
-      setJds(prevJds => prevJds.map(jd => jd.id === editingJd.id ? { ...editingJd, ...data, createdAt: jd.createdAt } : jd));
+      setJds(prevJds => prevJds.map(jd => jd.id === editingJd.id ? { ...jd, ...data } : jd)); // Preserve match score
       toast({ title: "Job Description Updated!" });
     } else {
       const newJd: JobDescriptionItem = {
@@ -129,7 +138,7 @@ export default function JobDescriptionsPage() {
 
   const openEditModal = (jd: JobDescriptionItem) => {
     setEditingJd(jd);
-    form.reset(jd); 
+    form.reset({title: jd.title, company: jd.company, description: jd.description}); 
     setJdUrl("");
     setIsModalOpen(true);
   };
@@ -193,7 +202,6 @@ export default function JobDescriptionsPage() {
     });
 
     try {
-      // Step 1: Fetch HTML content via API route
       const fetchResponse = await fetch(`/api/fetch-url-content?url=${encodeURIComponent(jdUrl)}`);
       if (!fetchResponse.ok) {
         const errorData = await fetchResponse.json();
@@ -211,7 +219,6 @@ export default function JobDescriptionsPage() {
         return;
       }
       
-      // Step 2: Extract text from HTML using AI flow
       const textExtractionResult = await extractTextFromHtml({ htmlContent });
       
       if (textExtractionResult.extractedText && textExtractionResult.extractedText.trim().length > 0) {
@@ -221,7 +228,6 @@ export default function JobDescriptionsPage() {
           description: "Job description populated. Now extracting title & company..."
         });
 
-        // Step 3: Extract job title and company from the extracted text
         const detailsExtractionResult = await extractJobDetails({ jobDescriptionText: textExtractionResult.extractedText });
         form.setValue("title", detailsExtractionResult.jobTitle, { shouldValidate: true });
         form.setValue("company", detailsExtractionResult.companyName, { shouldValidate: true });
@@ -295,6 +301,70 @@ export default function JobDescriptionsPage() {
     }
   };
 
+  const handleCalculateMatchScore = async (jdId: string) => {
+    setCalculatingMatchId(jdId);
+    try {
+      const storedProfileString = localStorage.getItem(USER_PROFILE_STORAGE_KEY);
+      if (!storedProfileString) {
+        toast({
+          title: "Profile Not Found",
+          description: "Please complete your profile first to calculate match scores.",
+          variant: "default",
+        });
+        router.push('/profile');
+        setCalculatingMatchId(null);
+        return;
+      }
+      const userProfile = JSON.parse(storedProfileString) as UserProfile;
+      const profileText = profileToResumeText(userProfile);
+
+      if (!profileText.trim()) {
+        toast({
+          title: "Profile Incomplete",
+          description: "Your profile is empty. Please add details to calculate match scores.",
+          variant: "default",
+        });
+        router.push('/profile');
+        setCalculatingMatchId(null);
+        return;
+      }
+
+      const currentJd = jds.find(jd => jd.id === jdId);
+      if (!currentJd) {
+        toast({ title: "Error", description: "Job description not found.", variant: "destructive" });
+        setCalculatingMatchId(null);
+        return;
+      }
+
+      const matchResult = await calculateProfileJdMatch({
+        profileText: profileText,
+        jobDescriptionText: currentJd.description,
+      });
+
+      setJds(prevJds =>
+        prevJds.map(jd =>
+          jd.id === jdId
+            ? { ...jd, 
+                matchPercentage: matchResult.matchPercentage, 
+                matchSummary: matchResult.matchSummary,
+                matchCategory: matchResult.matchCategory,
+              }
+            : jd
+        )
+      );
+      toast({ title: "Match Score Calculated!", description: `Score for "${currentJd.title}" is ${matchResult.matchPercentage}%.` });
+
+    } catch (error) {
+      console.error("Error calculating match score:", error);
+      let errorMessage = "Could not calculate match score.";
+      if (error instanceof Error) errorMessage = `Calculation failed: ${error.message}`;
+      toast({ title: "Match Score Error", description: errorMessage, variant: "destructive" });
+    } finally {
+      setCalculatingMatchId(null);
+    }
+  };
+
+
   if (!isLoaded) {
     return (
       <div className="container mx-auto py-8 text-center">
@@ -304,13 +374,25 @@ export default function JobDescriptionsPage() {
     );
   }
 
+  const getMatchBadgeVariant = (category?: JobDescriptionItem['matchCategory']): "default" | "secondary" | "destructive" | "outline" => {
+    if (!category) return "outline";
+    switch (category) {
+        case "Excellent Match": return "default"; // primary color
+        case "Good Match": return "secondary"; // Toned down success
+        case "Fair Match": return "outline"; // Neutral
+        case "Poor Match": return "destructive";
+        default: return "outline";
+    }
+  };
+
   return (
+    <TooltipProvider>
     <div className="container mx-auto py-8 space-y-8">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="font-headline text-3xl font-bold">Job Descriptions</h1>
           <p className="text-muted-foreground">
-            Manage your saved job descriptions and tailor resumes for them.
+            Manage saved JDs, tailor resumes, and see profile match scores.
           </p>
         </div>
         <Button onClick={openAddModal} size="lg">
@@ -338,8 +420,8 @@ export default function JobDescriptionsPage() {
           {jds.map((jd) => (
             <Card key={jd.id} className="flex flex-col">
               <CardHeader>
-                <div className="flex justify-between items-start">
-                  <Briefcase className="h-8 w-8 text-primary mb-2" />
+                <div className="flex justify-between items-start mb-2">
+                  <Briefcase className="h-8 w-8 text-primary" />
                   <div className="flex gap-1">
                     <Button variant="ghost" size="icon" onClick={() => openEditModal(jd)}><Edit3 className="h-4 w-4" /></Button>
                     <Button variant="ghost" size="icon" onClick={() => handleDeleteJd(jd.id)} className="text-destructive hover:text-destructive"><Trash2 className="h-4 w-4" /></Button>
@@ -347,11 +429,35 @@ export default function JobDescriptionsPage() {
                 </div>
                 <CardTitle className="font-headline text-xl">{jd.title}</CardTitle>
                 {jd.company && <CardDescription>{jd.company}</CardDescription>}
+                {jd.matchPercentage !== undefined && jd.matchCategory && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                        <Badge variant={getMatchBadgeVariant(jd.matchCategory)} className="mt-2 cursor-default">
+                           {jd.matchCategory}: {jd.matchPercentage}%
+                        </Badge>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="max-w-xs p-2">
+                        <p className="text-sm font-medium">Match Summary:</p>
+                        <p className="text-xs text-muted-foreground">{jd.matchSummary || "No summary available."}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                )}
               </CardHeader>
               <CardContent className="flex-grow">
                 <p className="text-sm text-muted-foreground line-clamp-3">{jd.description}</p>
               </CardContent>
-              <CardFooter>
+              <CardFooter className="flex flex-col gap-2 items-stretch">
+                {jd.matchPercentage === undefined && (
+                    <Button 
+                        variant="outline" 
+                        className="w-full" 
+                        onClick={() => handleCalculateMatchScore(jd.id)}
+                        disabled={calculatingMatchId === jd.id}
+                    >
+                        {calculatingMatchId === jd.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <BarChart3 className="mr-2 h-4 w-4" />}
+                        Calculate Match Score
+                    </Button>
+                )}
                 <Button className="w-full" onClick={() => handleTailorResumeWithProfile(jd)}>
                     Tailor Resume <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
@@ -394,7 +500,6 @@ export default function JobDescriptionsPage() {
                 </div>
                 <div className="text-xs text-muted-foreground">
                     Pasting a URL will attempt to fetch the content, extract the job description text, and then extract the title/company.
-                    The match meter for profile compatibility will be added in a future update.
                 </div>
             </div>
             <Separator />
@@ -461,6 +566,8 @@ export default function JobDescriptionsPage() {
         </DialogContent>
       </Dialog>
     </div>
+    </TooltipProvider>
   );
 }
 
+    

@@ -1,3 +1,4 @@
+
 export interface WorkExperience {
   id: string;
   company: string;
@@ -64,7 +65,9 @@ export interface JobDescriptionItem {
   company?: string;
   description: string; // The full job description text
   createdAt: string; // ISO date string
-  // Potentially add tailored resume IDs linked to this JD
+  matchPercentage?: number;
+  matchSummary?: string;
+  matchCategory?: 'Excellent Match' | 'Good Match' | 'Fair Match' | 'Poor Match';
 }
 
 export interface StoredResume {
@@ -78,3 +81,5 @@ export interface StoredResume {
   createdAt: string; // ISO date string
   // downloadUrl?: string; // if stored in R2, or generated on demand
 }
+
+    
