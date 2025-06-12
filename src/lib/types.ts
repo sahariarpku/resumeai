@@ -27,8 +27,8 @@ export interface Education {
   endDate: string; // Can be "Present" or expected graduation
   gpa?: string; // e.g., "3.8/4.0" or "First Class"
   thesisTitle?: string;
-  relevantCourses?: string[]; // Stored as array, handled as comma-separated in form
-  description?: string; // For additional notes, achievements during education
+  relevantCourses?: string[];
+  description?: string;
 }
 
 export interface Skill {
@@ -58,12 +58,12 @@ export interface HonorAward {
 export interface Publication {
   id: string;
   title: string;
-  authors?: string[]; // Stored as array, handled as comma-separated in form
+  authors?: string[];
   journalOrConference?: string;
   publicationDate?: string; // YYYY or YYYY-MM
   link?: string;
   doi?: string;
-  description?: string; // Abstract or summary
+  description?: string;
 }
 
 export interface Reference {
@@ -79,16 +79,39 @@ export interface CustomSection {
   content: string;
 }
 
+export type ProfileSectionKey = 
+  | 'workExperiences' 
+  | 'projects' 
+  | 'education' 
+  | 'skills' 
+  | 'certifications' 
+  | 'honorsAndAwards' 
+  | 'publications' 
+  | 'references' 
+  | 'customSections';
+
+export const DEFAULT_SECTION_ORDER: ProfileSectionKey[] = [
+  'workExperiences',
+  'education',
+  'projects',
+  'skills',
+  'honorsAndAwards',
+  'publications',
+  'certifications',
+  'references',
+  'customSections',
+];
+
 export interface UserProfile {
   id: string;
   fullName?: string;
-  email?: string; // Usually from auth
+  email?: string;
   phone?: string;
   address?: string;
   linkedin?: string;
   github?: string;
   portfolio?: string;
-  summary?: string; // Professional summary
+  summary?: string;
   workExperiences: WorkExperience[];
   projects: Project[];
   education: Education[];
@@ -98,6 +121,7 @@ export interface UserProfile {
   publications: Publication[];
   references: Reference[];
   customSections: CustomSection[];
+  sectionOrder?: ProfileSectionKey[];
 }
 
 export interface JobDescriptionItem {
