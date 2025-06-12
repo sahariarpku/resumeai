@@ -6,17 +6,18 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Rss, Search, Loader2, Briefcase, Building, FileText as FileTextIcon, CalendarDays, Percent, Sparkles as SparklesIcon, AlertTriangle, Link as LinkIcon, MapPin, ExternalLink, Filter, Tag, XCircle } from "lucide-react";
+import { Rss, Search, Loader2, Briefcase, Building, FileText as FileTextIcon, CalendarDays, Percent, Sparkles as SparklesIcon, AlertTriangle, Link as LinkIcon, MapPin, ExternalLink, Filter, Tag, XCircle, CheckSquare, Square, Info } from "lucide-react";
 import { useRouter } from 'next/navigation';
-import type { JobPostingItem, UserProfile } from "@/lib/types";
+import type { JobPostingRssItem, UserProfile } from "@/lib/types";
 import { z } from "zod"; 
-import { extractJobDetailsFromRssItem } from "@/ai/flows/extract-rss-item-flow";
+import { extractJobDetailsFromRssItem, type ExtractRssItemOutput } from "@/ai/flows/extract-rss-item-flow";
 import { calculateProfileJdMatch } from "@/ai/flows/calculate-profile-jd-match-flow";
 import { profileToResumeText } from '@/lib/profile-utils';
 import { Badge } from '@/components/ui/badge';
@@ -28,8 +29,6 @@ import {
 } from "@/components/ui/tooltip";
 import { 
     PREDEFINED_RSS_FEEDS, 
-    type RssFeed, 
-    getFeedsByType, 
     getFeedCategoriesByType,
     getFeedDetailsByCategoryAndType,
     ALL_SUBJECT_AREAS_URL,
@@ -37,8 +36,6 @@ import {
 } from '@/lib/job-rss-feeds';
 
 const USER_PROFILE_STORAGE_KEY = "userProfile";
-const TAILOR_RESUME_PREFILL_JD_KEY = "tailorResumePrefillJD";
-
 const LAST_SELECTED_SUBJECT_URL_KEY = "lastSelectedSubjectUrl_v2";
 const LAST_SELECTED_LOCATION_URL_KEY = "lastSelectedLocationUrl_v2";
 const LAST_KEYWORDS_KEY = "lastKeywords_v2";
@@ -51,19 +48,39 @@ const RssFiltersSchema = z.object({
 });
 type RssFiltersData = z.infer<typeof RssFiltersSchema>;
 
+// Basic client-side RSS item parser
+function parseBasicRssItem(itemXml: string, id: string): JobPostingRssItem {
+  const getTagValue = (tagName: string, xml: string): string => {
+    const match = xml.match(new RegExp(`<${tagName}[^>]*>\\s*<!\\[CDATA\\[(.*?)\\]\\]>\\s*<\\/${tagName}>|<${tagName}[^>]*>(.*?)<\\/${tagName}>`, "is"));
+    return match ? (match[1] || match[2] || '').trim() : '';
+  };
+
+  // Sanitize description: remove HTML tags for basic display and limit length
+  let description = getTagValue('description', itemXml);
+  description = description.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').substring(0, 150) + (description.length > 150 ? '...' : '');
+
+
+  return {
+    id: id,
+    title: getTagValue('title', itemXml) || 'N/A',
+    link: getTagValue('link', itemXml),
+    pubDate: getTagValue('pubDate', itemXml),
+    rssItemXml: itemXml, // Store the full XML for later AI processing
+    // requirementsSummary will be populated by AI later if requested
+    requirementsSummary: description, // Use basic parsed description as initial summary
+  };
+}
+
 
 export default function JobsRssPage() {
   const { toast } = useToast();
   const router = useRouter();
-  const [jobPostings, setJobPostings] = useState<JobPostingItem[]>([]);
+  const [jobPostings, setJobPostings] = useState<JobPostingRssItem[]>([]);
   const [isLoadingFeed, setIsLoadingFeed] = useState(false);
-  const [isProcessingItems, setIsProcessingItems] = useState(false);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [profileLoaded, setProfileLoaded] = useState(false);
-  const [processingProgress, setProcessingProgress] = useState(0);
-  const [totalItemsToProcess, setTotalItemsToProcess] = useState(0);
-  
   const [areFiltersLoaded, setAreFiltersLoaded] = useState(false);
+  const [selectedJobIds, setSelectedJobIds] = useState<Set<string>>(new Set());
 
   const filtersForm = useForm<RssFiltersData>({
     resolver: zodResolver(RssFiltersSchema),
@@ -76,7 +93,6 @@ export default function JobsRssPage() {
 
   const subjectAreaFeeds = useMemo(() => getFeedCategoriesByType('subjectArea'), []);
   const locationFeeds = useMemo(() => getFeedCategoriesByType('location'), []);
-
 
   useEffect(() => {
     try {
@@ -103,7 +119,6 @@ export default function JobsRssPage() {
     setAreFiltersLoaded(true);
   }, [toast, filtersForm]);
 
-
   useEffect(() => {
     if (areFiltersLoaded) {
       const subscription = filtersForm.watch((value) => {
@@ -119,13 +134,10 @@ export default function JobsRssPage() {
     }
   }, [filtersForm, areFiltersLoaded]);
 
-
-  const handleFetchAndProcessRss = async (data: RssFiltersData) => {
+  const handleFetchRssFeed = async (data: RssFiltersData) => {
     setIsLoadingFeed(true);
-    setIsProcessingItems(false);
     setJobPostings([]);
-    setProcessingProgress(0);
-    setTotalItemsToProcess(0);
+    setSelectedJobIds(new Set());
 
     let targetRssUrl = "";
     let feedDescription = "";
@@ -133,23 +145,15 @@ export default function JobsRssPage() {
     if (data.selectedSubjectUrl && data.selectedSubjectUrl !== ALL_SUBJECT_AREAS_URL) {
         targetRssUrl = data.selectedSubjectUrl;
         feedDescription = `subject: ${PREDEFINED_RSS_FEEDS.find(f => f.url === data.selectedSubjectUrl)?.name || 'Selected Subject'}`;
-
-        if (data.selectedLocationUrl && data.selectedLocationUrl !== ALL_LOCATIONS_URL) {
-            // For now, if both subject and location are specific, subject feed is primary.
-            // Location filtering happens via keywords if provided, or user inspects.
-            feedDescription += ` & location: ${PREDEFINED_RSS_FEEDS.find(f => f.url === data.selectedLocationUrl)?.name || 'Selected Location'} (location refined by keywords if provided)`;
-        }
     } else if (data.selectedLocationUrl && data.selectedLocationUrl !== ALL_LOCATIONS_URL) {
         targetRssUrl = data.selectedLocationUrl;
         feedDescription = `location: ${PREDEFINED_RSS_FEEDS.find(f => f.url === data.selectedLocationUrl)?.name || 'Selected Location'}`;
     } else {
-        // Both are "Any" or one is "Any" and the other not set (should default to ALL_..._URL)
-        targetRssUrl = ALL_LOCATIONS_URL; // Most general if both are "Any"
+        targetRssUrl = ALL_LOCATIONS_URL; 
         feedDescription = "general feed (all jobs)";
     }
     
     if (!targetRssUrl) {
-        // This case should be less likely now with defaults
         toast({ title: "No Feed Selected", description: "Please select a subject area or location.", variant: "default" });
         setIsLoadingFeed(false);
         return;
@@ -157,156 +161,176 @@ export default function JobsRssPage() {
 
     toast({ title: "Fetching RSS Feed...", description: `Fetching from ${feedDescription}` });
 
-    let rawRssContentString = "";
     try {
       const fetchResponse = await fetch(`/api/fetch-rss?url=${encodeURIComponent(targetRssUrl)}`);
       let responseBodyAsText = '';
-      try {
-        responseBodyAsText = await fetchResponse.text();
-      } catch (textError) {
-        setIsLoadingFeed(false);
-        throw new Error(`Failed to read response from API: ${textError instanceof Error ? textError.message : String(textError)}`);
-      }
+      try { responseBodyAsText = await fetchResponse.text(); } 
+      catch (textError) { throw new Error(`Failed to read response from API: ${textError instanceof Error ? textError.message : String(textError)}`); }
 
       if (!fetchResponse.ok) {
-        try {
-          const errorData = JSON.parse(responseBodyAsText);
-          throw new Error(errorData.error || `API Error (${fetchResponse.status}): ${fetchResponse.statusText}`);
-        } catch (e) {
-          throw new Error(`API Error (${fetchResponse.status}): ${fetchResponse.statusText}. Response: ${responseBodyAsText.substring(0, 300)}...`);
-        }
+        try { const errorData = JSON.parse(responseBodyAsText); throw new Error(errorData.error || `API Error (${fetchResponse.status}): ${fetchResponse.statusText}`); } 
+        catch (e) { throw new Error(`API Error (${fetchResponse.status}): ${fetchResponse.statusText}. Response: ${responseBodyAsText.substring(0, 300)}...`); }
       }
       
       const contentType = fetchResponse.headers.get("content-type");
       if (!contentType || !contentType.includes("application/json")) {
-        setIsLoadingFeed(false);
         throw new Error(`Expected JSON response from API, but received ${contentType || 'unknown content type'}. Response: ${responseBodyAsText.substring(0,500)}...`);
       }
       
       const responseData = JSON.parse(responseBodyAsText); 
-      if (responseData.error) {
-        setIsLoadingFeed(false);
-        throw new Error(responseData.error);
-      }
-      if (!responseData.rawRssContent) {
-        setIsLoadingFeed(false);
-        throw new Error("API returned success but no rawRssContent found.");
-      }
-      rawRssContentString = responseData.rawRssContent;
+      if (responseData.error) throw new Error(responseData.error);
+      if (!responseData.rawRssContent) throw new Error("API returned success but no rawRssContent found.");
       
-      setIsLoadingFeed(false);
-
+      const rawRssContentString = responseData.rawRssContent;
+      
       if (!rawRssContentString) {
-        toast({ title: "No Content Fetched", description: "The RSS URL did not return any content via the API.", variant: "default" });
-        return;
+        toast({ title: "No Content Fetched", description: "The RSS URL did not return any content.", variant: "default" });
+        setJobPostings([]); return;
       }
       
       const itemRegex = /<item>([\s\S]*?)<\/item>/g;
       let match;
-      const itemXmls: string[] = [];
+      const parsedItems: JobPostingRssItem[] = [];
+      let itemIndex = 0;
       while ((match = itemRegex.exec(rawRssContentString)) !== null) {
-        itemXmls.push(match[0]);
+        parsedItems.push(parseBasicRssItem(match[0], `rssjob-${Date.now()}-${itemIndex++}`));
       }
 
-      if (itemXmls.length === 0) {
+      if (parsedItems.length === 0) {
         toast({ title: "No Job Items Found", description: "The RSS feed does not seem to contain any job items.", variant: "default" });
-        return;
-      }
-
-      toast({ title: "Feed Fetched!", description: `Found ${itemXmls.length} items. Processing with AI...` });
-      setIsProcessingItems(true);
-      setTotalItemsToProcess(itemXmls.length);
-      
-      const initialProcessedJobs: JobPostingItem[] = [];
-      for (let i = 0; i < itemXmls.length; i++) {
-        const itemXml = itemXmls[i];
-        try {
-          const extractedDetails = await extractJobDetailsFromRssItem({ rssItemXml: itemXml });
-          if (extractedDetails.role && extractedDetails.jobUrl) { 
-            initialProcessedJobs.push({
-              ...extractedDetails,
-              id: `job-${Date.now()}-${i}`,
-              isCalculatingMatch: !!userProfile, 
-            });
-          }
-        } catch (extractionError) {
-          console.error("Error processing RSS item with AI:", extractionError, itemXml.substring(0,100));
-          toast({ title: `AI Error (Item ${i+1})`, description: `Skipping. ${extractionError instanceof Error ? extractionError.message : ''}`, variant: "destructive", duration: 3000 });
-        }
-        setProcessingProgress(i + 1);
+        setJobPostings([]); return;
       }
       
-      let finalJobs = initialProcessedJobs;
+      let finalJobs = parsedItems;
       const keywordsToFilter = data.keywords?.trim().toLowerCase();
       if (keywordsToFilter) {
         const keywordArray = keywordsToFilter.split(/\s*,\s*|\s+/).filter(Boolean); 
         if (keywordArray.length > 0) {
-            finalJobs = initialProcessedJobs.filter(job => {
+            finalJobs = parsedItems.filter(job => {
             const searchableText = [
-              job.role?.toLowerCase() || "",
-              job.company?.toLowerCase() || "",
-              job.requirementsSummary?.toLowerCase() || "",
-              job.location?.toLowerCase() || "",
+              job.title?.toLowerCase() || "",
+              job.company?.toLowerCase() || "", // Company might not be available at this stage
+              job.requirementsSummary?.toLowerCase() || "", // Basic summary
+              job.location?.toLowerCase() || "", // Location might not be available
             ].join(" ");
             return keywordArray.every(kw => searchableText.includes(kw));
           });
-          toast({ title: "Keywords Applied", description: `Filtered ${initialProcessedJobs.length} jobs down to ${finalJobs.length}.` });
+          toast({ title: "Keywords Applied", description: `Filtered ${parsedItems.length} jobs down to ${finalJobs.length}.` });
         }
       }
       
       setJobPostings(finalJobs);
-      toast({ title: "Jobs Processed!", description: `${finalJobs.length} jobs displayed from ${feedDescription}.` });
+      toast({ title: "RSS Feed Loaded!", description: `${finalJobs.length} jobs displayed from ${feedDescription}. Select jobs and click 'Process Selected' for more details & CV match.` });
 
     } catch (err) {
-      console.error("Error in handleFetchAndProcessRss:", err);
+      console.error("Error in handleFetchRssFeed:", err);
       let errorMessage = "Could not process the RSS feed.";
       if (err instanceof Error) errorMessage = err.message;
       toast({ title: "RSS Processing Error", description: errorMessage, variant: "destructive" });
+      setJobPostings([]);
     } finally {
       setIsLoadingFeed(false);
-      setIsProcessingItems(false);
     }
   };
 
-  const calculateMatchForJob = useCallback(async (job: JobPostingItem, profileText: string) => {
+  const handleProcessSelectedJobs = async () => {
+    if (selectedJobIds.size === 0) {
+      toast({ title: "No Jobs Selected", description: "Please select at least one job to process.", variant: "default" });
+      return;
+    }
+    if (!userProfile) {
+      toast({ title: "Profile Needed", description: "Please set up your profile to calculate CV matches.", variant: "default" });
+      router.push('/profile');
+      return;
+    }
+    const profileText = profileToResumeText(userProfile);
     if (!profileText.trim()) {
-      setJobPostings(prev => prev.map(j => j.id === job.id ? { ...j, matchPercentage: 0, matchSummary: "Profile is empty.", matchCategory: "Poor Match", isCalculatingMatch: false } : j));
-      return;
-    }
-    if(!job.requirementsSummary || job.requirementsSummary.trim().length < 10){
-       setJobPostings(prev => prev.map(j => j.id === job.id ? { ...j, matchPercentage: 0, matchSummary: "Job summary missing.", matchCategory: "Poor Match", isCalculatingMatch: false } : j));
-      return;
-    }
-    try {
-      const matchResult = await calculateProfileJdMatch({ profileText, jobDescriptionText: job.requirementsSummary });
-      setJobPostings(prev => prev.map(j => j.id === job.id ? { ...j, ...matchResult, isCalculatingMatch: false } : j));
-    } catch (error) {
-      console.error(`Error calculating match for job ${job.id}:`, error);
-      setJobPostings(prev => prev.map(j => j.id === job.id ? { ...j, matchPercentage: 0, matchSummary: "Error calculating match.", matchCategory: "Poor Match", isCalculatingMatch: false } : j));
-    }
-  }, []);
-
-  useEffect(() => {
-    if (jobPostings.length > 0 && userProfile && profileLoaded) {
-      const profileText = profileToResumeText(userProfile);
-      jobPostings.forEach(job => {
-        if (job.isCalculatingMatch && typeof job.matchPercentage === 'undefined') {
-          calculateMatchForJob(job, profileText);
-        }
-      });
-    }
-  }, [jobPostings, userProfile, profileLoaded, calculateMatchForJob]);
-
-  const handleTailorResume = (job: JobPostingItem) => {
-    if(!job.requirementsSummary) {
-        toast({title: "Cannot Tailor", description: "Job requirements summary is missing.", variant: "destructive"});
+        toast({ title: "Profile Empty", description: "Your profile is empty. Please add details to calculate matches.", variant: "default" });
+        router.push('/profile');
         return;
     }
-    localStorage.setItem(TAILOR_RESUME_PREFILL_JD_KEY, job.requirementsSummary);
-    router.push('/tailor-resume');
+
+    toast({ title: "Processing Selected Jobs...", description: `Fetching details for ${selectedJobIds.size} job(s). This may take a moment.` });
+
+    // Create a mutable copy of jobPostings to update
+    let updatedJobPostings = [...jobPostings];
+
+    for (const jobId of selectedJobIds) {
+      const jobIndex = updatedJobPostings.findIndex(j => j.id === jobId);
+      if (jobIndex === -1) continue;
+
+      // Set loading state for the specific job
+      updatedJobPostings[jobIndex] = { ...updatedJobPostings[jobIndex], isProcessingDetails: true, isCalculatingMatch: true };
+      setJobPostings([...updatedJobPostings]); // Trigger re-render
+
+      try {
+        const jobToProcess = updatedJobPostings[jobIndex];
+        if (!jobToProcess.rssItemXml) {
+          toast({ title: "Error", description: `Missing RSS XML for job ${jobToProcess.title}`, variant: "destructive" });
+          updatedJobPostings[jobIndex] = { ...jobToProcess, isProcessingDetails: false, isCalculatingMatch: false };
+          continue;
+        }
+
+        // 1. Get detailed job info using AI
+        const extractedDetails: ExtractRssItemOutput = await extractJobDetailsFromRssItem({ rssItemXml: jobToProcess.rssItemXml });
+        updatedJobPostings[jobIndex] = {
+          ...jobToProcess,
+          ...extractedDetails, // Update with AI extracted details
+          isProcessingDetails: false, // AI details extraction done
+        };
+        setJobPostings([...updatedJobPostings]); // Trigger re-render
+
+        // 2. Calculate CV Match if requirements summary is present
+        if (extractedDetails.requirementsSummary && extractedDetails.requirementsSummary.trim().length > 10) {
+          const matchResult = await calculateProfileJdMatch({ profileText, jobDescriptionText: extractedDetails.requirementsSummary });
+          updatedJobPostings[jobIndex] = {
+            ...updatedJobPostings[jobIndex],
+            ...matchResult,
+            isCalculatingMatch: false,
+          };
+        } else {
+          updatedJobPostings[jobIndex] = {
+            ...updatedJobPostings[jobIndex],
+            matchSummary: "Requirements summary missing or too short for matching.",
+            matchCategory: "Poor Match",
+            matchPercentage: 0,
+            isCalculatingMatch: false,
+          };
+        }
+        setJobPostings([...updatedJobPostings]); // Final update for this job
+      } catch (error) {
+        console.error(`Error processing job ${jobId}:`, error);
+        updatedJobPostings[jobIndex] = {
+          ...updatedJobPostings[jobIndex],
+          isProcessingDetails: false,
+          isCalculatingMatch: false,
+          matchSummary: `Error processing: ${error instanceof Error ? error.message : "Unknown error"}`,
+        };
+        setJobPostings([...updatedJobPostings]);
+        toast({ title: "Processing Error", description: `Could not process job: ${updatedJobPostings[jobIndex].title}`, variant: "destructive" });
+      }
+    }
+    toast({ title: "Processing Complete!", description: "Selected jobs have been processed." });
+  };
+  
+  const handleSelectJob = (jobId: string, checked: boolean) => {
+    setSelectedJobIds(prev => {
+      const newSet = new Set(prev);
+      if (checked) newSet.add(jobId);
+      else newSet.delete(jobId);
+      return newSet;
+    });
   };
 
-  const getMatchBadgeVariant = (category?: JobPostingItem['matchCategory']): "default" | "secondary" | "destructive" | "outline" => {
+  const handleSelectAllJobs = (checked: boolean) => {
+    if (checked) {
+      setSelectedJobIds(new Set(jobPostings.map(job => job.id)));
+    } else {
+      setSelectedJobIds(new Set());
+    }
+  };
+
+  const getMatchBadgeVariant = (category?: JobPostingRssItem['matchCategory']): "default" | "secondary" | "destructive" | "outline" => {
     if (!category) return "outline";
     switch (category) {
         case "Excellent Match": return "default";
@@ -325,26 +349,28 @@ export default function JobsRssPage() {
       </div>
     );
   }
+  
+  const isAllSelected = jobPostings.length > 0 && selectedJobIds.size === jobPostings.length;
 
   return (
     <TooltipProvider>
     <div className="container mx-auto py-8 space-y-8">
       <div>
         <h1 className="font-headline text-3xl font-bold flex items-center">
-          <Rss className="mr-3 h-8 w-8 text-primary" /> AI Powered RSS Job Feed
+          <Rss className="mr-3 h-8 w-8 text-primary" /> Advanced RSS Job Feed
         </h1>
         <p className="text-muted-foreground">
-          Select a subject area and/or location to fetch jobs from `jobs.ac.uk` RSS feeds. Then add keywords to filter the results.
+          Select feeds, filter by keywords, then process selected jobs for detailed AI analysis and CV matching.
         </p>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle className="font-headline flex items-center"><Filter className="mr-2 h-5 w-5" />Configure Job Feed Filters</CardTitle>
+          <CardTitle className="font-headline flex items-center"><Filter className="mr-2 h-5 w-5" />Configure & Fetch Feed</CardTitle>
         </CardHeader>
         <CardContent>
           <Form {...filtersForm}>
-            <form onSubmit={filtersForm.handleSubmit(handleFetchAndProcessRss)} className="space-y-6">
+            <form onSubmit={filtersForm.handleSubmit(handleFetchRssFeed)} className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <FormField
                   control={filtersForm.control}
@@ -354,7 +380,7 @@ export default function JobsRssPage() {
                       <FormLabel>Filter by Subject Area</FormLabel>
                       <Select 
                         onValueChange={field.onChange} 
-                        value={field.value}
+                        value={field.value || ALL_SUBJECT_AREAS_URL}
                       >
                         <FormControl>
                           <SelectTrigger>
@@ -387,7 +413,7 @@ export default function JobsRssPage() {
                       <FormLabel>Filter by Location</FormLabel>
                       <Select 
                         onValueChange={field.onChange} 
-                        value={field.value}
+                        value={field.value || ALL_LOCATIONS_URL}
                       >
                         <FormControl>
                           <SelectTrigger>
@@ -419,7 +445,7 @@ export default function JobsRssPage() {
                 name="keywords"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel htmlFor="keywordsInput">Add Keywords (comma or space separated)</FormLabel>
+                    <FormLabel htmlFor="keywordsInput">Filter by Keywords (optional, comma or space separated)</FormLabel>
                     <FormControl>
                       <Input id="keywordsInput" placeholder="e.g. research, python, remote, lecturer" {...field} />
                     </FormControl>
@@ -428,92 +454,108 @@ export default function JobsRssPage() {
                 )}
               />
 
-              <Button type="submit" disabled={isLoadingFeed || isProcessingItems} size="lg" className="w-full sm:w-auto">
-                {(isLoadingFeed || isProcessingItems) ? (
+              <Button type="submit" disabled={isLoadingFeed} size="lg" className="w-full sm:w-auto">
+                {isLoadingFeed ? (
                   <Loader2 className="mr-2 h-5 w-5 animate-spin" />
                 ) : (
                   <Search className="mr-2 h-5 w-5" />
                 )}
-                {(isLoadingFeed) ? "Fetching..." : (isProcessingItems ? `Processing ${processingProgress}/${totalItemsToProcess}` : "Fetch & Display Jobs")}
+                {isLoadingFeed ? "Fetching Feed..." : "Fetch RSS Feed"}
               </Button>
             </form>
           </Form>
-           {profileLoaded && !userProfile && (
-                <p className="text-sm text-amber-600 mt-4 flex items-center">
-                    <AlertTriangle className="mr-2 h-4 w-4" />
-                    Your profile is not set up. CV matching will be disabled. <Button variant="link" size="sm" className="p-0 h-auto ml-1" onClick={() => router.push('/profile')}>Set up profile</Button>
-                </p>
-            )}
         </CardContent>
       </Card>
-
-      {isProcessingItems && totalItemsToProcess > 0 && (
-        <div className="w-full bg-muted rounded-full h-2.5 my-4">
-            <div className="bg-primary h-2.5 rounded-full" style={{ width: `${(processingProgress / totalItemsToProcess) * 100}%` }}></div>
-        </div>
-      )}
 
       {jobPostings.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle className="font-headline">Jobs from Feed</CardTitle>
-            <CardDescription>
-                Review jobs from the selected feed
-                {filtersForm.getValues("keywords") ? ` (filtered by: "${filtersForm.getValues("keywords")}")` : ""}.
-            </CardDescription>
+            <div className="flex justify-between items-center">
+              <div>
+                <CardTitle className="font-headline">Jobs from Feed</CardTitle>
+                <CardDescription>
+                    Select jobs to process for detailed AI analysis and CV matching.
+                </CardDescription>
+              </div>
+              <Button 
+                onClick={handleProcessSelectedJobs} 
+                disabled={selectedJobIds.size === 0 || jobPostings.some(job => job.isProcessingDetails)}
+                size="lg"
+              >
+                <SparklesIcon className="mr-2 h-5 w-5" />
+                Process Selected ({selectedJobIds.size})
+              </Button>
+            </div>
           </CardHeader>
           <CardContent>
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-[50px]">
+                       <Tooltip>
+                        <TooltipTrigger asChild>
+                            <Checkbox
+                                checked={isAllSelected}
+                                onCheckedChange={(checked) => handleSelectAllJobs(Boolean(checked))}
+                                aria-label="Select all jobs"
+                            />
+                        </TooltipTrigger>
+                        <TooltipContent>Select/Deselect All</TooltipContent>
+                       </Tooltip>
+                    </TableHead>
                     <TableHead><Briefcase className="inline-block mr-1 h-4 w-4" />Role</TableHead>
                     <TableHead><Building className="inline-block mr-1 h-4 w-4" />Company</TableHead>
                     <TableHead><MapPin className="inline-block mr-1 h-4 w-4" />Location</TableHead>
-                    <TableHead><FileTextIcon className="inline-block mr-1 h-4 w-4" />Requirements</TableHead>
-                    <TableHead><CalendarDays className="inline-block mr-1 h-4 w-4" />Deadline/Posted</TableHead>
+                    <TableHead><FileTextIcon className="inline-block mr-1 h-4 w-4" />Summary (from RSS)</TableHead>
+                    <TableHead><CalendarDays className="inline-block mr-1 h-4 w-4" />Posted/Deadline</TableHead>
                     <TableHead className="text-center"><Percent className="inline-block mr-1 h-4 w-4" />CV Match</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {jobPostings.map((job) => (
-                    <TableRow key={job.id}>
+                    <TableRow key={job.id} data-state={selectedJobIds.has(job.id) ? "selected" : ""}>
+                      <TableCell>
+                        <Checkbox
+                            checked={selectedJobIds.has(job.id)}
+                            onCheckedChange={(checked) => handleSelectJob(job.id, Boolean(checked))}
+                            aria-labelledby={`job-title-${job.id}`}
+                        />
+                      </TableCell>
                       <TableCell className="font-medium max-w-xs">
-                        {job.jobUrl ? (
+                        <span id={`job-title-${job.id}`}>{job.role || job.title}</span>
+                        {job.link && (
                           <a 
-                            href={job.jobUrl} 
+                            href={job.link} 
                             target="_blank" 
                             rel="noopener noreferrer" 
-                            className="hover:underline text-primary flex items-center group"
-                            title={`View job: ${job.role}`}
+                            className="hover:underline text-primary/80 flex items-center group text-xs ml-1"
+                            title={`View original posting for: ${job.role || job.title}`}
                           >
-                            <span className="truncate group-hover:whitespace-normal">{job.role || <span className="text-muted-foreground/70">N/A</span>}</span>
-                             <ExternalLink className="inline-block ml-1.5 h-3.5 w-3.5 opacity-70 flex-shrink-0" />
+                            <ExternalLink className="inline-block mr-1 h-3 w-3 opacity-70 flex-shrink-0" /> Source
                           </a>
-                        ) : (
-                          <span className="truncate">{job.role || <span className="text-muted-foreground/70">N/A</span>}</span>
                         )}
                       </TableCell>
-                      <TableCell className="max-w-[150px] truncate">{job.company || <span className="text-muted-foreground/70">N/A</span>}</TableCell>
-                      <TableCell className="max-w-[150px] truncate">{job.location || <span className="text-muted-foreground/70">N/A</span>}</TableCell>
+                      <TableCell className="max-w-[150px] truncate">{job.company || <span className="text-muted-foreground/70 text-xs">Process for details</span>}</TableCell>
+                      <TableCell className="max-w-[150px] truncate">{job.location || <span className="text-muted-foreground/70 text-xs">Process for details</span>}</TableCell>
                       <TableCell className="max-w-xs">
                          <Tooltip>
                             <TooltipTrigger asChild>
-                                <p className="truncate hover:whitespace-normal cursor-help">
+                                <p className="truncate hover:whitespace-normal cursor-help text-xs">
                                   {job.requirementsSummary || <span className="text-muted-foreground/70">N/A</span>}
                                 </p>
                             </TooltipTrigger>
                             <TooltipContent side="bottom" className="max-w-md p-2 bg-popover text-popover-foreground">
-                                <p className="text-sm font-medium">Full Requirements Summary:</p>
+                                <p className="text-sm font-medium">RSS Description Snippet:</p>
                                 <p className="text-xs whitespace-pre-wrap">{job.requirementsSummary || "Not available."}</p>
+                                {(!job.matchPercentage && !job.isProcessingDetails) && <p className="text-xs mt-1 italic">Select and process for full summary & CV match.</p>}
                             </TooltipContent>
                         </Tooltip>
                       </TableCell>
-                      <TableCell className="max-w-[120px] truncate">{job.deadlineText || <span className="text-muted-foreground/70">N/A</span>}</TableCell>
+                      <TableCell className="max-w-[120px] truncate">{job.deadlineText || job.pubDate || <span className="text-muted-foreground/70">N/A</span>}</TableCell>
                       <TableCell className="text-center">
-                        {job.isCalculatingMatch ? (
-                          <Loader2 className="h-4 w-4 animate-spin mx-auto text-primary" />
+                        {job.isProcessingDetails || job.isCalculatingMatch ? (
+                          <Loader2 className="h-5 w-5 animate-spin mx-auto text-primary" />
                         ) : typeof job.matchPercentage === 'number' ? (
                           <Tooltip>
                             <TooltipTrigger asChild>
@@ -527,20 +569,11 @@ export default function JobsRssPage() {
                             </TooltipContent>
                           </Tooltip>
                         ) : (
-                          userProfile ? <span className="text-xs text-muted-foreground">-</span> : 
-                          <Tooltip><TooltipTrigger asChild><Badge variant="outline" className="cursor-help">N/A</Badge></TooltipTrigger><TooltipContent side="top"><p className="text-xs">Profile not set up.</p></TooltipContent></Tooltip>
+                          <Tooltip>
+                            <TooltipTrigger asChild><Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); setSelectedJobIds(new Set([job.id])); handleProcessSelectedJobs();}}><Info className="h-4 w-4 text-muted-foreground/70" /></Button></TooltipTrigger>
+                            <TooltipContent><p className="text-xs">Click to process this job</p></TooltipContent>
+                          </Tooltip>
                         )}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
-                          onClick={() => handleTailorResume(job)}
-                          disabled={!userProfile || !profileLoaded || !job.requirementsSummary}
-                          title={(!userProfile || !profileLoaded) ? "Set up profile to tailor" : (!job.requirementsSummary ? "Summary missing" : "Tailor resume")}
-                        >
-                          <SparklesIcon className="mr-2 h-4 w-4" /> Tailor
-                        </Button>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -551,16 +584,14 @@ export default function JobsRssPage() {
         </Card>
       )}
 
-       {(isLoadingFeed || (isProcessingItems && jobPostings.length === 0)) && (
+       {isLoadingFeed && (
          <div className="text-center py-12">
             <Loader2 className="mx-auto h-12 w-12 animate-spin text-primary mb-4" />
-            <p className="text-muted-foreground">
-                {isLoadingFeed ? "Fetching RSS feed..." : `Processing job items: ${processingProgress} / ${totalItemsToProcess}...`}
-            </p>
+            <p className="text-muted-foreground">Fetching RSS feed...</p>
         </div>
       )}
 
-      {!isLoadingFeed && !isProcessingItems && jobPostings.length === 0 && filtersForm.formState.isSubmitted && (
+      {!isLoadingFeed && jobPostings.length === 0 && filtersForm.formState.isSubmitted && (
          <Card className="text-center py-12">
             <CardHeader>
                 <Rss className="mx-auto h-16 w-16 text-muted-foreground mb-4" />
@@ -568,12 +599,12 @@ export default function JobsRssPage() {
             </CardHeader>
             <CardContent>
                 <p className="text-muted-foreground">
-                    No jobs were found in the feed for the selected criteria, or none matched your keywords: "{filtersForm.getValues("keywords")}". Please adjust filters or try different keywords.
+                    No jobs were found in the feed for the selected criteria, or none matched your keywords. Please adjust filters or try different keywords.
                 </p>
             </CardContent>
         </Card>
       )}
-       {!isLoadingFeed && !isProcessingItems && jobPostings.length === 0 && !filtersForm.formState.isSubmitted && (
+       {!isLoadingFeed && jobPostings.length === 0 && !filtersForm.formState.isSubmitted && (
          <Card className="text-center py-12">
             <CardHeader>
                 <Rss className="mx-auto h-16 w-16 text-muted-foreground mb-4" />
@@ -581,8 +612,15 @@ export default function JobsRssPage() {
             </CardHeader>
             <CardContent>
                 <p className="text-muted-foreground">
-                    Choose a subject area and/or location, add keywords, then click "Fetch & Display Jobs".
+                    Choose a subject area and/or location, optionally add keywords, then click "Fetch RSS Feed".
                 </p>
+                 {profileLoaded && !userProfile && (
+                    <p className="text-sm text-amber-600 mt-4 flex items-center justify-center">
+                        <AlertTriangle className="mr-2 h-4 w-4" />
+                        Your profile is not set up. CV matching will be disabled until profile is complete.
+                        <Button variant="link" size="sm" className="p-0 h-auto ml-1" onClick={() => router.push('/profile')}>Set up profile</Button>
+                    </p>
+                )}
             </CardContent>
         </Card>
       )}

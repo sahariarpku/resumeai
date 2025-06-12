@@ -146,21 +146,29 @@ export interface StoredResume {
   createdAt: string; // ISO date string
 }
 
-// For the new "Jobs RSS" AI simulation
-export interface SimulatedJobPosting {
-  role: string;
-  company: string;
-  requirementsSummary: string;
-  deadlineText: string; // e.g., "In 2 weeks", "2024-08-15"
-  location?: string; // Optional, can be added later
-  jobUrl?: string; // Optional, as it's simulated
-}
-
-export interface JobPostingItem extends SimulatedJobPosting {
+// For the "Jobs RSS" feature
+export interface JobPostingRssItem {
   id: string; // Client-generated unique ID
+  title: string; // Extracted directly from RSS <title>
+  link: string;  // Extracted directly from RSS <link>
+  pubDate?: string; // Extracted directly from RSS <pubDate>
+  
+  rssItemXml: string; // Store the raw XML of the <item> for deferred AI processing
+
+  // Fields to be populated by AI after user action
+  role?: string; // Usually same as title, but AI can confirm/refine
+  company?: string;
+  requirementsSummary?: string;
+  deadlineText?: string; // AI might derive a better deadline from description
+  location?: string;
+  jobUrl?: string; // Usually same as link, AI can confirm/refine
+
+  // CV Match fields
   matchPercentage?: number;
   matchSummary?: string;
   matchCategory?: 'Excellent Match' | 'Good Match' | 'Fair Match' | 'Poor Match';
-  isCalculatingMatch?: boolean; // For UI loading state
+  
+  isProcessingDetails?: boolean; // UI loading state for AI processing this item
+  isCalculatingMatch?: boolean; // UI loading state for CV match calculation for this item (can reuse or differentiate)
 }
 
