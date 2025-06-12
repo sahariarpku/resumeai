@@ -20,7 +20,7 @@ import { DEFAULT_SECTION_ORDER } from "@/lib/types";
 import { suggestCvSectionOrder } from "@/ai/flows/suggest-cv-section-order-flow";
 import { generateLatexCv } from "@/ai/flows/generate-latex-cv-flow";
 import { profileToResumeText, profileToResumeHtml } from '@/lib/profile-utils';
-import { Loader2, Download, FileText, Settings2, ListRestart } from 'lucide-react';
+import { Loader2, Download, FileText, Settings2, ListRestart, Printer } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 
 interface CvCustomizationModalProps {
@@ -80,19 +80,19 @@ export function CvCustomizationModal({ isOpen, onOpenChange }: CvCustomizationMo
         const sectionData = userProfile[key as keyof UserProfile];
         if (Array.isArray(sectionData)) return sectionData.length > 0;
         if (typeof sectionData === 'string') return sectionData.trim() !== '';
-        return false; // Default for sections that might not be arrays or strings directly (though most are)
+        return false; 
       }) as ProfileSectionKey[];
 
 
       const result = await suggestCvSectionOrder({
-        userPreference: userPreference || "General Purpose CV", // Default if empty
+        userPreference: userPreference || "General Purpose CV", 
         currentSectionOrder: currentOrder,
-        availableSections: availableSections.length > 0 ? availableSections : [...DEFAULT_SECTION_ORDER], // Use default if no sections have content
+        availableSections: availableSections.length > 0 ? availableSections : [...DEFAULT_SECTION_ORDER], 
       });
 
       const updatedProfile = { ...userProfile, sectionOrder: result.newSectionOrder };
       localStorage.setItem(USER_PROFILE_STORAGE_KEY, JSON.stringify(updatedProfile));
-      setUserProfile(updatedProfile); // Update state for immediate use by download functions
+      setUserProfile(updatedProfile); 
 
       toast({
         title: "CV Preference Applied!",
@@ -120,9 +120,9 @@ export function CvCustomizationModal({ isOpen, onOpenChange }: CvCustomizationMo
       filename = `${profileName}_CV.md`;
       blobType = 'text/markdown;charset=utf-8';
     } else if (format === 'docx') {
-      content = profileToResumeHtml(userProfile); // Uses the styled HTML
+      content = profileToResumeHtml(userProfile); 
       filename = `${profileName}_CV.docx`;
-      blobType = 'application/msword'; // For Word to import HTML
+      blobType = 'application/msword'; 
     } else if (format === 'tex') {
         if (generatedLatex) {
             content = generatedLatex;
@@ -147,6 +147,26 @@ export function CvCustomizationModal({ isOpen, onOpenChange }: CvCustomizationMo
     }
   };
 
+  const handlePrintPdfFromHtml = () => {
+    if (!userProfile) {
+      toast({ title: "Profile Error", description: "User profile not loaded.", variant: "destructive" });
+      return;
+    }
+    const htmlContent = profileToResumeHtml(userProfile);
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(htmlContent);
+      printWindow.document.close();
+      printWindow.focus();
+      setTimeout(() => {
+        printWindow.print();
+      }, 500);
+      toast({ title: "Preparing PDF for Print" });
+    } else {
+      toast({ title: "Print Error", description: "Could not open print window. Check pop-up blocker.", variant: "destructive" });
+    }
+  };
+
   const handleGenerateLatex = async () => {
     if (!userProfile) {
         toast({ title: "Profile Error", description: "User profile not loaded.", variant: "destructive" });
@@ -155,7 +175,7 @@ export function CvCustomizationModal({ isOpen, onOpenChange }: CvCustomizationMo
     setIsGeneratingLatex(true);
     setGeneratedLatex(null);
     try {
-        const profileAsText = profileToResumeText(userProfile); // Using the reordered profile
+        const profileAsText = profileToResumeText(userProfile); 
         const result = await generateLatexCv({
              profileAsText,
              cvStylePreference: userPreference || "Oxford style"
@@ -205,15 +225,20 @@ export function CvCustomizationModal({ isOpen, onOpenChange }: CvCustomizationMo
           <>
             <Separator className="my-4"/>
             <div className="space-y-3">
-                <h3 className="text-md font-medium text-center">Download Reordered CV</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <h3 className="text-md font-medium text-center">Download Reordered CV (from Profile Data)</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                     <Button variant="outline" onClick={() => handleDownload('md')} disabled={isLoading}>
-                        <Download className="mr-2 h-4 w-4" /> Download .md
+                        <Download className="mr-2 h-4 w-4" /> .md
                     </Button>
                     <Button variant="outline" onClick={() => handleDownload('docx')} disabled={isLoading}>
-                        <Download className="mr-2 h-4 w-4" /> Download .docx
+                        <Download className="mr-2 h-4 w-4" /> .docx
+                    </Button>
+                    <Button variant="outline" onClick={handlePrintPdfFromHtml} disabled={isLoading}>
+                        <Printer className="mr-2 h-4 w-4" /> PDF (HTML)
                     </Button>
                 </div>
+                <Separator className="my-4"/>
+                <h3 className="text-md font-medium text-center">Generate & Download LaTeX CV</h3>
                 <div className="space-y-2 pt-2">
                      <Button 
                         variant="outline" 
