@@ -1,3 +1,4 @@
+
 "use client";
 
 import { Header } from "@/components/layout/header";
@@ -11,7 +12,7 @@ export default function AppLayout({
 }) {
   return (
     <div className="flex min-h-screen w-full">
-      <Sidebar collapsible="icon" defaultOpen={true} variant="sidebar" side="left">
+      <Sidebar collapsible="icon" variant="sidebar" side="left">
         <SidebarContent>
           <MainNav />
         </SidebarContent>
