@@ -2,19 +2,19 @@
 "use client";
 
 import React, { useState } from 'react';
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
+// import { useForm } from "react-hook-form";
+// import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+// import { Textarea } from "@/components/ui/textarea"; // Using plain textarea for now
+// import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"; // Using divs for now
+// import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"; // Not using Form component for now
 import { useToast } from "@/hooks/use-toast";
 import { Sparkles, Download, Copy, FileText, Brain, Lightbulb, Loader2, Save } from "lucide-react";
-import { tailorResumeFormSchema, TailorResumeFormData } from "@/lib/schemas";
-import { tailorResumeToJobDescription } from "@/ai/flows/tailor-resume-to-job-description";
-import { improveResume } from "@/ai/flows/improve-resume-based-on-job-description";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Separator } from '@/components/ui/separator';
+// import { tailorResumeFormSchema, TailorResumeFormData } from "@/lib/schemas";
+// import { tailorResumeToJobDescription } from "@/ai/flows/tailor-resume-to-job-description";
+// import { improveResume } from "@/ai/flows/improve-resume-based-on-job-description";
+// import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+// import { Separator } from '@/components/ui/separator'; // Using hr for now
 
 export default function TailorResumePage() {
   const { toast } = useToast();
@@ -23,59 +23,54 @@ export default function TailorResumePage() {
   const [analysis, setAnalysis] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<string | null>(null);
 
-  const form = useForm<TailorResumeFormData>({
-    resolver: zodResolver(tailorResumeFormSchema),
-    defaultValues: {
-      jobDescription: "",
-      resumeContent: "",
-    },
-  });
+  // const form = useForm<TailorResumeFormData>({
+  //   resolver: zodResolver(tailorResumeFormSchema),
+  //   defaultValues: {
+  //     jobDescription: "",
+  //     resumeContent: "",
+  //   },
+  // });
 
-  const onSubmit = async (data: TailorResumeFormData) => {
-    setIsLoading(true);
-    setTailoredResume(null);
-    setAnalysis(null);
-    setSuggestions(null);
+  // const onSubmit = async (data: TailorResumeFormData) => {
+  //   setIsLoading(true);
+  //   setTailoredResume(null);
+  //   setAnalysis(null);
+  //   setSuggestions(null);
 
-    try {
-      const [tailorResult, improveResult] = await Promise.all([
-        tailorResumeToJobDescription({ resume: data.resumeContent, jobDescription: data.jobDescription }),
-        improveResume({ resume: data.resumeContent, jobDescription: data.jobDescription })
-      ]);
+  //   try {
+  //     const [tailorResult, improveResult] = await Promise.all([
+  //       tailorResumeToJobDescription({ resume: data.resumeContent, jobDescription: data.jobDescription }),
+  //       improveResume({ resume: data.resumeContent, jobDescription: data.jobDescription })
+  //     ]);
       
-      setTailoredResume(tailorResult.tailoredResume);
-      setAnalysis(tailorResult.analysis);
-      setSuggestions(improveResult.suggestions);
+  //     setTailoredResume(tailorResult.tailoredResume);
+  //     setAnalysis(tailorResult.analysis);
+  //     setSuggestions(improveResult.suggestions);
 
-      toast({ title: "Resume Tailored!", description: "AI has customized your resume." });
-    } catch (error) {
-      console.error("Error tailoring resume:", error);
-      toast({
-        title: "Error",
-        description: "Could not tailor resume. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  //     toast({ title: "Resume Tailored!", description: "AI has customized your resume." });
+  //   } catch (error) {
+  //     console.error("Error tailoring resume:", error);
+  //     toast({
+  //       title: "Error",
+  //       description: "Could not tailor resume. Please try again.",
+  //       variant: "destructive",
+  //     });
+  //   } finally {
+  //     setIsLoading(false);
+  //   }
+  // };
 
-  const handleCopyToClipboard = (text: string | null) => {
-    if (text) {
-      navigator.clipboard.writeText(text);
-      toast({ title: "Copied to clipboard!" });
-    }
-  };
-
-  const handleDownload = (content: string | null, filename: string) => {
-    console.log('Attempting to download:', filename, 'with content present:', !!content);
-    if (!content) {
-      toast({ title: "Download Error", description: "No content to download.", variant: "destructive" });
-      return;
-    }
-    // Minimal placeholder for download logic to test parsing
-    toast({ title: "Download Placeholder", description: `Would download ${filename}` });
-  };
+  // const handleCopyToClipboard = (text: string | null) => {
+  //   if (text) {
+  //     navigator.clipboard.writeText(text);
+  //     toast({ title: "Copied to clipboard!" });
+  //   }
+  // };
+  
+  // const handleDownload = (content: string | null, filename: string) => {
+  //   console.log("handleDownload (placeholder for debugging)");
+  //   toast({ title: "Download (Placeholder)" });
+  // };
   
   return (
     <div className="container mx-auto py-8 space-y-8">
@@ -86,49 +81,29 @@ export default function TailorResumePage() {
         </p>
       </div>
 
-      <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          <Card className="lg:col-span-1">
-            <CardHeader>
-              <CardTitle className="font-headline flex items-center"><FileText className="mr-2 h-5 w-5 text-primary"/> Your Base Resume</CardTitle>
-              <CardDescription>Paste your current resume content here.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <FormField
-                control={form.control}
-                name="resumeContent"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormControl>
-                      <Textarea placeholder="Paste your full resume text..." {...field} rows={15} className="text-sm"/>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </CardContent>
-          </Card>
+      {/* Simplified form section to avoid using 'form' which is now commented out */}
+      <form onSubmit={(e) => { e.preventDefault(); console.log("Form submit (placeholder)"); toast({ title: "Submit Placeholder"}) }} className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {/* Base Resume Input Area */}
+          <div className="lg:col-span-1 p-6 border rounded-lg shadow-sm bg-card text-card-foreground">
+            <h2 className="text-2xl font-semibold leading-none tracking-tight font-headline flex items-center mb-1.5"><FileText className="mr-2 h-5 w-5 text-primary"/> Your Base Resume</h2>
+            <p className="text-sm text-muted-foreground mb-4">Paste your current resume content here.</p>
+            <textarea 
+              placeholder="Paste your full resume text..." 
+              rows={15} 
+              className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+            />
+          </div>
 
-          <Card className="lg:col-span-1">
-            <CardHeader>
-              <CardTitle className="font-headline flex items-center"><Brain className="mr-2 h-5 w-5 text-primary"/> Job Description</CardTitle>
-              <CardDescription>Paste the job description you&apos;re targeting.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <FormField
-                control={form.control}
-                name="jobDescription"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormControl>
-                      <Textarea placeholder="Paste the full job description text..." {...field} rows={15} className="text-sm"/>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </CardContent>
-          </Card>
+          {/* Job Description Input Area */}
+          <div className="lg:col-span-1 p-6 border rounded-lg shadow-sm bg-card text-card-foreground">
+            <h2 className="text-2xl font-semibold leading-none tracking-tight font-headline flex items-center mb-1.5"><Brain className="mr-2 h-5 w-5 text-primary"/> Job Description</h2>
+            <p className="text-sm text-muted-foreground mb-4">Paste the job description you&apos;re targeting.</p>
+            <textarea 
+              placeholder="Paste the full job description text..." 
+              rows={15} 
+              className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+            />
+          </div>
           
           <div className="lg:col-span-2 flex justify-center">
             <Button type="submit" size="lg" disabled={isLoading} className="min-w-[200px]">
@@ -140,52 +115,44 @@ export default function TailorResumePage() {
               Forge My Resume
             </Button>
           </div>
-        </form>
-      </Form>
+      </form>
 
       {(tailoredResume || analysis || suggestions) && (
         <div className="space-y-8 pt-8">
-          <Separator />
+          <hr className="shrink-0 bg-border h-[1px] w-full my-4" /> {/* Simplified Separator */}
           <h2 className="font-headline text-2xl font-bold text-center">AI-Powered Results</h2>
           
           {tailoredResume && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="font-headline flex items-center"><FileText className="mr-2 h-5 w-5 text-primary"/> Tailored Resume</CardTitle>
-                <div className="flex gap-2">
-                    <Button variant="outline" size="sm" onClick={() => handleCopyToClipboard(tailoredResume)}><Copy className="mr-2 h-4 w-4" />Copy</Button>
-                    <Button variant="outline" size="sm" onClick={() => handleDownload(tailoredResume, "tailored_resume.txt")}><Download className="mr-2 h-4 w-4" />Download</Button>
-                    {/* <Button variant="default" size="sm" onClick={() => { /* Save logic */ }}><Save className="mr-2 h-4 w-4" />Save Resume</Button> */}
+            <div className="p-6 border rounded-lg shadow-sm bg-card text-card-foreground">
+              <div className="flex flex-col space-y-1.5 mb-6">
+                <h3 className="text-2xl font-semibold leading-none tracking-tight font-headline flex items-center"><FileText className="mr-2 h-5 w-5 text-primary"/> Tailored Resume</h3>
+                <div className="flex gap-2 pt-2">
+                    <Button variant="outline" size="sm" onClick={() => { console.log("Copy (Placeholder)"); toast({title: "Copy (Placeholder)"})}}><Copy className="mr-2 h-4 w-4" />Copy</Button>
+                    <Button variant="outline" size="sm" onClick={() => { console.log("Download (Placeholder)"); toast({title: "Download (Placeholder)"})}}><Download className="mr-2 h-4 w-4" />Download</Button>
                 </div>
-              </CardHeader>
-              <CardContent>
-                <pre className="whitespace-pre-wrap bg-muted/50 p-4 rounded-md text-sm font-mono max-h-[500px] overflow-y-auto">{tailoredResume}</pre>
-              </CardContent>
-            </Card>
+              </div>
+              <pre className="whitespace-pre-wrap bg-muted/50 p-4 rounded-md text-sm font-mono max-h-[500px] overflow-y-auto">{tailoredResume}</pre>
+            </div>
           )}
 
           {analysis && (
-             <Card>
-              <CardHeader>
-                <CardTitle className="font-headline flex items-center"><Brain className="mr-2 h-5 w-5 text-primary"/> AI Analysis</CardTitle>
-                 <Button variant="outline" size="sm" onClick={() => handleCopyToClipboard(analysis)}><Copy className="mr-2 h-4 w-4" />Copy Analysis</Button>
-              </CardHeader>
-              <CardContent>
-                 <div className="prose prose-sm max-w-none dark:prose-invert p-4 bg-muted/50 rounded-md max-h-[400px] overflow-y-auto" dangerouslySetInnerHTML={{ __html: analysis.replace(/\n/g, '<br />') }} />
-              </CardContent>
-            </Card>
+             <div className="p-6 border rounded-lg shadow-sm bg-card text-card-foreground">
+              <div className="flex flex-col space-y-1.5 mb-6">
+                <h3 className="text-2xl font-semibold leading-none tracking-tight font-headline flex items-center"><Brain className="mr-2 h-5 w-5 text-primary"/> AI Analysis</h3>
+                 <Button variant="outline" size="sm" onClick={() => { console.log("Copy analysis (Placeholder)"); toast({title: "Copy (Placeholder)"})}} className="mt-2"><Copy className="mr-2 h-4 w-4" />Copy Analysis</Button>
+              </div>
+              <div className="prose prose-sm max-w-none dark:prose-invert p-4 bg-muted/50 rounded-md max-h-[400px] overflow-y-auto" dangerouslySetInnerHTML={{ __html: analysis.replace(/\n/g, '<br />') }} />
+            </div>
           )}
 
           {suggestions && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="font-headline flex items-center"><Lightbulb className="mr-2 h-5 w-5 text-primary"/> AI Suggestions</CardTitle>
-                <Button variant="outline" size="sm" onClick={() => handleCopyToClipboard(suggestions)}><Copy className="mr-2 h-4 w-4" />Copy Suggestions</Button>
-              </CardHeader>
-              <CardContent>
-                <div className="prose prose-sm max-w-none dark:prose-invert p-4 bg-muted/50 rounded-md max-h-[400px] overflow-y-auto" dangerouslySetInnerHTML={{ __html: suggestions.replace(/\n/g, '<br />') }} />
-              </CardContent>
-            </Card>
+            <div className="p-6 border rounded-lg shadow-sm bg-card text-card-foreground">
+              <div className="flex flex-col space-y-1.5 mb-6">
+                <h3 className="text-2xl font-semibold leading-none tracking-tight font-headline flex items-center"><Lightbulb className="mr-2 h-5 w-5 text-primary"/> AI Suggestions</h3>
+                <Button variant="outline" size="sm" onClick={() => { console.log("Copy suggestions (Placeholder)"); toast({title: "Copy (Placeholder)"})}} className="mt-2"><Copy className="mr-2 h-4 w-4" />Copy Suggestions</Button>
+              </div>
+              <div className="prose prose-sm max-w-none dark:prose-invert p-4 bg-muted/50 rounded-md max-h-[400px] overflow-y-auto" dangerouslySetInnerHTML={{ __html: suggestions.replace(/\n/g, '<br />') }} />
+            </div>
           )}
         </div>
       )}
