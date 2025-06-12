@@ -1,10 +1,10 @@
 
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useRouter, useSearchParams } from 'next/navigation'; 
+import { useRouter } from 'next/navigation'; 
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,17 +20,84 @@ import { profileToResumeText, textToProfessionalHtml } from '@/lib/profile-utils
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Separator } from '@/components/ui/separator';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 
 const TAILOR_RESUME_PREFILL_JD_KEY = "tailorResumePrefillJD";
 const TAILOR_RESUME_PREFILL_RESUME_KEY = "tailorResumePrefillResume";
 const USER_PROFILE_STORAGE_KEY = "userProfile";
 
+// Simple Markdown to HTML utility for display purposes
+const SimpleMarkdownToHtmlDisplay = ({ text }: { text: string | null }) => {
+  if (!text) return null;
+
+  let html = text;
+
+  // Headers (more specific styling might be needed, or rely on prose)
+  html = html.replace(/^### (.*$)/gim, '<h3 class="text-lg font-semibold mt-3 mb-1">$1</h3>');
+  html = html.replace(/^## (.*$)/gim, '<h2 class="text-xl font-semibold mt-4 mb-2">$1</h2>');
+  html = html.replace(/^# (.*$)/gim, '<h1 class="text-2xl font-bold mt-5 mb-3">$1</h1>');
+
+  // Bold and Italic
+  html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+  html = html.replace(/__(.*?)__/g, '<strong>$1</strong>'); 
+  html = html.replace(/\*(.*?)\*/g, '<em>$1</em>');
+  html = html.replace(/_(.*?)_/g, '<em>$1</em>'); 
+
+  // Lists (basic handling)
+  const lines = html.split('\n');
+  let newHtmlLines = [];
+  let inList = false;
+  let listType = ''; // 'ul' or 'ol'
+
+  for (const line of lines) {
+    const ulMatch = line.match(/^(\* |\- )/);
+    const olMatch = line.match(/^(\d+\. )/);
+
+    if (ulMatch || olMatch) {
+      const currentListType = ulMatch ? 'ul' : 'ol';
+      if (!inList || listType !== currentListType) {
+        if (inList) newHtmlLines.push(`</${listType}>`); // Close previous list
+        newHtmlLines.push(`<${currentListType}>`);
+        inList = true;
+        listType = currentListType;
+      }
+      newHtmlLines.push(`  <li>${line.substring(olMatch ? olMatch[0].length : 2)}</li>`);
+    } else {
+      if (inList) {
+        newHtmlLines.push(`</${listType}>`);
+        inList = false;
+        listType = '';
+      }
+      newHtmlLines.push(line);
+    }
+  }
+  if (inList) {
+    newHtmlLines.push(`</${listType}>`);
+  }
+  html = newHtmlLines.join('\n');
+
+  // Paragraphs: Wrap blocks of text separated by one or more empty lines in <p> tags.
+  // Also, convert single newlines within those paragraphs to <br />.
+  html = html.split(/\n\s*\n/).map(paragraph => {
+    if (paragraph.trim() === '') return ''; // Skip empty paragraphs
+    // Avoid wrapping already structured HTML (like lists or headers) in <p> tags
+    if (paragraph.match(/^\s*<(ul|ol|h[1-6]|div|section|article|aside|header|footer|nav|figure|table|blockquote|hr|pre|form)/i)) {
+        return paragraph;
+    }
+    return `<p>${paragraph.replace(/\n/g, '<br />')}</p>`;
+  }).join('');
+
+  html = html.replace(/<p>\s*(<(ul|ol)>.*?<\/(ul|ol)>)\s*<\/p>/gs, '$1'); // Remove <p> tags around lists
+  html = html.replace(/<p>\s*<\/p>/g, ''); // Clean up empty paragraphs
+
+  return <div className="prose prose-sm dark:prose-invert max-w-none break-words" dangerouslySetInnerHTML={{ __html: html }} />;
+};
+
 
 export default function TailorResumePage() {
   const { toast } = useToast();
   const router = useRouter(); 
-  const searchParams = useSearchParams();
 
   const [isLoadingResume, setIsLoadingResume] = useState(false);
   const [isLoadingCoverLetter, setIsLoadingCoverLetter] = useState(false);
@@ -41,6 +108,9 @@ export default function TailorResumePage() {
   const [error, setError] = useState<string | null>(null);
   const [jobTitleForSave, setJobTitleForSave] = useState<string>("");
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  
+  const resultsSectionRef = useRef<HTMLDivElement>(null);
+  const coverLetterSectionRef = useRef<HTMLDivElement>(null);
 
 
   const form = useForm<TailorResumeFormData>({
@@ -65,7 +135,7 @@ export default function TailorResumePage() {
 
       if (prefillResumeFromStorage) {
         form.setValue("resumeContent", prefillResumeFromStorage);
-        localStorage.removeItem(TAILOR_RESUME_PREFILL_RESUME_KEY); // Clean up
+        localStorage.removeItem(TAILOR_RESUME_PREFILL_RESUME_KEY); 
       } else if (loadedProfile) {
         const profileAsText = profileToResumeText(loadedProfile);
         if (profileAsText) {
@@ -75,18 +145,12 @@ export default function TailorResumePage() {
 
       if (prefillJD) {
         form.setValue("jobDescription", prefillJD);
-        localStorage.removeItem(TAILOR_RESUME_PREFILL_JD_KEY); // Clean up
+        localStorage.removeItem(TAILOR_RESUME_PREFILL_JD_KEY); 
       }
 
-      // Extract job title for saving if JD is available
       const currentJD = form.getValues("jobDescription") || prefillJD;
       if (currentJD) {
-        const jdLines = currentJD.split('\n');
-        let extractedTitle = jdLines.find(line => /title/i.test(line) && !/job title/i.test(line) && line.length < 100)?.replace(/.*title\s*[:=-]?\s*/i, '').trim();
-        if (!extractedTitle && jdLines[0] && jdLines[0].length < 100) {
-          extractedTitle = jdLines[0].trim();
-        }
-        setJobTitleForSave(extractedTitle || "Untitled Job");
+        setJobTitleForSave(extractJobTitleFromJD(currentJD) || "Untitled Job");
       }
 
     } catch (e) {
@@ -94,6 +158,19 @@ export default function TailorResumePage() {
         toast({title: "Info", description: "Could not load prefill data.", variant: "default"});
     }
   }, [form, toast]);
+
+  useEffect(() => {
+    if ((tailoredResume || analysis || suggestions) && resultsSectionRef.current) {
+      resultsSectionRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [tailoredResume, analysis, suggestions]);
+
+  useEffect(() => {
+    if (generatedCoverLetter && coverLetterSectionRef.current) {
+        coverLetterSectionRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [generatedCoverLetter]);
+
 
   const extractJobTitleFromJD = (jdText: string): string => {
     const jdLines = jdText.split('\n');
@@ -111,7 +188,7 @@ export default function TailorResumePage() {
     setAnalysis(null);
     setSuggestions(null);
     setError(null);
-    setGeneratedCoverLetter(null); // Clear cover letter if re-forging resume
+    setGeneratedCoverLetter(null); 
 
     const currentJobTitle = extractJobTitleFromJD(data.jobDescription);
     setJobTitleForSave(currentJobTitle);
@@ -163,10 +240,9 @@ export default function TailorResumePage() {
     setIsLoadingCoverLetter(true);
     setGeneratedCoverLetter(null);
     setError(null);
-    setTailoredResume(null); // Clear resume if forging cover letter
+    setTailoredResume(null); 
     setAnalysis(null);
     setSuggestions(null);
-
 
     const currentJobTitle = extractJobTitleFromJD(data.jobDescription);
     setJobTitleForSave(currentJobTitle);
@@ -227,7 +303,7 @@ export default function TailorResumePage() {
       return;
     }
     const filename = `${baseFilename.replace(/\s+/g, '_')}_${type.toLowerCase()}.docx`;
-    const finalHtmlContent = textToProfessionalHtml(content, `${baseFilename} ${type}`);
+    const finalHtmlContent = textToProfessionalHtml(content, `${jobTitleForSave} ${type}`);
 
     const blob = new Blob([finalHtmlContent], { type: 'application/msword' }); 
     const link = document.createElement('a');
@@ -245,7 +321,7 @@ export default function TailorResumePage() {
       toast({ title: "Print Error", description: `No ${type} content to print.`, variant: "destructive" });
       return;
     }
-    const htmlContent = textToProfessionalHtml(content, `${baseFilename} ${type}`);
+    const htmlContent = textToProfessionalHtml(content, `${jobTitleForSave} ${type}`);
     const printWindow = window.open('', '_blank');
     if (printWindow) {
       printWindow.document.write(htmlContent);
@@ -253,10 +329,6 @@ export default function TailorResumePage() {
       printWindow.focus(); 
       setTimeout(() => {
         printWindow.print();
-        // It's good practice to close the window after print dialog is handled,
-        // but automatic closing can sometimes be blocked or undesirable.
-        // For now, let's leave it open, user can close manually.
-        // printWindow.close(); 
       }, 500); 
       toast({ title: `Preparing ${type} PDF for Print` });
     } else {
@@ -290,8 +362,6 @@ export default function TailorResumePage() {
         console.error("Failed to save resume to localStorage:", e);
         toast({ title: "Save Error", description: "Could not save resume to local storage.", variant: "destructive"});
       }
-    } else {
-      // toast({ title: "Nothing to Save", description: "Please generate a tailored resume first.", variant: "destructive"});
     }
   };
   
@@ -392,108 +462,135 @@ export default function TailorResumePage() {
         </Alert>
       )}
 
-      {(tailoredResume || analysis || suggestions || generatedCoverLetter) && !error && (
-        <div className="space-y-8 pt-8">
+      {(tailoredResume || analysis || suggestions) && !error && (
+        <div ref={resultsSectionRef} className="space-y-8 pt-8">
           <Separator />
-          <h2 className="font-headline text-2xl font-bold text-center">AI-Powered Results</h2>
+          <h2 className="font-headline text-2xl font-bold text-center">AI-Powered Resume Results</h2>
           
-          {tailoredResume && (
-            <Card>
-              <CardHeader>
-                <div className="flex justify-between items-center">
-                    <CardTitle className="font-headline flex items-center"><FileText className="mr-2 h-5 w-5 text-primary"/> Tailored Resume</CardTitle>
+          <Tabs defaultValue="tailoredResume" className="w-full">
+            <TabsList className="grid w-full grid-cols-3">
+              <TabsTrigger value="tailoredResume" disabled={!tailoredResume}>Tailored Resume</TabsTrigger>
+              <TabsTrigger value="analysis" disabled={!analysis}>AI Analysis</TabsTrigger>
+              <TabsTrigger value="suggestions" disabled={!suggestions}>AI Suggestions</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="tailoredResume">
+              {tailoredResume && (
+                <Card>
+                  <CardHeader>
+                    <div className="flex justify-between items-center flex-wrap gap-2">
+                        <CardTitle className="font-headline flex items-center"><FileText className="mr-2 h-5 w-5 text-primary"/> Tailored Resume</CardTitle>
+                        <div className="flex gap-2 flex-wrap">
+                            <Button variant="outline" size="sm" onClick={() => handleCopyToClipboard(tailoredResume, "Resume")}><Copy className="mr-2 h-4 w-4" />Copy</Button>
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button variant="outline" size="sm"><Download className="mr-2 h-4 w-4" />Download</Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                    <DropdownMenuItem onClick={() => handleDownloadMd(tailoredResume, jobTitleForSave, "Resume")}>
+                                        <FileText className="mr-2 h-4 w-4" /> .md
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => handleDownloadDocx(tailoredResume, jobTitleForSave, "Resume")}>
+                                        <FileText className="mr-2 h-4 w-4" /> .docx
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => handlePrintToPdf(tailoredResume, jobTitleForSave, "Resume")}>
+                                        <Printer className="mr-2 h-4 w-4" /> PDF...
+                                    </DropdownMenuItem>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                        </div>
+                    </div>
+                    <p className="text-xs text-muted-foreground pt-2">
+                      Your tailored resume has been automatically saved. Use the download options for different formats.
+                    </p>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="bg-muted/50 p-4 rounded-md max-h-[600px] overflow-y-auto">
+                        <SimpleMarkdownToHtmlDisplay text={tailoredResume} />
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+            </TabsContent>
+
+            <TabsContent value="analysis">
+              {analysis && (
+                <Card>
+                  <CardHeader>
+                    <div className="flex justify-between items-center flex-wrap gap-2">
+                        <CardTitle className="font-headline flex items-center"><Brain className="mr-2 h-5 w-5 text-primary"/> AI Resume Analysis</CardTitle>
+                        <Button variant="outline" size="sm" onClick={() => handleCopyToClipboard(analysis, "Analysis")}><Copy className="mr-2 h-4 w-4" />Copy</Button>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                     <div className="bg-muted/50 p-4 rounded-md max-h-[600px] overflow-y-auto">
+                        <SimpleMarkdownToHtmlDisplay text={analysis} />
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+            </TabsContent>
+
+            <TabsContent value="suggestions">
+              {suggestions && (
+                <Card>
+                  <CardHeader>
+                    <div className="flex justify-between items-center flex-wrap gap-2">
+                        <CardTitle className="font-headline flex items-center"><Lightbulb className="mr-2 h-5 w-5 text-primary"/> AI Resume Suggestions</CardTitle>
+                        <Button variant="outline" size="sm" onClick={() => handleCopyToClipboard(suggestions, "Suggestions")}><Copy className="mr-2 h-4 w-4" />Copy</Button>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="bg-muted/50 p-4 rounded-md max-h-[600px] overflow-y-auto">
+                        <SimpleMarkdownToHtmlDisplay text={suggestions} />
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+            </TabsContent>
+          </Tabs>
+        </div>
+      )}
+      
+      {generatedCoverLetter && !error && (
+         <div ref={coverLetterSectionRef} className="space-y-8 pt-8">
+          <Separator />
+           <Card>
+            <CardHeader>
+                <div className="flex justify-between items-center flex-wrap gap-2">
+                <CardTitle className="font-headline flex items-center"><Mail className="mr-2 h-5 w-5 text-primary"/> Generated Cover Letter</CardTitle>
+                <div className="flex gap-2 flex-wrap">
+                    <Button variant="outline" size="sm" onClick={() => handleCopyToClipboard(generatedCoverLetter, "Cover Letter")}><Copy className="mr-2 h-4 w-4" />Copy</Button>
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                            <Button variant="outline" size="sm"><Download className="mr-2 h-4 w-4" />Download Options</Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => handleDownloadMd(tailoredResume, jobTitleForSave, "Resume")}>
-                                <FileText className="mr-2 h-4 w-4" /> Download as .md
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleDownloadDocx(tailoredResume, jobTitleForSave, "Resume")}>
-                                <FileText className="mr-2 h-4 w-4" /> Download as Word (.docx)
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handlePrintToPdf(tailoredResume, jobTitleForSave, "Resume")}>
-                                <Printer className="mr-2 h-4 w-4" /> Print to PDF...
-                            </DropdownMenuItem>
-                        </DropdownMenuContent>
-                    </DropdownMenu>
-                </div>
-                <div className="flex gap-2 pt-2 flex-wrap">
-                    <Button variant="outline" size="sm" onClick={() => handleCopyToClipboard(tailoredResume, "Resume")}><Copy className="mr-2 h-4 w-4" />Copy Resume</Button>
-                </div>
-                <p className="text-xs text-muted-foreground pt-2">
-                  Your tailored resume has been automatically saved. Use the download options for different formats.
-                </p>
-              </CardHeader>
-              <CardContent>
-                <pre className="whitespace-pre-wrap bg-muted/50 p-4 rounded-md text-sm font-mono max-h-[500px] overflow-y-auto">{tailoredResume}</pre>
-              </CardContent>
-            </Card>
-          )}
-
-          {analysis && (
-             <Card>
-              <CardHeader>
-                <CardTitle className="font-headline flex items-center"><Brain className="mr-2 h-5 w-5 text-primary"/> AI Resume Analysis</CardTitle>
-                 <Button variant="outline" size="sm" onClick={() => handleCopyToClipboard(analysis, "Analysis")} className="mt-2 w-fit"><Copy className="mr-2 h-4 w-4" />Copy Analysis</Button>
-              </CardHeader>
-              <CardContent>
-                <div className="prose prose-sm max-w-none dark:prose-invert p-4 bg-muted/50 rounded-md max-h-[400px] overflow-y-auto whitespace-pre-line" dangerouslySetInnerHTML={{ __html: analysis.replace(/\n/g, '<br />') }} />
-              </CardContent>
-            </Card>
-          )}
-
-          {suggestions && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="font-headline flex items-center"><Lightbulb className="mr-2 h-5 w-5 text-primary"/> AI Resume Suggestions</CardTitle>
-                <Button variant="outline" size="sm" onClick={() => handleCopyToClipboard(suggestions, "Suggestions")} className="mt-2 w-fit"><Copy className="mr-2 h-4 w-4" />Copy Suggestions</Button>
-              </CardHeader>
-              <CardContent>
-                <div className="prose prose-sm max-w-none dark:prose-invert p-4 bg-muted/50 rounded-md max-h-[400px] overflow-y-auto whitespace-pre-line" dangerouslySetInnerHTML={{ __html: suggestions.replace(/\n/g, '<br />') }} />
-              </CardContent>
-            </Card>
-          )}
-
-          {generatedCoverLetter && (
-            <Card>
-              <CardHeader>
-                 <div className="flex justify-between items-center">
-                    <CardTitle className="font-headline flex items-center"><Mail className="mr-2 h-5 w-5 text-primary"/> Generated Cover Letter</CardTitle>
-                    <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <Button variant="outline" size="sm"><Download className="mr-2 h-4 w-4" />Download Options</Button>
+                            <Button variant="outline" size="sm"><Download className="mr-2 h-4 w-4" />Download</Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                             <DropdownMenuItem onClick={() => handleDownloadMd(generatedCoverLetter, jobTitleForSave, "CoverLetter")}>
-                                <FileText className="mr-2 h-4 w-4" /> Download as .md
+                                <FileText className="mr-2 h-4 w-4" /> .md
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => handleDownloadDocx(generatedCoverLetter, jobTitleForSave, "CoverLetter")}>
-                                <FileText className="mr-2 h-4 w-4" /> Download as Word (.docx)
+                                <FileText className="mr-2 h-4 w-4" /> .docx
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => handlePrintToPdf(generatedCoverLetter, jobTitleForSave, "CoverLetter")}>
-                                <Printer className="mr-2 h-4 w-4" /> Print to PDF...
+                                <Printer className="mr-2 h-4 w-4" /> PDF...
                             </DropdownMenuItem>
                         </DropdownMenuContent>
                     </DropdownMenu>
                 </div>
-                <div className="flex gap-2 pt-2 flex-wrap">
-                    <Button variant="outline" size="sm" onClick={() => handleCopyToClipboard(generatedCoverLetter, "Cover Letter")}><Copy className="mr-2 h-4 w-4" />Copy Cover Letter</Button>
                 </div>
                 <p className="text-xs text-muted-foreground pt-2">
-                  Use the download options for different formats. Cover letters are not automatically saved.
+                Use the download options for different formats. Cover letters are not automatically saved to "My Resumes".
                 </p>
-              </CardHeader>
-              <CardContent>
-                <pre className="whitespace-pre-wrap bg-muted/50 p-4 rounded-md text-sm font-mono max-h-[600px] overflow-y-auto">{generatedCoverLetter}</pre>
-              </CardContent>
+            </CardHeader>
+            <CardContent>
+                <div className="bg-muted/50 p-4 rounded-md max-h-[700px] overflow-y-auto">
+                    <SimpleMarkdownToHtmlDisplay text={generatedCoverLetter} />
+                </div>
+            </CardContent>
             </Card>
-          )}
-
         </div>
       )}
     </div>
   );
 }
-
