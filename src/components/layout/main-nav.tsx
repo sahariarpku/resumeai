@@ -23,7 +23,9 @@ import {
   Lightbulb,
   FolderKanban,
   Trophy, // For Honors & Awards
-  BookOpen // For Publications
+  BookOpen, // For Publications
+  Contact, // For References
+  LayoutList // For Custom Sections
 } from "lucide-react";
 import { ResumeForgeLogo } from "../resume-forge-logo";
 import React, { useEffect, useState } from "react"; 
@@ -39,6 +41,8 @@ const navItems = [
         { href: "/profile#publications", label: "Publications", icon: BookOpen },
         { href: "/profile#skills", label: "Skills", icon: Wrench },
         { href: "/profile#certifications", label: "Certifications", icon: CertificationIcon },
+        { href: "/profile#references", label: "References", icon: Contact },
+        { href: "/profile#custom-sections", label: "Custom Sections", icon: LayoutList },
     ]
   },
   { href: "/job-descriptions", label: "Job Descriptions", icon: Briefcase },

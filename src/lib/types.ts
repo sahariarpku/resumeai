@@ -66,6 +66,19 @@ export interface Publication {
   description?: string; // Abstract or summary
 }
 
+export interface Reference {
+  id: string;
+  name: string;
+  titleAndCompany?: string;
+  contactDetailsOrNote?: string;
+}
+
+export interface CustomSection {
+  id: string;
+  heading: string;
+  content: string;
+}
+
 export interface UserProfile {
   id: string;
   fullName?: string;
@@ -83,6 +96,8 @@ export interface UserProfile {
   certifications: Certification[];
   honorsAndAwards: HonorAward[];
   publications: Publication[];
+  references: Reference[];
+  customSections: CustomSection[];
 }
 
 export interface JobDescriptionItem {

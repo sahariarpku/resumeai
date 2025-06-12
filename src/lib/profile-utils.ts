@@ -137,5 +137,24 @@ export function profileToResumeText(profile: UserProfile): string {
     });
   }
 
+  if (profile.references && profile.references.length > 0) {
+    resumeText += "REFERENCES\n";
+    resumeText += "--------------------\n";
+    profile.references.forEach(ref => {
+      resumeText += `${ref.name}\n`;
+      if (ref.titleAndCompany) resumeText += `${ref.titleAndCompany}\n`;
+      if (ref.contactDetailsOrNote) resumeText += `${ref.contactDetailsOrNote}\n`;
+      resumeText += "\n";
+    });
+  }
+
+  if (profile.customSections && profile.customSections.length > 0) {
+    profile.customSections.forEach(section => {
+      resumeText += `${section.heading.toUpperCase()}\n`;
+      resumeText += "--------------------\n";
+      resumeText += `${section.content}\n\n`;
+    });
+  }
+
   return resumeText.trim();
 }

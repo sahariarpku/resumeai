@@ -76,6 +76,21 @@ export const publicationSchema = z.object({
 });
 export type PublicationFormData = z.infer<typeof publicationSchema>;
 
+export const referenceSchema = z.object({
+  id: z.string().optional(),
+  name: z.string().min(1, "Reference name is required"),
+  titleAndCompany: z.string().optional(),
+  contactDetailsOrNote: z.string().max(500, "Details are too long (max 500 chars)").optional(),
+});
+export type ReferenceFormData = z.infer<typeof referenceSchema>;
+
+export const customSectionSchema = z.object({
+  id: z.string().optional(),
+  heading: z.string().min(1, "Custom section heading is required").max(100, "Heading is too long (max 100 chars)"),
+  content: z.string().min(1, "Content is required").max(2000, "Content is too long (max 2000 chars)"),
+});
+export type CustomSectionFormData = z.infer<typeof customSectionSchema>;
+
 
 export const userProfileSchema = z.object({
   fullName: z.string().min(1, "Full name is required").optional(),

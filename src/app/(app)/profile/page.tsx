@@ -30,8 +30,8 @@ import {
   DialogClose,
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { PlusCircle, Edit3, Trash2, Save, UserCircle, Briefcase, FolderKanban, GraduationCap, Wrench, Award, Loader2, Sparkles, Trophy, BookOpen } from "lucide-react";
-import type { UserProfile, WorkExperience, Project, Education, Skill, Certification, HonorAward, Publication } from "@/lib/types";
+import { PlusCircle, Edit3, Trash2, Save, UserCircle, Briefcase, FolderKanban, GraduationCap, Wrench, Award, Loader2, Sparkles, Trophy, BookOpen, Contact, LayoutList } from "lucide-react";
+import type { UserProfile, WorkExperience, Project, Education, Skill, Certification, HonorAward, Publication, Reference, CustomSection } from "@/lib/types";
 import { 
     userProfileSchema, UserProfileFormData,
     workExperienceSchema, WorkExperienceFormData,
@@ -40,7 +40,9 @@ import {
     skillSchema, SkillFormData,
     certificationSchema, CertificationFormData,
     honorAwardSchema, HonorAwardFormData,
-    publicationSchema, PublicationFormData
+    publicationSchema, PublicationFormData,
+    referenceSchema, ReferenceFormData,
+    customSectionSchema, CustomSectionFormData
 } from "@/lib/schemas";
 import { FormSection, FormSectionList } from '@/components/forms/form-section';
 import { WorkExperienceFormFields } from '@/components/forms/work-experience-form-fields';
@@ -50,6 +52,8 @@ import { SkillFormFields } from '@/components/forms/skill-form-fields';
 import { CertificationFormFields } from '@/components/forms/certification-form-fields';
 import { HonorAwardFormFields } from '@/components/forms/honor-award-form-fields';
 import { PublicationFormFields } from '@/components/forms/publication-form-fields';
+import { ReferenceFormFields } from '@/components/forms/reference-form-fields';
+import { CustomSectionFormFields } from '@/components/forms/custom-section-form-fields';
 import { polishText } from '@/ai/flows/polish-text-flow';
 import { TooltipProvider } from '@/components/ui/tooltip';
 
@@ -68,6 +72,8 @@ const fallbackInitialProfileData: UserProfile = {
   certifications: [],
   honorsAndAwards: [],
   publications: [],
+  references: [],
+  customSections: [],
 };
 
 
@@ -96,6 +102,12 @@ export default function ProfilePage() {
 
   const [isPublicationModalOpen, setIsPublicationModalOpen] = useState(false);
   const [editingPublication, setEditingPublication] = useState<Publication | null>(null);
+
+  const [isReferenceModalOpen, setIsReferenceModalOpen] = useState(false);
+  const [editingReference, setEditingReference] = useState<Reference | null>(null);
+
+  const [isCustomSectionModalOpen, setIsCustomSectionModalOpen] = useState(false);
+  const [editingCustomSection, setEditingCustomSection] = useState<CustomSection | null>(null);
   
   const [polishingField, setPolishingField] = useState<string | null>(null);
 
@@ -112,6 +124,8 @@ export default function ProfilePage() {
   const certificationForm = useForm<CertificationFormData>({ resolver: zodResolver(certificationSchema), defaultValues: {} });
   const honorAwardForm = useForm<HonorAwardFormData>({ resolver: zodResolver(honorAwardSchema), defaultValues: {} });
   const publicationForm = useForm<PublicationFormData>({ resolver: zodResolver(publicationSchema), defaultValues: {} });
+  const referenceForm = useForm<ReferenceFormData>({ resolver: zodResolver(referenceSchema), defaultValues: {} });
+  const customSectionForm = useForm<CustomSectionFormData>({ resolver: zodResolver(customSectionSchema), defaultValues: {} });
 
 
   useEffect(() => {
@@ -316,6 +330,40 @@ export default function ProfilePage() {
     }
     saveProfile({ ...profileData, publications: updatedItems });
     setIsPublicationModalOpen(false); setEditingPublication(null);
+  };
+
+  // --- References ---
+  const handleAddReference = () => { setEditingReference(null); referenceForm.reset({}); setIsReferenceModalOpen(true); };
+  const handleEditReference = (item: Reference) => { setEditingReference(item); referenceForm.reset(item); setIsReferenceModalOpen(true); };
+  const handleDeleteReference = (id: string) => { saveProfile({ ...profileData, references: profileData.references.filter(item => item.id !== id) }); toast({ title: "Reference Removed", variant: "destructive" }); };
+  const onReferenceSubmit = (data: ReferenceFormData) => {
+    let updatedItems;
+    if (editingReference) {
+      updatedItems = profileData.references.map(item => item.id === editingReference.id ? { ...item, ...data, id: item.id } : item);
+      toast({ title: "Reference Updated" });
+    } else {
+      updatedItems = [...profileData.references, { ...data, id: `ref-${Date.now()}` }];
+      toast({ title: "Reference Added" });
+    }
+    saveProfile({ ...profileData, references: updatedItems });
+    setIsReferenceModalOpen(false); setEditingReference(null);
+  };
+
+  // --- Custom Sections ---
+  const handleAddCustomSection = () => { setEditingCustomSection(null); customSectionForm.reset({}); setIsCustomSectionModalOpen(true); };
+  const handleEditCustomSection = (item: CustomSection) => { setEditingCustomSection(item); customSectionForm.reset(item); setIsCustomSectionModalOpen(true); };
+  const handleDeleteCustomSection = (id: string) => { saveProfile({ ...profileData, customSections: profileData.customSections.filter(item => item.id !== id) }); toast({ title: "Custom Section Removed", variant: "destructive" }); };
+  const onCustomSectionSubmit = (data: CustomSectionFormData) => {
+    let updatedItems;
+    if (editingCustomSection) {
+      updatedItems = profileData.customSections.map(item => item.id === editingCustomSection.id ? { ...item, ...data, id: item.id } : item);
+      toast({ title: "Custom Section Updated" });
+    } else {
+      updatedItems = [...profileData.customSections, { ...data, id: `cs-${Date.now()}` }];
+      toast({ title: "Custom Section Added" });
+    }
+    saveProfile({ ...profileData, customSections: updatedItems });
+    setIsCustomSectionModalOpen(false); setEditingCustomSection(null);
   };
 
   
@@ -581,6 +629,61 @@ export default function ProfilePage() {
             </FormSection>
         </AccordionItem>
 
+        <AccordionItem value="references" id="references" className="border-none">
+            <FormSection
+              title="References"
+              description="Provide professional or academic references."
+              actions={<Button onClick={handleAddReference} variant="outline"><PlusCircle className="mr-2 h-4 w-4" /> Add Reference</Button>}
+            >
+              <FormSectionList
+                items={profileData.references}
+                renderItem={(item) => (
+                  <div key={item.id} className="p-4 rounded-md border bg-card/50">
+                    <div className="flex justify-between items-start">
+                        <div>
+                            <h4 className="font-semibold">{item.name}</h4>
+                            {item.titleAndCompany && <p className="text-sm text-muted-foreground">{item.titleAndCompany}</p>}
+                            {item.contactDetailsOrNote && <p className="text-xs text-muted-foreground mt-1 whitespace-pre-line">{item.contactDetailsOrNote}</p>}
+                        </div>
+                        <div className="flex gap-1">
+                            <Button variant="ghost" size="icon" onClick={() => handleEditReference(item)}><Edit3 className="h-4 w-4" /></Button>
+                            <Button variant="ghost" size="icon" onClick={() => handleDeleteReference(item.id)} className="text-destructive hover:text-destructive"><Trash2 className="h-4 w-4" /></Button>
+                        </div>
+                    </div>
+                  </div>
+                )}
+                emptyState={<p className="text-sm text-muted-foreground">No references added yet. You can add contact details or simply state "Available upon request".</p>}
+              />
+            </FormSection>
+        </AccordionItem>
+
+        <AccordionItem value="custom-sections" id="custom-sections" className="border-none">
+            <FormSection
+              title="Custom Sections"
+              description="Add any other relevant sections to your profile."
+              actions={<Button onClick={handleAddCustomSection} variant="outline"><PlusCircle className="mr-2 h-4 w-4" /> Add Custom Section</Button>}
+            >
+              <FormSectionList
+                items={profileData.customSections}
+                renderItem={(item) => (
+                  <div key={item.id} className="p-4 rounded-md border bg-card/50">
+                    <div className="flex justify-between items-start">
+                        <div>
+                            <h4 className="font-semibold uppercase">{item.heading}</h4>
+                            <p className="text-sm text-muted-foreground mt-1 whitespace-pre-line">{item.content}</p>
+                        </div>
+                        <div className="flex gap-1">
+                            <Button variant="ghost" size="icon" onClick={() => handleEditCustomSection(item)}><Edit3 className="h-4 w-4" /></Button>
+                            <Button variant="ghost" size="icon" onClick={() => handleDeleteCustomSection(item.id)} className="text-destructive hover:text-destructive"><Trash2 className="h-4 w-4" /></Button>
+                        </div>
+                    </div>
+                  </div>
+                )}
+                emptyState={<p className="text-sm text-muted-foreground">No custom sections added yet. Use this for things like 'Languages', 'Hobbies', etc.</p>}
+              />
+            </FormSection>
+        </AccordionItem>
+
       </Accordion>
 
       {/* Work Experience Modal */}
@@ -657,6 +760,38 @@ export default function ProfilePage() {
               <DialogFooter>
                 <DialogClose asChild><Button type="button" variant="outline">Cancel</Button></DialogClose>
                 <Button type="submit" disabled={publicationForm.formState.isSubmitting}><Save className="mr-2 h-4 w-4"/>{publicationForm.formState.isSubmitting ? <Loader2 className="animate-spin"/> : (editingPublication ? 'Save Changes' : 'Add Publication')}</Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reference Modal */}
+      <Dialog open={isReferenceModalOpen} onOpenChange={setIsReferenceModalOpen}>
+        <DialogContent className="sm:max-w-xl">
+          <DialogHeader><DialogTitle className="font-headline">{editingReference ? 'Edit Reference' : 'Add New Reference'}</DialogTitle><DialogDescription>Provide reference details.</DialogDescription></DialogHeader>
+          <Form {...referenceForm}>
+            <form onSubmit={referenceForm.handleSubmit(onReferenceSubmit)} className="space-y-6 py-4">
+              <ReferenceFormFields control={referenceForm.control} onPolishRequest={(fieldName) => handleAIPolish(fieldName, referenceForm)} polishingField={polishingField as keyof ReferenceFormData | null} isSubmitting={referenceForm.formState.isSubmitting} />
+              <DialogFooter>
+                <DialogClose asChild><Button type="button" variant="outline">Cancel</Button></DialogClose>
+                <Button type="submit" disabled={referenceForm.formState.isSubmitting}><Save className="mr-2 h-4 w-4"/>{referenceForm.formState.isSubmitting ? <Loader2 className="animate-spin"/> : (editingReference ? 'Save Changes' : 'Add Reference')}</Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Custom Section Modal */}
+      <Dialog open={isCustomSectionModalOpen} onOpenChange={setIsCustomSectionModalOpen}>
+        <DialogContent className="sm:max-w-xl">
+          <DialogHeader><DialogTitle className="font-headline">{editingCustomSection ? 'Edit Custom Section' : 'Add New Custom Section'}</DialogTitle><DialogDescription>Define a custom heading and content for your profile.</DialogDescription></DialogHeader>
+          <Form {...customSectionForm}>
+            <form onSubmit={customSectionForm.handleSubmit(onCustomSectionSubmit)} className="space-y-6 py-4">
+              <CustomSectionFormFields control={customSectionForm.control} onPolishRequest={(fieldName) => handleAIPolish(fieldName, customSectionForm)} polishingField={polishingField as keyof CustomSectionFormData | null} isSubmitting={customSectionForm.formState.isSubmitting} />
+              <DialogFooter>
+                <DialogClose asChild><Button type="button" variant="outline">Cancel</Button></DialogClose>
+                <Button type="submit" disabled={customSectionForm.formState.isSubmitting}><Save className="mr-2 h-4 w-4"/>{customSectionForm.formState.isSubmitting ? <Loader2 className="animate-spin"/> : (editingCustomSection ? 'Save Changes' : 'Add Custom Section')}</Button>
               </DialogFooter>
             </form>
           </Form>
