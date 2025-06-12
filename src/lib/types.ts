@@ -145,3 +145,21 @@ export interface StoredResume {
   aiSuggestions?: string; // AI suggestions for improvement
   createdAt: string; // ISO date string
 }
+
+// For the new "Jobs RSS" AI simulation
+export interface SimulatedJobPosting {
+  role: string;
+  company: string;
+  requirementsSummary: string;
+  deadlineText: string; // e.g., "In 2 weeks", "2024-08-15"
+  // location?: string; // Optional, can be added later
+  // jobUrl?: string; // Optional, as it's simulated
+}
+
+export interface JobPostingItem extends SimulatedJobPosting {
+  id: string; // Client-generated unique ID
+  matchPercentage?: number;
+  matchSummary?: string;
+  matchCategory?: 'Excellent Match' | 'Good Match' | 'Fair Match' | 'Poor Match';
+  isCalculatingMatch?: boolean; // For UI loading state
+}

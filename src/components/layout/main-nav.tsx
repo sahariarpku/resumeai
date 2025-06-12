@@ -26,7 +26,8 @@ import {
   BookOpen, // For Publications
   Contact, // For References
   LayoutList, // For Custom Sections
-  ClipboardList // New icon for "Jobs to Apply"
+  ClipboardList, // Icon for "Jobs to Apply"
+  Rss // Icon for "Jobs RSS"
 } from "lucide-react";
 import { ResumeForgeLogo } from "../resume-forge-logo";
 import React, { useEffect, useState } from "react"; 
@@ -49,6 +50,7 @@ const navItems = [
   { href: "/tailor-resume", label: "Tailor New Resume", icon: Sparkles },
   { href: "/resumes", label: "My Resumes", icon: FileText },
   { href: "/job-descriptions", label: "Jobs to Apply", icon: ClipboardList },
+  { href: "/jobs-rss", label: "Jobs RSS", icon: Rss },
 ];
 
 export function MainNav() {
