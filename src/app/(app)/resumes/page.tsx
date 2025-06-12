@@ -1,8 +1,9 @@
+
 "use client";
 
 import React, { useState } from 'react';
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { FileText, Download, Trash2, Eye, PlusCircle, Edit3, FileSearch } from "lucide-react";
 import Link from "next/link";
