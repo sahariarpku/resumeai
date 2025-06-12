@@ -56,19 +56,21 @@ export function MainNav() {
         {navItems.map((item) => (
           <SidebarMenuItem key={item.href}>
             <Link href={item.href}>
-              <SidebarMenuButton
-                variant="default"
-                size="default"
-                isActive={pathname.startsWith(item.href) && (item.href === "/dashboard" ? pathname === item.href : true) } // More specific active check for dashboard
-                className={cn(
-                  "w-full justify-start",
-                  !open && "justify-center"
-                )}
-                tooltip={open ? undefined : item.label}
-              >
-                <item.icon className="h-5 w-5" />
-                {open && <span className="ml-2">{item.label}</span>}
-              </SidebarMenuButton>
+              <span>
+                <SidebarMenuButton
+                  variant="default"
+                  size="default"
+                  isActive={pathname.startsWith(item.href) && (item.href === "/dashboard" ? pathname === item.href : true) }
+                  className={cn(
+                    "w-full justify-start",
+                    !open && "justify-center"
+                  )}
+                  tooltip={open ? undefined : item.label}
+                >
+                  <item.icon className="h-5 w-5" />
+                  {open && <span className="ml-2">{item.label}</span>}
+                </SidebarMenuButton>
+              </span>
             </Link>
              {/* Render sub-items if they exist and sidebar is open */}
              {open && item.subItems && pathname.startsWith(item.href) && (
@@ -76,15 +78,17 @@ export function MainNav() {
                   {item.subItems.map(subItem => (
                     <li key={subItem.href}>
                        <Link href={subItem.href}>
-                        <SidebarMenuButton
-                            variant="ghost"
-                            size="sm"
-                            isActive={pathname === subItem.href || (pathname + location.hash) === subItem.href}
-                            className="w-full justify-start text-sm"
-                        >
-                            <subItem.icon className="h-4 w-4 mr-2 text-sidebar-foreground/70" />
-                            {subItem.label}
-                        </SidebarMenuButton>
+                        <span>
+                          <SidebarMenuButton
+                              variant="ghost"
+                              size="sm"
+                              isActive={pathname === subItem.href || (pathname + location.hash) === subItem.href}
+                              className="w-full justify-start text-sm"
+                          >
+                              <subItem.icon className="h-4 w-4 mr-2 text-sidebar-foreground/70" />
+                              {subItem.label}
+                          </SidebarMenuButton>
+                        </span>
                        </Link>
                     </li>
                   ))}
@@ -96,15 +100,17 @@ export function MainNav() {
       {open && (
         <div className="p-4 mt-auto border-t border-sidebar-border">
              <Link href="/settings">
-                <SidebarMenuButton
-                    variant="ghost"
-                    size="default"
-                    isActive={pathname.startsWith("/settings")}
-                    className="w-full justify-start"
-                >
-                    <Settings className="h-5 w-5" />
-                    <span className="ml-2">Settings</span>
-                </SidebarMenuButton>
+                <span>
+                  <SidebarMenuButton
+                      variant="ghost"
+                      size="default"
+                      isActive={pathname.startsWith("/settings")}
+                      className="w-full justify-start"
+                  >
+                      <Settings className="h-5 w-5" />
+                      <span className="ml-2">Settings</span>
+                  </SidebarMenuButton>
+                </span>
              </Link>
         </div>
       )}
