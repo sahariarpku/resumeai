@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@/components/ui/button";
@@ -34,9 +34,10 @@ import {
   DialogHeader,
   DialogTitle,
   DialogClose,
+  DialogTrigger,
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { PlusCircle, Edit3, Trash2, Save, UserCircle, Briefcase, FolderKanban, GraduationCap, Wrench, Award, Loader2, Sparkles, Trophy, BookOpen, Contact, LayoutList, DownloadCloud, Printer, FileText, ArrowUpCircle, ArrowDownCircle } from "lucide-react";
+import { PlusCircle, Edit3, Trash2, Save, UserCircle, Briefcase, FolderKanban, GraduationCap, Wrench, Award, Loader2, Sparkles, Trophy, BookOpen, Contact, LayoutList, DownloadCloud, Printer, FileText, ArrowUpCircle, ArrowDownCircle, UploadCloud } from "lucide-react";
 import type { UserProfile, WorkExperience, Project, Education, Skill, Certification, HonorAward, Publication, Reference, CustomSection, ProfileSectionKey } from "@/lib/types";
 import { DEFAULT_SECTION_ORDER } from "@/lib/types";
 import { 
@@ -62,8 +63,10 @@ import { PublicationFormFields } from '@/components/forms/publication-form-field
 import { ReferenceFormFields } from '@/components/forms/reference-form-fields';
 import { CustomSectionFormFields } from '@/components/forms/custom-section-form-fields';
 import { polishText } from '@/ai/flows/polish-text-flow';
+import { extractProfileFromCv, type ExtractProfileFromCvOutput } from '@/ai/flows/extract-profile-from-cv-flow';
 import { profileToResumeText, profileToResumeHtml } from '@/lib/profile-utils';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { Label } from '@/components/ui/label';
 
 
 const USER_PROFILE_STORAGE_KEY = "userProfile";
@@ -124,6 +127,12 @@ export default function ProfilePage() {
   const [editingCustomSection, setEditingCustomSection] = useState<CustomSection | null>(null);
   
   const [polishingField, setPolishingField] = useState<string | null>(null);
+
+  // For CV Import Modal
+  const [isImportCvModalOpen, setIsImportCvModalOpen] = useState(false);
+  const [cvFileContent, setCvFileContent] = useState<string | null>(null);
+  const [isImportingCv, setIsImportingCv] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
 
   const generalInfoForm = useForm<UserProfileFormData>({
@@ -460,6 +469,186 @@ export default function ProfilePage() {
   
     saveProfile({ ...profileData, sectionOrder: currentOrder });
     toast({ title: "Section Order Updated", description: `${formatSectionTitleLocal(sectionKey)} moved ${direction}.` });
+  };
+
+  // --- CV Import Functions ---
+  const handleCvFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      if (file.type === "text/plain" || file.type === "text/markdown") {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          setCvFileContent(e.target?.result as string);
+        };
+        reader.readAsText(file);
+      } else {
+        toast({ title: "Invalid File Type", description: "Please upload a .txt or .md file.", variant: "destructive" });
+        if(fileInputRef.current) fileInputRef.current.value = ""; // Reset file input
+        setCvFileContent(null);
+      }
+    }
+  };
+
+  const handleProcessCvImport = async () => {
+    if (!cvFileContent) {
+      toast({ title: "No CV Content", description: "Please select a CV file first.", variant: "default" });
+      return;
+    }
+    setIsImportingCv(true);
+    try {
+      const extractedData = await extractProfileFromCv({ cvText: cvFileContent });
+      
+      // Ask for confirmation before applying
+      if (window.confirm("AI has extracted data from your CV. Do you want to apply this to your profile? This may overwrite current form data.")) {
+        applyExtractedDataToProfile(extractedData);
+        toast({ title: "CV Data Imported!", description: "Profile forms have been populated. Review and save each section."});
+        setIsImportCvModalOpen(false); // Close modal on success
+      } else {
+        toast({ title: "Import Cancelled", description: "CV data was not applied to your profile.", variant: "default"});
+      }
+
+    } catch (err) {
+      console.error("Error importing CV data:", err);
+      toast({ title: "CV Import Error", description: `Could not process CV: ${err instanceof Error ? err.message : 'Unknown error'}.`, variant: "destructive" });
+    } finally {
+      setIsImportingCv(false);
+      setCvFileContent(null); // Clear content after processing
+      if(fileInputRef.current) fileInputRef.current.value = ""; // Reset file input
+    }
+  };
+
+  const applyExtractedDataToProfile = (data: ExtractProfileFromCvOutput) => {
+    let updatedProfile = { ...profileData };
+
+    // General Info
+    if (data.fullName) updatedProfile.fullName = data.fullName;
+    if (data.email) updatedProfile.email = data.email; // Note: email in form is disabled, but good to have in profileData
+    if (data.phone) updatedProfile.phone = data.phone;
+    if (data.address) updatedProfile.address = data.address;
+    if (data.linkedin) updatedProfile.linkedin = data.linkedin;
+    if (data.github) updatedProfile.github = data.github;
+    if (data.portfolio) updatedProfile.portfolio = data.portfolio;
+    if (data.summary) updatedProfile.summary = data.summary;
+    
+    generalInfoForm.reset({
+      fullName: updatedProfile.fullName,
+      email: updatedProfile.email,
+      phone: updatedProfile.phone,
+      address: updatedProfile.address,
+      linkedin: updatedProfile.linkedin,
+      github: updatedProfile.github,
+      portfolio: updatedProfile.portfolio,
+      summary: updatedProfile.summary,
+    });
+
+    // Work Experiences
+    if (data.workExperiences) {
+      updatedProfile.workExperiences = data.workExperiences.map((exp, index) => ({
+        id: `imp-we-${Date.now()}-${index}`,
+        company: exp.company || "",
+        role: exp.role || "",
+        startDate: exp.startDate || "",
+        endDate: exp.endDate || "",
+        description: exp.description || "",
+        achievements: exp.achievements || [],
+      }));
+    }
+
+    // Education
+    if (data.education) {
+      updatedProfile.education = data.education.map((edu, index) => ({
+        id: `imp-edu-${Date.now()}-${index}`,
+        institution: edu.institution || "",
+        degree: edu.degree || "",
+        fieldOfStudy: edu.fieldOfStudy || "",
+        startDate: edu.startDate || "",
+        endDate: edu.endDate || "",
+        gpa: edu.gpa || "",
+        description: edu.description || "", // AI schema combines thesis, courses, description here
+        thesisTitle: undefined, // Or try to parse from edu.description
+        relevantCourses: undefined, // Or try to parse from edu.description
+      }));
+    }
+    
+    // Projects
+    if (data.projects) {
+      updatedProfile.projects = data.projects.map((proj, index) => ({
+        id: `imp-proj-${Date.now()}-${index}`,
+        name: proj.name || "",
+        description: proj.description || "",
+        technologies: proj.technologies || [],
+        achievements: proj.achievements || [],
+        link: proj.link || "",
+      }));
+    }
+
+    // Skills
+    if (data.skills) {
+      updatedProfile.skills = data.skills.map((skill, index) => ({
+        id: `imp-skill-${Date.now()}-${index}`,
+        name: skill.name || "",
+        category: skill.category || "",
+        proficiency: skill.proficiency as Skill['proficiency'] || undefined,
+      }));
+    }
+
+    // Certifications
+    if (data.certifications) {
+      updatedProfile.certifications = data.certifications.map((cert, index) => ({
+        id: `imp-cert-${Date.now()}-${index}`,
+        name: cert.name || "",
+        issuingOrganization: cert.issuingOrganization || "",
+        issueDate: cert.issueDate || "",
+        credentialId: cert.credentialId || "",
+        credentialUrl: cert.credentialUrl || "",
+      }));
+    }
+    
+    // Honors & Awards
+    if (data.honorsAndAwards) {
+      updatedProfile.honorsAndAwards = data.honorsAndAwards.map((item, index) => ({
+        id: `imp-ha-${Date.now()}-${index}`,
+        name: item.name || "",
+        organization: item.organization || "",
+        date: item.date || "",
+        description: item.description || "",
+      }));
+    }
+
+    // Publications
+    if (data.publications) {
+      updatedProfile.publications = data.publications.map((item, index) => ({
+        id: `imp-pub-${Date.now()}-${index}`,
+        title: item.title || "",
+        authors: item.authors || [],
+        journalOrConference: item.journalOrConference || "",
+        publicationDate: item.publicationDate || "",
+        link: item.link || "",
+        doi: item.doi || "",
+        description: item.description || "",
+      }));
+    }
+
+    // References
+    if (data.references) {
+      updatedProfile.references = data.references.map((item, index) => ({
+        id: `imp-ref-${Date.now()}-${index}`,
+        name: item.name || "",
+        titleAndCompany: item.titleAndCompany || "",
+        contactDetailsOrNote: item.contactDetailsOrNote || "",
+      }));
+    }
+
+    // Custom Sections
+    if (data.customSections) {
+      updatedProfile.customSections = data.customSections.map((item, index) => ({
+        id: `imp-cs-${Date.now()}-${index}`,
+        heading: item.heading || "",
+        content: item.content || "",
+      }));
+    }
+
+    setProfileData(updatedProfile); // This will trigger re-render of FormSectionLists
   };
 
 
@@ -815,24 +1004,29 @@ export default function ProfilePage() {
             Complete your profile to enable AI-powered resume tailoring. The more details you provide, the better ResumeForge can assist you.
             </p>
         </div>
-        <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="lg">
-                    <DownloadCloud className="mr-2 h-5 w-5" /> Download / Print
-                </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={handleDownloadMd}>
-                    <FileText className="mr-2 h-4 w-4" /> Download as .md
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={handleDownloadDocx}>
-                    <FileText className="mr-2 h-4 w-4" /> Download as Word (.docx)
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={handlePrintToPdf}>
-                    <Printer className="mr-2 h-4 w-4" /> Print to PDF...
-                </DropdownMenuItem>
-            </DropdownMenuContent>
-        </DropdownMenu>
+        <div className="flex flex-col sm:flex-row gap-2">
+            <Button onClick={() => setIsImportCvModalOpen(true)} variant="outline" size="lg">
+                <UploadCloud className="mr-2 h-5 w-5" /> Import CV
+            </Button>
+            <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="lg">
+                        <DownloadCloud className="mr-2 h-5 w-5" /> Download / Print
+                    </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={handleDownloadMd}>
+                        <FileText className="mr-2 h-4 w-4" /> Download as .md
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={handleDownloadDocx}>
+                        <FileText className="mr-2 h-4 w-4" /> Download as Word (.docx)
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={handlePrintToPdf}>
+                        <Printer className="mr-2 h-4 w-4" /> Print to PDF...
+                    </DropdownMenuItem>
+                </DropdownMenuContent>
+            </DropdownMenu>
+        </div>
       </div>
 
       <Accordion 
@@ -882,6 +1076,58 @@ export default function ProfilePage() {
         {(profileData.sectionOrder || DEFAULT_SECTION_ORDER).map((sectionKey, index) => renderSection(sectionKey, index))}
 
       </Accordion>
+
+      {/* CV Import Modal */}
+      <Dialog open={isImportCvModalOpen} onOpenChange={(isOpen) => {
+          setIsImportCvModalOpen(isOpen);
+          if (!isOpen) { 
+              setCvFileContent(null); 
+              if(fileInputRef.current) fileInputRef.current.value = "";
+          }
+      }}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="font-headline">Import CV</DialogTitle>
+            <DialogDescription>
+              Upload your CV (.txt or .md file) to automatically populate your profile.
+              The AI will attempt to extract information. Please review carefully before saving.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4 space-y-4">
+            <div>
+              <Label htmlFor="cv-file-input">CV File (.txt, .md)</Label>
+              <Input 
+                id="cv-file-input" 
+                type="file" 
+                accept=".txt,.md" 
+                onChange={handleCvFileChange}
+                ref={fileInputRef} 
+                className="mt-1"
+              />
+            </div>
+            {cvFileContent && (
+              <div className="p-2 border rounded-md bg-muted max-h-40 overflow-y-auto text-xs">
+                <h4 className="font-medium mb-1">File Preview:</h4>
+                <pre className="whitespace-pre-wrap">{cvFileContent.substring(0, 300)}{cvFileContent.length > 300 ? "..." : ""}</pre>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button type="button" variant="outline">Cancel</Button>
+            </DialogClose>
+            <Button 
+              type="button" 
+              onClick={handleProcessCvImport} 
+              disabled={!cvFileContent || isImportingCv}
+            >
+              {isImportingCv ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
+              {isImportingCv ? 'Processing...' : 'Process & Populate'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
 
       {/* Modals ... */}
       {/* Work Experience Modal */}

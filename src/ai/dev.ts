@@ -13,3 +13,5 @@ import '@/ai/flows/suggest-cv-section-order-flow.ts'; // Added CV reordering flo
 import '@/ai/flows/generate-latex-cv-flow.ts'; // Added LaTeX CV generation flow
 // import '@/ai/flows/find-jobs-flow.ts'; // Commented out as Jobs RSS page now uses direct RSS parsing
 import '@/ai/flows/extract-rss-item-flow.ts'; // Added new flow for RSS item parsing
+import '@/ai/flows/extract-profile-from-cv-flow.ts'; // Added new flow for CV parsing
+
