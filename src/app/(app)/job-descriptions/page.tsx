@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState } from 'react';
@@ -11,7 +12,8 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { useToast } from "@/hooks/use-toast";
 import { PlusCircle, Briefcase, ArrowRight, Trash2, Edit3, FileSearch, Sparkles, Loader2 } from "lucide-react";
 import Link from "next/link";
-import type { JobDescriptionItem } from "@/lib/types";
+import { useRouter } from 'next/navigation';
+import type { JobDescriptionItem, UserProfile } from "@/lib/types";
 import { jobDescriptionFormSchema, JobDescriptionFormData } from "@/lib/schemas";
 import {
   Dialog,
@@ -24,6 +26,7 @@ import {
   DialogClose,
 } from "@/components/ui/dialog";
 import { extractJobDetails } from "@/ai/flows/extract-job-details-flow";
+import { profileToResumeText } from '@/lib/profile-utils';
 
 
 const initialJds: JobDescriptionItem[] = [
@@ -31,8 +34,14 @@ const initialJds: JobDescriptionItem[] = [
   { id: "jd2", title: "Product Marketing Manager", company: "Startup Co.", description: "Join our fast-paced team...", createdAt: new Date().toISOString() },
 ];
 
+const USER_PROFILE_STORAGE_KEY = "userProfile";
+const TAILOR_RESUME_PREFILL_JD_KEY = "tailorResumePrefillJD";
+const TAILOR_RESUME_PREFILL_RESUME_KEY = "tailorResumePrefillResume";
+
+
 export default function JobDescriptionsPage() {
   const { toast } = useToast();
+  const router = useRouter();
   const [jds, setJds] = useState<JobDescriptionItem[]>(initialJds);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingJd, setEditingJd] = useState<JobDescriptionItem | null>(null);
@@ -119,6 +128,46 @@ export default function JobDescriptionsPage() {
     }
   };
 
+  const handleTailorResumeWithProfile = (jd: JobDescriptionItem) => {
+    try {
+      const storedProfileString = localStorage.getItem(USER_PROFILE_STORAGE_KEY);
+      if (!storedProfileString) {
+        toast({
+          title: "Profile Not Found",
+          description: "Please complete your profile first before tailoring with it.",
+          variant: "default",
+        });
+        router.push('/profile'); // Redirect to profile page
+        return;
+      }
+      const userProfile = JSON.parse(storedProfileString) as UserProfile;
+      const baseResumeText = profileToResumeText(userProfile);
+
+      if (!baseResumeText.trim()) {
+         toast({
+          title: "Profile Incomplete",
+          description: "Your profile seems empty. Please add some details to generate a base resume.",
+          variant: "default",
+        });
+        router.push('/profile');
+        return;
+      }
+      
+      localStorage.setItem(TAILOR_RESUME_PREFILL_RESUME_KEY, baseResumeText);
+      localStorage.setItem(TAILOR_RESUME_PREFILL_JD_KEY, jd.description);
+
+      router.push('/tailor-resume');
+
+    } catch (error) {
+      console.error("Error preparing for resume tailoring:", error);
+      toast({
+        title: "Error",
+        description: "Could not prepare data for resume tailoring. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
 
   return (
     <div className="container mx-auto py-8 space-y-8">
@@ -168,10 +217,8 @@ export default function JobDescriptionsPage() {
                 <p className="text-sm text-muted-foreground line-clamp-3">{jd.description}</p>
               </CardContent>
               <CardFooter>
-                <Button className="w-full" asChild>
-                  <Link href={`/tailor-resume?jdId=${jd.id}`}> {/* Pass JD content via query or state if needed, or load on next page */}
+                <Button className="w-full" onClick={() => handleTailorResumeWithProfile(jd)}>
                     Tailor Resume <ArrowRight className="ml-2 h-4 w-4" />
-                  </Link>
                 </Button>
               </CardFooter>
             </Card>
@@ -251,3 +298,5 @@ export default function JobDescriptionsPage() {
     </div>
   );
 }
+
+    

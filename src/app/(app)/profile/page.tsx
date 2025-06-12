@@ -1,6 +1,7 @@
+
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useForm, useFieldArray, FormProvider } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@/components/ui/button";
@@ -38,11 +39,13 @@ import { userProfileSchema, workExperienceSchema, UserProfileFormData, WorkExper
 import { FormSection, FormSectionList } from '@/components/forms/form-section';
 import { WorkExperienceFormFields } from '@/components/forms/work-experience-form-fields';
 
-// Mock initial data - in a real app, this would come from a DB/API
-const initialProfileData: UserProfile = {
+const USER_PROFILE_STORAGE_KEY = "userProfile";
+
+// Mock initial data - only used if nothing in localStorage
+const fallbackInitialProfileData: UserProfile = {
   id: "user123",
   fullName: "Jane Doe",
-  email: "jane.doe@example.com",
+  email: "jane.doe@example.com", // This will be overwritten by localStorage if available
   summary: "A passionate software engineer with 5 years of experience.",
   workExperiences: [
     { id: "we1", company: "Tech Solutions Inc.", role: "Senior Developer", startDate: "2020-01", endDate: "Present", description: "Developed awesome things.", achievements: ["Led a team", "Launched a product"] },
@@ -56,7 +59,9 @@ const initialProfileData: UserProfile = {
 
 export default function ProfilePage() {
   const { toast } = useToast();
-  const [profileData, setProfileData] = useState<UserProfile>(initialProfileData);
+  const [profileData, setProfileData] = useState<UserProfile>(fallbackInitialProfileData);
+  const [isProfileLoaded, setIsProfileLoaded] = useState(false);
+
 
   const [isWorkExperienceModalOpen, setIsWorkExperienceModalOpen] = useState(false);
   const [editingWorkExperience, setEditingWorkExperience] = useState<WorkExperience | null>(null);
@@ -64,13 +69,13 @@ export default function ProfilePage() {
   const generalInfoForm = useForm<UserProfileFormData>({
     resolver: zodResolver(userProfileSchema),
     defaultValues: {
-      fullName: profileData.fullName || "",
-      email: profileData.email || "", // Assuming email is not editable here or handled elsewhere
-      phone: profileData.phone || "",
-      linkedin: profileData.linkedin || "",
-      github: profileData.github || "",
-      portfolio: profileData.portfolio || "",
-      summary: profileData.summary || "",
+      fullName: "",
+      email: "", 
+      phone: "",
+      linkedin: "",
+      github: "",
+      portfolio: "",
+      summary: "",
     },
   });
 
@@ -79,14 +84,82 @@ export default function ProfilePage() {
     defaultValues: {},
   });
 
+  useEffect(() => {
+    try {
+      const storedProfileString = localStorage.getItem(USER_PROFILE_STORAGE_KEY);
+      if (storedProfileString) {
+        const storedProfile = JSON.parse(storedProfileString) as UserProfile;
+        setProfileData(storedProfile);
+        generalInfoForm.reset({
+            fullName: storedProfile.fullName || "",
+            email: storedProfile.email || "user@example.com", // Ensure email field has a default
+            phone: storedProfile.phone || "",
+            linkedin: storedProfile.linkedin || "",
+            github: storedProfile.github || "",
+            portfolio: storedProfile.portfolio || "",
+            summary: storedProfile.summary || "",
+        });
+      } else {
+        // Use fallback if nothing in local storage, and save it
+        setProfileData(fallbackInitialProfileData);
+        generalInfoForm.reset({
+            fullName: fallbackInitialProfileData.fullName || "",
+            email: fallbackInitialProfileData.email || "user@example.com",
+            phone: fallbackInitialProfileData.phone || "",
+            linkedin: fallbackInitialProfileData.linkedin || "",
+            github: fallbackInitialProfileData.github || "",
+            portfolio: fallbackInitialProfileData.portfolio || "",
+            summary: fallbackInitialProfileData.summary || "",
+        });
+        localStorage.setItem(USER_PROFILE_STORAGE_KEY, JSON.stringify(fallbackInitialProfileData));
+      }
+    } catch (error) {
+      console.error("Failed to load profile from localStorage:", error);
+      // Use fallback and set it in form
+      setProfileData(fallbackInitialProfileData);
+       generalInfoForm.reset({
+            fullName: fallbackInitialProfileData.fullName || "",
+            email: fallbackInitialProfileData.email || "user@example.com",
+            phone: fallbackInitialProfileData.phone || "",
+            linkedin: fallbackInitialProfileData.linkedin || "",
+            github: fallbackInitialProfileData.github || "",
+            portfolio: fallbackInitialProfileData.portfolio || "",
+            summary: fallbackInitialProfileData.summary || "",
+        });
+      toast({
+        title: "Load Error",
+        description: "Could not load profile from local storage. Using default.",
+        variant: "destructive",
+      });
+    }
+    setIsProfileLoaded(true);
+  }, [toast, generalInfoForm]);
+
+
+  const saveProfile = (updatedProfile: UserProfile) => {
+    setProfileData(updatedProfile);
+    try {
+      localStorage.setItem(USER_PROFILE_STORAGE_KEY, JSON.stringify(updatedProfile));
+    } catch (error) {
+      console.error("Failed to save profile to localStorage:", error);
+      toast({
+        title: "Save Error",
+        description: "Could not save profile to local storage.",
+        variant: "destructive",
+      });
+    }
+  };
+
+
   const onGeneralInfoSubmit = (data: UserProfileFormData) => {
-    setProfileData(prev => ({ ...prev, ...data }));
+    const updatedProfile = { ...profileData, ...data };
+    saveProfile(updatedProfile);
     toast({ title: "Profile Updated", description: "Your general information has been saved." });
   };
 
   const handleAddWorkExperience = () => {
     setEditingWorkExperience(null);
-    workExperienceForm.reset({}); // Reset form for new entry
+    workExperienceForm.reset({ achievements: '' }); 
     setIsWorkExperienceModalOpen(true);
   };
 
@@ -100,35 +173,33 @@ export default function ProfilePage() {
   };
 
   const handleDeleteWorkExperience = (id: string) => {
-    setProfileData(prev => ({
-      ...prev,
-      workExperiences: prev.workExperiences.filter(exp => exp.id !== id),
-    }));
+    const updatedWorkExperiences = profileData.workExperiences.filter(exp => exp.id !== id);
+    const updatedProfile = { ...profileData, workExperiences: updatedWorkExperiences };
+    saveProfile(updatedProfile);
     toast({ title: "Work Experience Removed", variant: "destructive" });
   };
 
   const onWorkExperienceSubmit = (data: WorkExperienceFormData) => {
     const achievementsArray = data.achievements?.split(',').map(s => s.trim()).filter(Boolean);
+    let updatedWorkExperiences;
     if (editingWorkExperience) {
-      // Update existing
-      setProfileData(prev => ({
-        ...prev,
-        workExperiences: prev.workExperiences.map(exp =>
-          exp.id === editingWorkExperience.id ? { ...exp, ...data, achievements: achievementsArray, id: exp.id } : exp
-        ),
-      }));
+      updatedWorkExperiences = profileData.workExperiences.map(exp =>
+        exp.id === editingWorkExperience.id ? { ...exp, ...data, achievements: achievementsArray, id: exp.id } : exp
+      );
       toast({ title: "Work Experience Updated" });
     } else {
-      // Add new
-      setProfileData(prev => ({
-        ...prev,
-        workExperiences: [...prev.workExperiences, { ...data, achievements: achievementsArray, id: `we-${Date.now()}` }],
-      }));
+      updatedWorkExperiences = [...profileData.workExperiences, { ...data, achievements: achievementsArray, id: `we-${Date.now()}` }];
       toast({ title: "Work Experience Added" });
     }
+    const updatedProfile = { ...profileData, workExperiences: updatedWorkExperiences };
+    saveProfile(updatedProfile);
     setIsWorkExperienceModalOpen(false);
     setEditingWorkExperience(null);
   };
+  
+  if (!isProfileLoaded) {
+    return <div className="container mx-auto py-8 text-center">Loading profile...</div>;
+  }
 
   const sectionIconProps = { className: "h-5 w-5 mr-2 text-primary" };
 
@@ -173,8 +244,51 @@ export default function ProfilePage() {
                         </FormItem>
                       )}
                     />
+                    <FormField
+                      control={generalInfoForm.control}
+                      name="phone"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Phone (Optional)</FormLabel>
+                          <FormControl><Input {...field} /></FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={generalInfoForm.control}
+                      name="linkedin"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>LinkedIn Profile URL (Optional)</FormLabel>
+                          <FormControl><Input placeholder="https://linkedin.com/in/yourprofile" {...field} /></FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                     <FormField
+                      control={generalInfoForm.control}
+                      name="github"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>GitHub Profile URL (Optional)</FormLabel>
+                          <FormControl><Input placeholder="https://github.com/yourusername" {...field} /></FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                     <FormField
+                      control={generalInfoForm.control}
+                      name="portfolio"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Portfolio URL (Optional)</FormLabel>
+                          <FormControl><Input placeholder="https://yourportfolio.com" {...field} /></FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
                   </div>
-                  {/* Add other general fields like phone, linkedin, github, portfolio */}
                   <FormField
                     control={generalInfoForm.control}
                     name="summary"
@@ -281,3 +395,5 @@ export default function ProfilePage() {
     </div>
   );
 }
+
+    
