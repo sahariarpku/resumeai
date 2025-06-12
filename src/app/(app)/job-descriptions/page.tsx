@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
-import { PlusCircle, Briefcase, ArrowRight, Trash2, Edit3, FileSearch } from "lucide-react";
+import { PlusCircle, Briefcase, ArrowRight, Trash2, Edit3, FileSearch, Sparkles, Loader2 } from "lucide-react";
 import Link from "next/link";
 import type { JobDescriptionItem } from "@/lib/types";
 import { jobDescriptionFormSchema, JobDescriptionFormData } from "@/lib/schemas";
@@ -23,6 +23,8 @@ import {
   DialogTrigger,
   DialogClose,
 } from "@/components/ui/dialog";
+import { extractJobDetails } from "@/ai/flows/extract-job-details-flow";
+
 
 const initialJds: JobDescriptionItem[] = [
   { id: "jd1", title: "Senior Software Engineer", company: "Tech Giant LLC", description: "Looking for a skilled SSE...", createdAt: new Date().toISOString() },
@@ -34,6 +36,7 @@ export default function JobDescriptionsPage() {
   const [jds, setJds] = useState<JobDescriptionItem[]>(initialJds);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingJd, setEditingJd] = useState<JobDescriptionItem | null>(null);
+  const [isExtracting, setIsExtracting] = useState(false);
 
   const form = useForm<JobDescriptionFormData>({
     resolver: zodResolver(jobDescriptionFormSchema),
@@ -78,6 +81,44 @@ export default function JobDescriptionsPage() {
     setJds(jds.filter(jd => jd.id !== id));
     toast({ title: "Job Description Deleted", variant: "destructive" });
   };
+
+  const handleExtractDetails = async () => {
+    const descriptionValue = form.getValues("description");
+    if (!descriptionValue || descriptionValue.trim().length < 50) {
+      toast({
+        title: "Cannot Extract Details",
+        description: "Please paste a job description (at least 50 characters) into the textarea first.",
+        variant: "default",
+      });
+      return;
+    }
+
+    setIsExtracting(true);
+    try {
+      const result = await extractJobDetails({ jobDescriptionText: descriptionValue });
+      form.setValue("title", result.jobTitle, { shouldValidate: true });
+      form.setValue("company", result.companyName, { shouldValidate: true });
+      
+      toast({
+        title: "Extraction Attempted!",
+        description: "Job title and company name fields have been updated based on the AI's findings. Please review them.",
+      });
+    } catch (err) {
+      console.error("Error extracting job details:", err);
+      let errorMessage = "Could not extract details. Please try again or fill them manually.";
+      if (err instanceof Error && err.message) {
+        errorMessage = `Extraction failed: ${err.message}`;
+      }
+      toast({
+        title: "Extraction Error",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    } finally {
+      setIsExtracting(false);
+    }
+  };
+
 
   return (
     <div className="container mx-auto py-8 space-y-8">
@@ -175,9 +216,25 @@ export default function JobDescriptionsPage() {
                 name="description"
                 render={({ field }) => (
                     <FormItem>
-                    <FormLabel>Job Description</FormLabel>
-                    <FormControl><Textarea placeholder="Paste the full job description here..." {...field} rows={10} /></FormControl>
-                    <FormMessage />
+                      <div className="flex justify-between items-center mb-1">
+                        <FormLabel>Job Description</FormLabel>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={handleExtractDetails}
+                          disabled={isExtracting}
+                        >
+                          {isExtracting ? (
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          ) : (
+                            <Sparkles className="mr-2 h-4 w-4" />
+                          )}
+                          AI Extract Details
+                        </Button>
+                      </div>
+                      <FormControl><Textarea placeholder="Paste the full job description here..." {...field} rows={10} /></FormControl>
+                      <FormMessage />
                     </FormItem>
                 )}
                 />
