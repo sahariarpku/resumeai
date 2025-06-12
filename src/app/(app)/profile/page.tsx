@@ -36,7 +36,7 @@ import {
   DialogClose,
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { PlusCircle, Edit3, Trash2, Save, UserCircle, Briefcase, FolderKanban, GraduationCap, Wrench, Award, Loader2, Sparkles, Trophy, BookOpen, Contact, LayoutList, DownloadCloud, Printer, FileText } from "lucide-react";
+import { PlusCircle, Edit3, Trash2, Save, UserCircle, Briefcase, FolderKanban, GraduationCap, Wrench, Award, Loader2, Sparkles, Trophy, BookOpen, Contact, LayoutList, DownloadCloud, Printer, FileText, ArrowUpCircle, ArrowDownCircle } from "lucide-react";
 import type { UserProfile, WorkExperience, Project, Education, Skill, Certification, HonorAward, Publication, Reference, CustomSection, ProfileSectionKey } from "@/lib/types";
 import { DEFAULT_SECTION_ORDER } from "@/lib/types";
 import { 
@@ -71,7 +71,7 @@ const USER_PROFILE_STORAGE_KEY = "userProfile";
 const fallbackInitialProfileData: UserProfile = {
   id: "user123",
   fullName: "",
-  email: "user@example.com", // Typically set by auth, but good for fallback
+  email: "user@example.com", 
   phone: "",
   address: "",
   linkedin: "",
@@ -128,7 +128,7 @@ export default function ProfilePage() {
 
   const generalInfoForm = useForm<UserProfileFormData>({
     resolver: zodResolver(userProfileSchema),
-    defaultValues: fallbackInitialProfileData, // will be updated by useEffect
+    defaultValues: fallbackInitialProfileData, 
   });
 
   const workExperienceForm = useForm<WorkExperienceFormData>({ resolver: zodResolver(workExperienceSchema), defaultValues: { company: '', role: '', startDate: '', endDate: '', description: '', achievements: ''} });
@@ -148,7 +148,6 @@ export default function ProfilePage() {
       let loadedProfile: UserProfile;
       if (storedProfileString) {
         const parsedProfile = JSON.parse(storedProfileString) as UserProfile;
-        // Ensure all array fields are present and sectionOrder is initialized
         loadedProfile = {
             ...fallbackInitialProfileData, 
             ...parsedProfile,
@@ -164,13 +163,13 @@ export default function ProfilePage() {
             sectionOrder: parsedProfile.sectionOrder && parsedProfile.sectionOrder.length > 0 ? parsedProfile.sectionOrder : [...DEFAULT_SECTION_ORDER],
         };
       } else {
-        loadedProfile = { ...fallbackInitialProfileData };
+        loadedProfile = { ...fallbackInitialProfileData, sectionOrder: [...DEFAULT_SECTION_ORDER] };
         localStorage.setItem(USER_PROFILE_STORAGE_KEY, JSON.stringify(loadedProfile));
       }
       setProfileData(loadedProfile);
       generalInfoForm.reset({
           fullName: loadedProfile.fullName || "",
-          email: loadedProfile.email || "user@example.com", // Should ideally come from auth
+          email: loadedProfile.email || "user@example.com",
           phone: loadedProfile.phone || "",
           address: loadedProfile.address || "",
           linkedin: loadedProfile.linkedin || "",
@@ -420,13 +419,10 @@ export default function ProfilePage() {
     const printWindow = window.open('', '_blank');
     if (printWindow) {
       printWindow.document.write(resumeHtml);
-      printWindow.document.close(); // Necessary for some browsers.
-      printWindow.focus(); // Necessary for some browsers.
-      // Delay print slightly to ensure content is rendered
+      printWindow.document.close(); 
+      printWindow.focus(); 
       setTimeout(() => {
         printWindow.print();
-        // Closing the window after print dialog can be tricky and browser-dependent
-        // printWindow.close(); 
       }, 500);
       toast({ title: "Preparing PDF for Print" });
     } else {
@@ -434,20 +430,41 @@ export default function ProfilePage() {
     }
   };
   
-  const orderedSections = useMemo(() => {
-    const order = profileData.sectionOrder || DEFAULT_SECTION_ORDER;
-    return order.map(key => ({
-      key,
-      // You can add more properties here if needed for rendering, like titles or icons
-    }));
-  }, [profileData.sectionOrder]);
+  const formatSectionTitleLocal = (key: ProfileSectionKey): string => {
+    // A simple formatter for toast messages if not importing from profile-utils
+    return key
+      .replace(/([A-Z])/g, ' $1')
+      .replace(/^./, (str) => str.toUpperCase())
+      .trim();
+  };
+  
+  const handleMoveSection = (sectionKey: ProfileSectionKey, direction: 'up' | 'down') => {
+    const currentOrder = [...(profileData.sectionOrder || DEFAULT_SECTION_ORDER)];
+    const currentIndex = currentOrder.indexOf(sectionKey);
+  
+    if (currentIndex === -1) return; 
+  
+    const newIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+  
+    if (newIndex < 0 || newIndex >= currentOrder.length) return; 
+  
+    const itemToMove = currentOrder.splice(currentIndex, 1)[0];
+    currentOrder.splice(newIndex, 0, itemToMove);
+  
+    saveProfile({ ...profileData, sectionOrder: currentOrder });
+    toast({ title: "Section Order Updated", description: `${formatSectionTitleLocal(sectionKey)} moved ${direction}.` });
+  };
 
 
   if (!isProfileLoaded) {
     return <div className="container mx-auto py-8 text-center flex justify-center items-center min-h-[200px]"><Loader2 className="h-8 w-8 animate-spin text-primary" /> <span className="ml-2">Loading profile...</span></div>;
   }
 
-  const renderSection = (sectionKey: ProfileSectionKey) => {
+  const renderSection = (sectionKey: ProfileSectionKey, index: number) => {
+    const totalReorderableSections = (profileData.sectionOrder || DEFAULT_SECTION_ORDER).length;
+    const canMoveUp = index > 0;
+    const canMoveDown = index < totalReorderableSections - 1;
+
     switch (sectionKey) {
       case 'workExperiences':
         return (
@@ -456,6 +473,11 @@ export default function ProfilePage() {
               title="Work Experience"
               description="Detail your past and current roles."
               actions={<Button onClick={handleAddWorkExperience} variant="outline"><PlusCircle className="mr-2 h-4 w-4" /> Add Work Experience</Button>}
+              isReorderable={true}
+              canMoveUp={canMoveUp}
+              canMoveDown={canMoveDown}
+              onMoveUp={() => handleMoveSection(sectionKey, 'up')}
+              onMoveDown={() => handleMoveSection(sectionKey, 'down')}
             >
               <FormSectionList
                 items={profileData.workExperiences}
@@ -487,6 +509,11 @@ export default function ProfilePage() {
               title="Projects"
               description="Showcase your personal or professional projects."
               actions={<Button onClick={handleAddProject} variant="outline"><PlusCircle className="mr-2 h-4 w-4" /> Add Project</Button>}
+              isReorderable={true}
+              canMoveUp={canMoveUp}
+              canMoveDown={canMoveDown}
+              onMoveUp={() => handleMoveSection(sectionKey, 'up')}
+              onMoveDown={() => handleMoveSection(sectionKey, 'down')}
             >
               <FormSectionList
                 items={profileData.projects}
@@ -519,6 +546,11 @@ export default function ProfilePage() {
               title="Education"
               description="List your academic qualifications and achievements."
               actions={<Button onClick={handleAddEducation} variant="outline"><PlusCircle className="mr-2 h-4 w-4" /> Add Education</Button>}
+              isReorderable={true}
+              canMoveUp={canMoveUp}
+              canMoveDown={canMoveDown}
+              onMoveUp={() => handleMoveSection(sectionKey, 'up')}
+              onMoveDown={() => handleMoveSection(sectionKey, 'down')}
             >
               <FormSectionList
                 items={profileData.education}
@@ -553,6 +585,11 @@ export default function ProfilePage() {
               title="Honors &amp; Awards"
               description="List your recognitions and accolades."
               actions={<Button onClick={handleAddHonorAward} variant="outline"><PlusCircle className="mr-2 h-4 w-4" /> Add Honor/Award</Button>}
+              isReorderable={true}
+              canMoveUp={canMoveUp}
+              canMoveDown={canMoveDown}
+              onMoveUp={() => handleMoveSection(sectionKey, 'up')}
+              onMoveDown={() => handleMoveSection(sectionKey, 'down')}
             >
               <FormSectionList
                 items={profileData.honorsAndAwards}
@@ -584,6 +621,11 @@ export default function ProfilePage() {
               title="Publications"
               description="Showcase your published work."
               actions={<Button onClick={handleAddPublication} variant="outline"><PlusCircle className="mr-2 h-4 w-4" /> Add Publication</Button>}
+              isReorderable={true}
+              canMoveUp={canMoveUp}
+              canMoveDown={canMoveDown}
+              onMoveUp={() => handleMoveSection(sectionKey, 'up')}
+              onMoveDown={() => handleMoveSection(sectionKey, 'down')}
             >
               <FormSectionList
                 items={profileData.publications}
@@ -618,6 +660,11 @@ export default function ProfilePage() {
               title="Skills"
               description="Highlight your technical and soft skills."
               actions={<Button onClick={handleAddSkill} variant="outline"><PlusCircle className="mr-2 h-4 w-4" /> Add Skill</Button>}
+              isReorderable={true}
+              canMoveUp={canMoveUp}
+              canMoveDown={canMoveDown}
+              onMoveUp={() => handleMoveSection(sectionKey, 'up')}
+              onMoveDown={() => handleMoveSection(sectionKey, 'down')}
             >
               <FormSectionList
                 items={profileData.skills}
@@ -648,6 +695,11 @@ export default function ProfilePage() {
               title="Certifications"
               description="Add any relevant certifications."
               actions={<Button onClick={handleAddCertification} variant="outline"><PlusCircle className="mr-2 h-4 w-4" /> Add Certification</Button>}
+              isReorderable={true}
+              canMoveUp={canMoveUp}
+              canMoveDown={canMoveDown}
+              onMoveUp={() => handleMoveSection(sectionKey, 'up')}
+              onMoveDown={() => handleMoveSection(sectionKey, 'down')}
             >
               <FormSectionList
                 items={profileData.certifications}
@@ -679,6 +731,11 @@ export default function ProfilePage() {
               title="References"
               description="Provide professional or academic references."
               actions={<Button onClick={handleAddReference} variant="outline"><PlusCircle className="mr-2 h-4 w-4" /> Add Reference</Button>}
+              isReorderable={true}
+              canMoveUp={canMoveUp}
+              canMoveDown={canMoveDown}
+              onMoveUp={() => handleMoveSection(sectionKey, 'up')}
+              onMoveDown={() => handleMoveSection(sectionKey, 'down')}
             >
               <FormSectionList
                 items={profileData.references}
@@ -709,6 +766,11 @@ export default function ProfilePage() {
               title="Custom Sections"
               description="Add any other relevant sections to your profile."
               actions={<Button onClick={handleAddCustomSection} variant="outline"><PlusCircle className="mr-2 h-4 w-4" /> Add Custom Section</Button>}
+              isReorderable={true}
+              canMoveUp={canMoveUp}
+              canMoveDown={canMoveDown}
+              onMoveUp={() => handleMoveSection(sectionKey, 'up')}
+              onMoveDown={() => handleMoveSection(sectionKey, 'down')}
             >
               <FormSectionList
                 items={profileData.customSections}
@@ -766,22 +828,27 @@ export default function ProfilePage() {
         </DropdownMenu>
       </div>
 
-      <Accordion type="multiple" defaultValue={['general-info', ...(profileData.sectionOrder || DEFAULT_SECTION_ORDER).map(s => s.toLowerCase())]} className="w-full space-y-4">
+      <Accordion 
+        type="multiple" 
+        defaultValue={['general-info', ...(profileData.sectionOrder || DEFAULT_SECTION_ORDER).map(s => s.toLowerCase())]} 
+        className="w-full space-y-4"
+      >
         <AccordionItem value="general-info" className="border-none">
             <FormSection
               title="General Information"
               description="Basic contact and summary details."
+              isReorderable={false} // General Info is not reorderable
             >
               <Form {...generalInfoForm}>
                 <form onSubmit={generalInfoForm.handleSubmit(onGeneralInfoSubmit)} className="space-y-6">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FormField control={generalInfoForm.control} name="fullName" render={({ field }) => (<FormItem><FormLabel>Full Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
-                    <FormField control={generalInfoForm.control} name="email" render={({ field }) => (<FormItem><FormLabel>Email</FormLabel><FormControl><Input type="email" {...field} disabled/></FormControl><FormDescription>Email is managed via your account settings.</FormDescription><FormMessage /></FormItem>)} />
-                    <FormField control={generalInfoForm.control} name="phone" render={({ field }) => (<FormItem><FormLabel>Phone (Optional)</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
-                    <FormField control={generalInfoForm.control} name="address" render={({ field }) => (<FormItem><FormLabel>Address (Optional)</FormLabel><FormControl><Input placeholder="e.g. 123 Main St, Anytown, USA" {...field} /></FormControl><FormMessage /></FormItem>)} />
-                    <FormField control={generalInfoForm.control} name="linkedin" render={({ field }) => (<FormItem><FormLabel>LinkedIn Profile URL (Optional)</FormLabel><FormControl><Input placeholder="https://linkedin.com/in/yourprofile" {...field} /></FormControl><FormMessage /></FormItem>)} />
-                    <FormField control={generalInfoForm.control} name="github" render={({ field }) => (<FormItem><FormLabel>GitHub Profile URL (Optional)</FormLabel><FormControl><Input placeholder="https://github.com/yourusername" {...field} /></FormControl><FormMessage /></FormItem>)} />
-                    <FormField control={generalInfoForm.control} name="portfolio" render={({ field }) => (<FormItem><FormLabel>Portfolio URL (Optional)</FormLabel><FormControl><Input placeholder="https://yourportfolio.com" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                    <FormField control={generalInfoForm.control} name="fullName" render={({ field }) => (<FormItem><FormLabel>Full Name</FormLabel><FormControl><Input {...field} value={field.value || ''} /></FormControl><FormMessage /></FormItem>)} />
+                    <FormField control={generalInfoForm.control} name="email" render={({ field }) => (<FormItem><FormLabel>Email</FormLabel><FormControl><Input type="email" {...field} value={field.value || ''} disabled/></FormControl><FormDescription>Email is managed via your account settings.</FormDescription><FormMessage /></FormItem>)} />
+                    <FormField control={generalInfoForm.control} name="phone" render={({ field }) => (<FormItem><FormLabel>Phone (Optional)</FormLabel><FormControl><Input {...field} value={field.value || ''} /></FormControl><FormMessage /></FormItem>)} />
+                    <FormField control={generalInfoForm.control} name="address" render={({ field }) => (<FormItem><FormLabel>Address (Optional)</FormLabel><FormControl><Input placeholder="e.g. 123 Main St, Anytown, USA" {...field} value={field.value || ''} /></FormControl><FormMessage /></FormItem>)} />
+                    <FormField control={generalInfoForm.control} name="linkedin" render={({ field }) => (<FormItem><FormLabel>LinkedIn Profile URL (Optional)</FormLabel><FormControl><Input placeholder="https://linkedin.com/in/yourprofile" {...field} value={field.value || ''} /></FormControl><FormMessage /></FormItem>)} />
+                    <FormField control={generalInfoForm.control} name="github" render={({ field }) => (<FormItem><FormLabel>GitHub Profile URL (Optional)</FormLabel><FormControl><Input placeholder="https://github.com/yourusername" {...field} value={field.value || ''} /></FormControl><FormMessage /></FormItem>)} />
+                    <FormField control={generalInfoForm.control} name="portfolio" render={({ field }) => (<FormItem><FormLabel>Portfolio URL (Optional)</FormLabel><FormControl><Input placeholder="https://yourportfolio.com" {...field} value={field.value || ''} /></FormControl><FormMessage /></FormItem>)} />
                   </div>
                   <FormField
                     control={generalInfoForm.control}
@@ -794,7 +861,7 @@ export default function ProfilePage() {
                                 {polishingField === 'summary' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4 text-primary" />}
                             </Button>
                         </div>
-                        <FormControl><Textarea placeholder="A brief summary of your career..." {...field} rows={4} /></FormControl>
+                        <FormControl><Textarea placeholder="A brief summary of your career..." {...field} value={field.value || ''} rows={4} /></FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -805,8 +872,7 @@ export default function ProfilePage() {
             </FormSection>
         </AccordionItem>
 
-        {/* Dynamically render sections based on sectionOrder */}
-        {orderedSections.map(section => renderSection(section.key))}
+        {(profileData.sectionOrder || DEFAULT_SECTION_ORDER).map((sectionKey, index) => renderSection(sectionKey, index))}
 
       </Accordion>
 
