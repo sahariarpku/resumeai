@@ -1,3 +1,4 @@
+
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { CheckCircle, Zap, FileText, Users } from "lucide-react";
@@ -29,12 +30,12 @@ export default function LandingPage() {
             Pricing
           </Link>
           <Button asChild variant="outline">
-            <Link href="/dashboard" prefetch={false}>
+            <Link href="/auth/signin" prefetch={false}>
               Sign In
             </Link>
           </Button>
           <Button asChild>
-            <Link href="/dashboard" prefetch={false}>
+            <Link href="/auth/signup" prefetch={false}>
               Get Started
             </Link>
           </Button>
@@ -55,7 +56,7 @@ export default function LandingPage() {
                 </div>
                 <div className="flex flex-col gap-2 min-[400px]:flex-row">
                   <Button size="lg" asChild>
-                    <Link href="/dashboard" prefetch={false}>
+                    <Link href="/auth/signup" prefetch={false}>
                       Start Building Free
                     </Link>
                   </Button>
@@ -161,7 +162,7 @@ export default function LandingPage() {
                 </CardContent>
                 <CardFooter>
                   <Button className="w-full" asChild>
-                    <Link href="/dashboard" prefetch={false}>
+                    <Link href="/auth/signup" prefetch={false}>
                       Sign Up for Free
                     </Link>
                   </Button>

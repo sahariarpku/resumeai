@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
@@ -68,14 +67,15 @@ import { extractProfileFromCv, type ExtractProfileFromCvOutput } from '@/ai/flow
 import { profileToResumeText, profileToResumeHtml } from '@/lib/profile-utils';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { Label } from '@/components/ui/label';
+import { useAuth } from '@/contexts/auth-context'; // Import useAuth
 
 
 const USER_PROFILE_STORAGE_KEY = "userProfile";
 
 const fallbackInitialProfileData: UserProfile = {
-  id: "user123",
+  id: "user_default_id", // Ensure a default ID
   fullName: "",
-  email: "user@example.com", 
+  email: "", // Will be populated from auth
   phone: "",
   address: "",
   linkedin: "",
@@ -97,6 +97,7 @@ const fallbackInitialProfileData: UserProfile = {
 
 export default function ProfilePage() {
   const { toast } = useToast();
+  const { currentUser } = useAuth(); // Get current user from AuthContext
   const [profileData, setProfileData] = useState<UserProfile>(fallbackInitialProfileData);
   const [isProfileLoaded, setIsProfileLoaded] = useState(false);
 
@@ -153,76 +154,100 @@ export default function ProfilePage() {
 
 
   useEffect(() => {
-    try {
-      const storedProfileString = localStorage.getItem(USER_PROFILE_STORAGE_KEY);
-      let loadedProfile: UserProfile;
-      if (storedProfileString) {
-        const parsedProfile = JSON.parse(storedProfileString) as UserProfile;
+    if (currentUser) { // Only load from localStorage if a user is logged in
+        try {
+        const storedProfileString = localStorage.getItem(`${USER_PROFILE_STORAGE_KEY}_${currentUser.uid}`);
+        let loadedProfile: UserProfile;
         
-        let effectiveSectionOrder: ProfileSectionKey[];
-        if (parsedProfile.sectionOrder && Array.isArray(parsedProfile.sectionOrder) && parsedProfile.sectionOrder.length > 0) {
-          const validStoredKeys = parsedProfile.sectionOrder.filter(key => DEFAULT_SECTION_ORDER.includes(key as ProfileSectionKey));
-          const missingDefaultKeys = DEFAULT_SECTION_ORDER.filter(key => !validStoredKeys.includes(key));
-          effectiveSectionOrder = [...validStoredKeys, ...missingDefaultKeys];
-        } else {
-          effectiveSectionOrder = [...DEFAULT_SECTION_ORDER];
-        }
+        if (storedProfileString) {
+            const parsedProfile = JSON.parse(storedProfileString) as UserProfile;
+            
+            let effectiveSectionOrder: ProfileSectionKey[];
+            if (parsedProfile.sectionOrder && Array.isArray(parsedProfile.sectionOrder) && parsedProfile.sectionOrder.length > 0) {
+            const validStoredKeys = parsedProfile.sectionOrder.filter(key => DEFAULT_SECTION_ORDER.includes(key as ProfileSectionKey));
+            const missingDefaultKeys = DEFAULT_SECTION_ORDER.filter(key => !validStoredKeys.includes(key));
+            effectiveSectionOrder = [...validStoredKeys, ...missingDefaultKeys];
+            } else {
+            effectiveSectionOrder = [...DEFAULT_SECTION_ORDER];
+            }
 
-        loadedProfile = {
-            ...fallbackInitialProfileData, 
-            ...parsedProfile,
-            fullName: parsedProfile.fullName || "",
-            email: parsedProfile.email || "user@example.com",
-            phone: parsedProfile.phone || "",
-            address: parsedProfile.address || "",
-            linkedin: parsedProfile.linkedin || "",
-            github: parsedProfile.github || "",
-            portfolio: parsedProfile.portfolio || "",
-            summary: parsedProfile.summary || "",
-            workExperiences: parsedProfile.workExperiences || [],
-            projects: parsedProfile.projects || [],
-            education: parsedProfile.education || [],
-            skills: parsedProfile.skills || [],
-            certifications: parsedProfile.certifications || [],
-            honorsAndAwards: parsedProfile.honorsAndAwards || [],
-            publications: parsedProfile.publications || [],
-            references: parsedProfile.references || [],
-            customSections: parsedProfile.customSections || [],
-            sectionOrder: effectiveSectionOrder,
+            loadedProfile = {
+                ...fallbackInitialProfileData, 
+                ...parsedProfile,
+                id: currentUser.uid, // Ensure ID is from auth user
+                email: currentUser.email || "", // Email from auth user
+                fullName: parsedProfile.fullName || currentUser.displayName || "", // Name from profile or auth user
+                sectionOrder: effectiveSectionOrder,
+            };
+        } else {
+            // No profile for this user in localStorage, start with a fresh one based on auth user
+            loadedProfile = { 
+                ...fallbackInitialProfileData, 
+                id: currentUser.uid,
+                email: currentUser.email || "",
+                fullName: currentUser.displayName || "",
+                sectionOrder: [...DEFAULT_SECTION_ORDER] 
+            };
+            // Optionally, save this initial profile to localStorage
+            // localStorage.setItem(`${USER_PROFILE_STORAGE_KEY}_${currentUser.uid}`, JSON.stringify(loadedProfile));
+        }
+        setProfileData(loadedProfile);
+        generalInfoForm.reset({
+            fullName: loadedProfile.fullName || "",
+            email: loadedProfile.email || "", // Email from auth user, field will be disabled
+            phone: loadedProfile.phone || "",
+            address: loadedProfile.address || "",
+            linkedin: loadedProfile.linkedin || "",
+            github: loadedProfile.github || "",
+            portfolio: loadedProfile.portfolio || "",
+            summary: loadedProfile.summary || "",
+        });
+        } catch (error) {
+        console.error("Failed to load profile from localStorage:", error);
+        // Fallback to a fresh profile if loading fails
+        const freshProfile = {
+            ...fallbackInitialProfileData,
+            id: currentUser.uid,
+            email: currentUser.email || "",
+            fullName: currentUser.displayName || "",
+            sectionOrder: [...DEFAULT_SECTION_ORDER]
         };
-      } else {
-        loadedProfile = { ...fallbackInitialProfileData, sectionOrder: [...DEFAULT_SECTION_ORDER] };
-        localStorage.setItem(USER_PROFILE_STORAGE_KEY, JSON.stringify(loadedProfile));
-      }
-      setProfileData(loadedProfile);
-      generalInfoForm.reset({
-          fullName: loadedProfile.fullName || "",
-          email: loadedProfile.email || "user@example.com",
-          phone: loadedProfile.phone || "",
-          address: loadedProfile.address || "",
-          linkedin: loadedProfile.linkedin || "",
-          github: loadedProfile.github || "",
-          portfolio: loadedProfile.portfolio || "",
-          summary: loadedProfile.summary || "",
-      });
-    } catch (error) {
-      console.error("Failed to load profile from localStorage:", error);
-      setProfileData(fallbackInitialProfileData); 
-      generalInfoForm.reset(fallbackInitialProfileData);
-      toast({
-        title: "Load Error",
-        description: "Could not load profile from local storage. Using default.",
-        variant: "destructive",
-      });
+        setProfileData(freshProfile); 
+        generalInfoForm.reset({
+            email: currentUser.email || "",
+            fullName: currentUser.displayName || "",
+        });
+        toast({
+            title: "Load Error",
+            description: "Could not load your profile. Starting fresh.",
+            variant: "destructive",
+        });
+        }
+    } else {
+        // No current user, reset to fallback or clear state
+        setProfileData(fallbackInitialProfileData);
+        generalInfoForm.reset(fallbackInitialProfileData);
     }
     setIsProfileLoaded(true);
-  }, [toast, generalInfoForm]);
+  }, [currentUser, toast, generalInfoForm]);
 
 
   const saveProfile = (updatedProfile: UserProfile) => {
-    setProfileData(updatedProfile);
+    if (!currentUser) {
+      toast({ title: "Not Authenticated", description: "You must be signed in to save your profile.", variant: "destructive" });
+      return;
+    }
+    // Ensure profile id and email are consistent with the authenticated user
+    const profileToSave = {
+      ...updatedProfile,
+      id: currentUser.uid,
+      email: currentUser.email || updatedProfile.email, // Prefer auth email
+      fullName: updatedProfile.fullName || currentUser.displayName
+    };
+
+    setProfileData(profileToSave);
     try {
-      localStorage.setItem(USER_PROFILE_STORAGE_KEY, JSON.stringify(updatedProfile));
+      localStorage.setItem(`${USER_PROFILE_STORAGE_KEY}_${currentUser.uid}`, JSON.stringify(profileToSave));
     } catch (error) {
       console.error("Failed to save profile to localStorage:", error);
       toast({
@@ -234,7 +259,7 @@ export default function ProfilePage() {
   };
 
   const onGeneralInfoSubmit = (data: UserProfileFormData) => {
-    const updatedProfile = { ...profileData, ...data };
+    const updatedProfile = { ...profileData, ...data, email: currentUser?.email || profileData.email }; // Ensure email comes from auth
     saveProfile(updatedProfile);
     toast({ title: "Profile Updated", description: "Your general information has been saved." });
   };
@@ -417,11 +442,12 @@ export default function ProfilePage() {
   };
 
   const handleDownloadMd = () => {
+    if (!currentUser) { toast({ title: "Not Authenticated", variant: "destructive" }); return; }
     const resumeMd = profileToResumeText(profileData);
     const blob = new Blob([resumeMd], { type: 'text/markdown;charset=utf-8' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = `${(profileData.fullName || 'resume').replace(/\s+/g, '_')}.md`;
+    link.download = `${(profileData.fullName || currentUser.displayName || 'resume').replace(/\s+/g, '_')}.md`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -430,11 +456,12 @@ export default function ProfilePage() {
   };
 
   const handleDownloadDocx = () => {
+    if (!currentUser) { toast({ title: "Not Authenticated", variant: "destructive" }); return; }
     const resumeHtml = profileToResumeHtml(profileData);
     const blob = new Blob([resumeHtml], { type: 'application/msword;charset=utf-8' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = `${(profileData.fullName || 'resume').replace(/\s+/g, '_')}.docx`;
+    link.download = `${(profileData.fullName || currentUser.displayName || 'resume').replace(/\s+/g, '_')}.docx`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -443,6 +470,7 @@ export default function ProfilePage() {
   };
   
   const handlePrintToPdf = () => {
+    if (!currentUser) { toast({ title: "Not Authenticated", variant: "destructive" }); return; }
     const resumeHtml = profileToResumeHtml(profileData);
     const printWindow = window.open('', '_blank');
     if (printWindow) {
@@ -505,15 +533,18 @@ export default function ProfilePage() {
       toast({ title: "No CV Content", description: "Please select a CV file first.", variant: "default" });
       return;
     }
+    if (!currentUser) {
+      toast({ title: "Not Authenticated", description: "Please sign in to import a CV.", variant: "destructive" });
+      return;
+    }
     setIsImportingCv(true);
     try {
       const extractedData = await extractProfileFromCv({ cvText: cvFileContent });
       
-      // Ask for confirmation before applying
       if (window.confirm("AI has extracted data from your CV. Do you want to apply this to your profile? This may overwrite current form data.")) {
         applyExtractedDataToProfile(extractedData);
         toast({ title: "CV Data Imported!", description: "Profile forms have been populated. Review and save each section."});
-        setIsImportCvModalOpen(false); // Close modal on success
+        setIsImportCvModalOpen(false); 
       } else {
         toast({ title: "Import Cancelled", description: "CV data was not applied to your profile.", variant: "default"});
       }
@@ -523,17 +554,21 @@ export default function ProfilePage() {
       toast({ title: "CV Import Error", description: `Could not process CV: ${err instanceof Error ? err.message : 'Unknown error'}.`, variant: "destructive" });
     } finally {
       setIsImportingCv(false);
-      setCvFileContent(null); // Clear content after processing
-      if(fileInputRef.current) fileInputRef.current.value = ""; // Reset file input
+      setCvFileContent(null); 
+      if(fileInputRef.current) fileInputRef.current.value = ""; 
     }
   };
 
   const applyExtractedDataToProfile = (data: ExtractProfileFromCvOutput) => {
-    let updatedProfile = { ...profileData };
+    if (!currentUser) return; 
+
+    let updatedProfile = { ...profileData }; // Start with existing or fresh profile data
+
+    updatedProfile.id = currentUser.uid; // Always set ID from auth user
+    updatedProfile.email = currentUser.email || ""; // Email from auth user
 
     // General Info
-    if (data.fullName) updatedProfile.fullName = data.fullName;
-    if (data.email) updatedProfile.email = data.email; 
+    updatedProfile.fullName = data.fullName || currentUser.displayName || "";
     if (data.phone) updatedProfile.phone = data.phone;
     if (data.address) updatedProfile.address = data.address;
     if (data.linkedin) updatedProfile.linkedin = data.linkedin;
@@ -660,11 +695,17 @@ export default function ProfilePage() {
     }
 
     setProfileData(updatedProfile); 
+    // Note: We don't automatically call saveProfile() here, as the user should review and save each section.
   };
 
 
-  if (!isProfileLoaded) {
-    return <div className="container mx-auto py-8 text-center flex justify-center items-center min-h-[200px]"><Loader2 className="h-8 w-8 animate-spin text-primary" /> <span className="ml-2">Loading profile...</span></div>;
+  if (!isProfileLoaded || !currentUser) { // Wait for both profile and auth user
+    return (
+      <div className="container mx-auto py-8 text-center flex justify-center items-center min-h-[200px]">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" /> 
+        <span className="ml-2">Loading profile data...</span>
+      </div>
+    );
   }
 
   const currentDisplayOrder = (profileData.sectionOrder && profileData.sectionOrder.length > 0) 
@@ -1002,12 +1043,12 @@ export default function ProfilePage() {
             </p>
         </div>
         <div className="flex flex-col sm:flex-row gap-2">
-            <Button onClick={() => setIsImportCvModalOpen(true)} variant="outline" size="lg">
+            <Button onClick={() => setIsImportCvModalOpen(true)} variant="outline" size="lg" disabled={!currentUser}>
                 <UploadCloud className="mr-2 h-5 w-5" /> Import CV
             </Button>
             <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="lg">
+                    <Button variant="outline" size="lg" disabled={!currentUser}>
                         <DownloadCloud className="mr-2 h-5 w-5" /> Download / Print
                     </Button>
                 </DropdownMenuTrigger>
@@ -1040,8 +1081,8 @@ export default function ProfilePage() {
               <Form {...generalInfoForm}>
                 <form onSubmit={generalInfoForm.handleSubmit(onGeneralInfoSubmit)} className="space-y-6">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FormField control={generalInfoForm.control} name="fullName" render={({ field }) => (<FormItem><FormLabel>Full Name</FormLabel><FormControl><Input {...field} value={field.value || ''} /></FormControl><FormMessage /></FormItem>)} />
-                    <FormField control={generalInfoForm.control} name="email" render={({ field }) => (<FormItem><FormLabel>Email</FormLabel><FormControl><Input type="email" {...field} value={field.value || ''} disabled/></FormControl><FormDescription>Email is managed via your account settings.</FormDescription><FormMessage /></FormItem>)} />
+                    <FormField control={generalInfoForm.control} name="fullName" render={({ field }) => (<FormItem><FormLabel>Full Name</FormLabel><FormControl><Input {...field} value={field.value || currentUser?.displayName || ''} /></FormControl><FormMessage /></FormItem>)} />
+                    <FormField control={generalInfoForm.control} name="email" render={({ field }) => (<FormItem><FormLabel>Email</FormLabel><FormControl><Input type="email" {...field} value={field.value || currentUser?.email || ''} disabled/></FormControl><FormDescription>Email is managed via your account.</FormDescription><FormMessage /></FormItem>)} />
                     <FormField control={generalInfoForm.control} name="phone" render={({ field }) => (<FormItem><FormLabel>Phone (Optional)</FormLabel><FormControl><Input {...field} value={field.value || ''} /></FormControl><FormMessage /></FormItem>)} />
                     <FormField control={generalInfoForm.control} name="address" render={({ field }) => (<FormItem><FormLabel>Address (Optional)</FormLabel><FormControl><Input placeholder="e.g. 123 Main St, Anytown, USA" {...field} value={field.value || ''} /></FormControl><FormMessage /></FormItem>)} />
                     <FormField control={generalInfoForm.control} name="linkedin" render={({ field }) => (<FormItem><FormLabel>LinkedIn Profile URL (Optional)</FormLabel><FormControl><Input placeholder="https://linkedin.com/in/yourprofile" {...field} value={field.value || ''} /></FormControl><FormMessage /></FormItem>)} />
@@ -1064,7 +1105,7 @@ export default function ProfilePage() {
                       </FormItem>
                     )}
                   />
-                  <Button type="submit" size="lg" disabled={generalInfoForm.formState.isSubmitting}><Save className="mr-2 h-4 w-4"/> {generalInfoForm.formState.isSubmitting ? <Loader2 className="animate-spin" /> : "Save General Info"}</Button>
+                  <Button type="submit" size="lg" disabled={generalInfoForm.formState.isSubmitting || !currentUser}><Save className="mr-2 h-4 w-4"/> {generalInfoForm.formState.isSubmitting ? <Loader2 className="animate-spin" /> : "Save General Info"}</Button>
                 </form>
               </Form>
             </FormSection>
@@ -1116,7 +1157,7 @@ export default function ProfilePage() {
             <Button 
               type="button" 
               onClick={handleProcessCvImport} 
-              disabled={!cvFileContent || isImportingCv}
+              disabled={!cvFileContent || isImportingCv || !currentUser}
             >
               {isImportingCv ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
               {isImportingCv ? 'Processing...' : 'Process & Populate'}
@@ -1283,5 +1324,3 @@ export default function ProfilePage() {
     </TooltipProvider>
   );
 }
-
-    

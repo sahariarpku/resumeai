@@ -4,12 +4,44 @@
 import { Header } from "@/components/layout/header";
 import { MainNav } from "@/components/layout/main-nav";
 import { Sidebar, SidebarContent, SidebarInset, SidebarRail } from "@/components/ui/sidebar";
+import { useAuth } from "@/contexts/auth-context"; // Import useAuth
+import { useRouter } from "next/navigation"; // Import useRouter for redirection
+import React, { useEffect } from "react"; // Import React and useEffect
+import { Loader2 } from "lucide-react"; // Import Loader2
 
 export default function AppLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const { currentUser, loading } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!loading && !currentUser) {
+      router.push('/auth/signin');
+    }
+  }, [currentUser, loading, router]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-background">
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!currentUser) {
+    // This return is for the brief moment before redirection completes or if redirection fails
+    // Or you can return a loader here as well if useEffect takes time to redirect
+    return (
+        <div className="flex items-center justify-center min-h-screen bg-background">
+            <Loader2 className="h-12 w-12 animate-spin text-primary" />
+            <p className="ml-2">Please sign in to continue...</p>
+        </div>
+    );
+  }
+
   return (
     <div className="flex min-h-screen w-full">
       <Sidebar collapsible="icon" variant="sidebar" side="left">

@@ -15,27 +15,67 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { LogOut, User, Settings, CreditCard, LifeBuoy } from "lucide-react";
 import Link from "next/link";
+import { useAuth } from "@/contexts/auth-context"; // Import useAuth
+import { useToast } from "@/hooks/use-toast"; // Import useToast
+import { useRouter } from "next/navigation"; // Import useRouter
 
 export function UserNav() {
-  // In a real app, useSession() from NextAuth.js would provide user data
-  const user = { name: "User Name", email: "user@example.com", image: "https://placehold.co/40x40.png" };
+  const { currentUser, logout, loading } = useAuth();
+  const { toast } = useToast();
+  const router = useRouter();
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+      toast({ title: "Logged Out", description: "You have been successfully logged out." });
+      router.push('/'); // Redirect to landing page after logout
+    } catch (error) {
+      toast({ title: "Logout Error", description: "Failed to log out. Please try again.", variant: "destructive" });
+    }
+  };
+
+  if (loading) {
+    // Optionally, show a skeleton or a simple loading state for the button
+    return (
+      <Button variant="ghost" className="relative h-9 w-9 rounded-full" disabled>
+        <Avatar className="h-9 w-9">
+          <AvatarFallback>U</AvatarFallback>
+        </Avatar>
+      </Button>
+    );
+  }
+
+  if (!currentUser) {
+    // If not logged in, maybe show a "Sign In" button or nothing
+    // For simplicity, this nav is often only shown when logged in,
+    // but here we'll make it disappear if no user (or show Sign In button)
+    return (
+      <Button asChild variant="outline" size="sm">
+        <Link href="/auth/signin">Sign In</Link>
+      </Button>
+    );
+  }
+
+  const userDisplayName = currentUser.displayName || "User";
+  const userEmail = currentUser.email || "No email provided";
+  const avatarFallback = userDisplayName.charAt(0).toUpperCase();
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" className="relative h-9 w-9 rounded-full">
           <Avatar className="h-9 w-9">
-            <AvatarImage src={user.image} alt={user.name ?? ""} />
-            <AvatarFallback>{user.name?.charAt(0).toUpperCase() ?? 'U'}</AvatarFallback>
+            {currentUser.photoURL && <AvatarImage src={currentUser.photoURL} alt={userDisplayName} />}
+            <AvatarFallback>{avatarFallback}</AvatarFallback>
           </Avatar>
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent className="w-56" align="end" forceMount>
         <DropdownMenuLabel className="font-normal">
           <div className="flex flex-col space-y-1">
-            <p className="text-sm font-medium leading-none">{user.name}</p>
+            <p className="text-sm font-medium leading-none">{userDisplayName}</p>
             <p className="text-xs leading-none text-muted-foreground">
-              {user.email}
+              {userEmail}
             </p>
           </div>
         </DropdownMenuLabel>
@@ -74,14 +114,11 @@ export function UserNav() {
           API (Coming Soon)
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        {/* In a real app, this would trigger a signOut() function */}
-        <Link href="/">
-          <DropdownMenuItem>
-            <LogOut className="mr-2 h-4 w-4" />
-            <span>Log out</span>
-            <DropdownMenuShortcut>⇧⌘Q</DropdownMenuShortcut>
-          </DropdownMenuItem>
-        </Link>
+        <DropdownMenuItem onClick={handleLogout}>
+          <LogOut className="mr-2 h-4 w-4" />
+          <span>Log out</span>
+          <DropdownMenuShortcut>⇧⌘Q</DropdownMenuShortcut>
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );
