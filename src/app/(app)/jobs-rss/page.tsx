@@ -19,8 +19,8 @@ import { useRouter } from 'next/navigation';
 import type { JobPostingRssItem, UserProfile } from "@/lib/types";
 import { z } from "zod"; 
 import { extractJobDetailsFromRssItem, type ExtractRssItemOutput } from "@/ai/flows/extract-rss-item-flow";
-import { extractTextFromHtml } from "@/ai/flows/extract-text-from-html-flow"; // Added
-import { extractJobDetails } from "@/ai/flows/extract-job-details-flow"; // Added
+import { extractTextFromHtml } from "@/ai/flows/extract-text-from-html-flow";
+import { extractJobDetails } from "@/ai/flows/extract-job-details-flow";
 import { calculateProfileJdMatch } from "@/ai/flows/calculate-profile-jd-match-flow";
 import { profileToResumeText } from '@/lib/profile-utils';
 import { Badge } from '@/components/ui/badge';
@@ -115,6 +115,7 @@ export default function JobsRssPage() {
     setProfileLoaded(true);
   }, [toast]);
 
+  // Load filters from localStorage and initialize form
   useEffect(() => {
     try {
       const lastSubject = localStorage.getItem(LAST_SELECTED_SUBJECT_URL_KEY);
@@ -126,26 +127,31 @@ export default function JobsRssPage() {
         selectedLocationUrl: lastLocation || ALL_LOCATIONS_URL,
         keywords: lastKeywords || "",
       });
+      console.log("Filters loaded from localStorage:", { lastSubject, lastLocation, lastKeywords });
     } catch (error) {
       console.error("Failed to load last filters from localStorage:", error);
+      // Form defaults will be used
     }
     setAreFiltersLoaded(true);
   }, [filtersForm]);
 
+  // Save filters to localStorage when they change
+  const watchedSubjectUrl = filtersForm.watch("selectedSubjectUrl");
+  const watchedLocationUrl = filtersForm.watch("selectedLocationUrl");
+  const watchedKeywords = filtersForm.watch("keywords");
+
   useEffect(() => {
     if (areFiltersLoaded) { 
-      const subscription = filtersForm.watch((value) => {
-        try {
-          localStorage.setItem(LAST_SELECTED_SUBJECT_URL_KEY, value.selectedSubjectUrl || ALL_SUBJECT_AREAS_URL);
-          localStorage.setItem(LAST_SELECTED_LOCATION_URL_KEY, value.selectedLocationUrl || ALL_LOCATIONS_URL);
-          localStorage.setItem(LAST_KEYWORDS_KEY, value.keywords || "");
-        } catch (error) {
-          console.warn("Could not save filters to localStorage", error);
-        }
-      });
-      return () => subscription.unsubscribe();
+      try {
+        localStorage.setItem(LAST_SELECTED_SUBJECT_URL_KEY, watchedSubjectUrl || ALL_SUBJECT_AREAS_URL);
+        localStorage.setItem(LAST_SELECTED_LOCATION_URL_KEY, watchedLocationUrl || ALL_LOCATIONS_URL);
+        localStorage.setItem(LAST_KEYWORDS_KEY, watchedKeywords || "");
+        console.log("Filters saved to localStorage:", { watchedSubjectUrl, watchedLocationUrl, watchedKeywords });
+      } catch (error) {
+        console.warn("Could not save filters to localStorage", error);
+      }
     }
-  }, [filtersForm, areFiltersLoaded]);
+  }, [watchedSubjectUrl, watchedLocationUrl, watchedKeywords, areFiltersLoaded]);
 
 
   const handleFetchRssFeed = useCallback(async (data: RssFiltersData) => {
@@ -158,6 +164,7 @@ export default function JobsRssPage() {
     let targetRssUrl = "";
     let feedDescription = "selected filters";
 
+    // Determine targetRssUrl based on selections
     if (data.selectedSubjectUrl && data.selectedSubjectUrl !== ALL_SUBJECT_AREAS_URL) {
         targetRssUrl = data.selectedSubjectUrl;
         const feedDetails = PREDEFINED_RSS_FEEDS.find(f => f.url === data.selectedSubjectUrl);
@@ -167,10 +174,12 @@ export default function JobsRssPage() {
         const feedDetails = PREDEFINED_RSS_FEEDS.find(f => f.url === data.selectedLocationUrl);
         feedDescription = `location: ${feedDetails?.categoryDetail || 'Selected Location'}`;
     } else { 
+        // Default to a general feed if no specific subject or location is chosen
         targetRssUrl = ALL_LOCATIONS_URL; 
         feedDescription = "general feed (all jobs)";
     }
     
+    console.log("Fetching RSS with data:", data, "Target URL:", targetRssUrl);
     toast({ title: "Fetching RSS Feed...", description: `Using ${feedDescription}` });
 
     let rawRssContentString = '';
@@ -195,6 +204,7 @@ export default function JobsRssPage() {
         }
       }
       
+      // If response.ok is true, assume it's JSON, then check for content
       const responseData = JSON.parse(responseBodyAsText);
       if (responseData.error) { setIsLoadingFeed(false); throw new Error(responseData.error); }
       if (!responseData.rawRssContent) { setIsLoadingFeed(false); throw new Error("API returned success but no rawRssContent found.");}
@@ -245,14 +255,11 @@ export default function JobsRssPage() {
       setIsLoadingFeed(false);
     }
   }, [toast]); 
-
-  const watchedSubjectUrl = filtersForm.watch("selectedSubjectUrl");
-  const watchedLocationUrl = filtersForm.watch("selectedLocationUrl");
-  const watchedKeywords = filtersForm.watch("keywords");
   
+  // Auto-fetch on load based on saved filters
   useEffect(() => {
     if (areFiltersLoaded && !initialFetchDone) {
-      console.log("Auto-fetching with filters:", filtersForm.getValues());
+      console.log("Attempting auto-fetch with current form values:", filtersForm.getValues());
       filtersForm.handleSubmit(handleFetchRssFeed)(); 
       setInitialFetchDone(true);
     }
@@ -261,7 +268,7 @@ export default function JobsRssPage() {
     initialFetchDone, 
     filtersForm, 
     handleFetchRssFeed,
-    watchedSubjectUrl, 
+    watchedSubjectUrl, // Ensure re-run if these specific watched values change after initial load
     watchedLocationUrl, 
     watchedKeywords     
   ]);
@@ -373,8 +380,8 @@ export default function JobsRssPage() {
   const handleTailorCvForJob = async (jobId: string) => {
     setTailoringJobId(jobId);
     let job = jobPostings.find(j => j.id === jobId);
-    if (!job || !job.link) {
-      toast({ title: "Error", description: "Job link not found for this item.", variant: "destructive" });
+    if (!job || !job.link || job.link === '#') {
+      toast({ title: "Error", description: "Valid job link not found for this item.", variant: "destructive" });
       setTailoringJobId(null);
       return;
     }
@@ -382,7 +389,6 @@ export default function JobsRssPage() {
     toast({ title: "Fetching Full Job Posting...", description: `Accessing ${job.link} for details.`, variant: "default" });
 
     try {
-      // 1. Fetch HTML content from job.link
       const fetchHtmlResponse = await fetch(`/api/fetch-url-content?url=${encodeURIComponent(job.link)}`);
       if (!fetchHtmlResponse.ok) {
         const errorData = await fetchHtmlResponse.json().catch(() => ({error: "Failed to parse API error response."}));
@@ -396,7 +402,6 @@ export default function JobsRssPage() {
         return;
       }
       
-      // 2. Extract text from HTML using AI
       toast({ title: "Extracting Text...", description: `AI is processing the job page content.`, variant: "default" });
       const textExtractionResult = await extractTextFromHtml({ htmlContent });
       
@@ -407,19 +412,15 @@ export default function JobsRssPage() {
       }
       const detailedJobDescription = textExtractionResult.extractedText;
 
-      // 3. (Optional but good) Extract Title/Company from the new detailed text
       const detailsExtractionResult = await extractJobDetails({ jobDescriptionText: detailedJobDescription });
       
-      // Update the job item in the local state with the new, more detailed information
       setJobPostings(prev => prev.map(j => j.id === jobId ? { 
         ...j, 
-        requirementsSummary: detailedJobDescription, // Use the most detailed description
-        role: detailsExtractionResult.jobTitle || j.role, // Update if AI found a better one
-        company: detailsExtractionResult.companyName || j.company, // Update if AI found a better one
+        requirementsSummary: detailedJobDescription, 
+        role: detailsExtractionResult.jobTitle || j.role, 
+        company: detailsExtractionResult.companyName || j.company, 
       } : j));
 
-
-      // 4. Prepare for tailoring
       const storedProfileString = localStorage.getItem(USER_PROFILE_STORAGE_KEY);
       if (!storedProfileString) {
         toast({ title: "Profile Not Found", description: "Please complete your profile first.", variant: "default" });
@@ -438,7 +439,7 @@ export default function JobsRssPage() {
       }
       
       localStorage.setItem(TAILOR_RESUME_PREFILL_RESUME_KEY, baseResumeText);
-      localStorage.setItem(TAILOR_RESUME_PREFILL_JD_KEY, detailedJobDescription); // Use the detailed one from URL
+      localStorage.setItem(TAILOR_RESUME_PREFILL_JD_KEY, detailedJobDescription); 
 
       toast({ title: "Ready to Tailor!", description: "Full job description loaded.", variant: "default" });
       router.push('/tailor-resume');
@@ -467,7 +468,7 @@ export default function JobsRssPage() {
       let jobData = jobPostings.find(j => j.id === jobId);
       if (!jobData) return;
 
-      if (!jobData.company && jobData.rssItemXml) { // Indicator that full details haven't been fetched from RSS XML
+      if (!jobData.company && jobData.rssItemXml) { 
           jobData = await fetchAndSetJobDetailsFromRssXml(jobId);
       }
 
@@ -512,7 +513,7 @@ export default function JobsRssPage() {
         </p>
       </div>
 
-      <Accordion type="single" collapsible defaultValue="item-1" className="w-full">
+      <Accordion type="single" collapsible className="w-full">
         <AccordionItem value="item-1">
           <AccordionTrigger>
              <div className="flex items-center text-lg font-medium">
@@ -685,10 +686,10 @@ export default function JobsRssPage() {
                             disabled={!!job.isProcessingDetails || !!job.isCalculatingMatch || tailoringJobId === job.id}
                         />
                       </TableCell>
-                      <TableCell className="font-medium max-w-xs">
-                        <div className="flex items-center">
+                      <TableCell className="font-medium max-w-xs align-top">
+                        <div className="flex items-center mb-1">
                             <span id={`job-title-${job.id}`} className="font-semibold">{job.role || job.title || <span className="text-muted-foreground/70 text-xs">N/A</span>}</span>
-                            {job.link && (
+                            {job.link && job.link !== '#' && (
                             <a 
                                 href={job.link} 
                                 target="_blank" 
@@ -700,25 +701,26 @@ export default function JobsRssPage() {
                             </a>
                             )}
                         </div>
-                         {job.company && <p className="text-xs text-muted-foreground mt-1"><Building className="inline-block mr-1 h-3 w-3" />{job.company}</p>}
-                         {job.location && <p className="text-xs text-muted-foreground"><MapPin className="inline-block mr-1 h-3 w-3" />{job.location}</p>}
-                         {job.deadlineText && <p className="text-xs text-muted-foreground"><CalendarDays className="inline-block mr-1 h-3 w-3" />{job.deadlineText}</p>}
+                         {job.company && <p className="text-xs text-muted-foreground mt-1 flex items-center"><Building className="inline-block mr-1.5 h-3 w-3 flex-shrink-0" />{job.company}</p>}
+                         {job.location && <p className="text-xs text-muted-foreground flex items-center"><MapPin className="inline-block mr-1.5 h-3 w-3 flex-shrink-0" />{job.location}</p>}
+                         {job.deadlineText && <p className="text-xs text-muted-foreground flex items-center"><CalendarDays className="inline-block mr-1.5 h-3 w-3 flex-shrink-0" />{job.deadlineText}</p>}
+                         {job.pubDate && !job.deadlineText && <p className="text-xs text-muted-foreground flex items-center"><CalendarDays className="inline-block mr-1.5 h-3 w-3 flex-shrink-0" />Posted: {new Date(job.pubDate).toLocaleDateString()}</p>}
                       </TableCell>
-                      <TableCell className="max-w-md">
+                      <TableCell className="max-w-md align-top">
                          <Tooltip>
                             <TooltipTrigger asChild>
                                 <p className="text-xs whitespace-pre-wrap">
-                                  {job.requirementsSummary || <span className="text-muted-foreground/70">N/A (Process to load)</span>}
+                                  {job.requirementsSummary?.replace(/&lt;br\s*\/?&gt;|<br\s*\/?>/gi, '\n') || <span className="text-muted-foreground/70">N/A (Process to load)</span>}
                                 </p>
                             </TooltipTrigger>
                             <TooltipContent side="bottom" className="max-w-md p-2 bg-popover text-popover-foreground">
                                 <p className="text-sm font-medium">RSS Description Snippet/AI Summary:</p>
-                                <p className="text-xs whitespace-pre-wrap">{job.requirementsSummary || "Not available."}</p>
+                                <p className="text-xs whitespace-pre-wrap">{job.requirementsSummary?.replace(/&lt;br\s*\/?&gt;|<br\s*\/?>/gi, '\n') || "Not available."}</p>
                                 {(!job.company && !job.isProcessingDetails && !job.isCalculatingMatch && !job.requirementsSummary?.endsWith('...')) && <p className="text-xs mt-1 italic">This is a snippet. Select and process, or click 'Tailor CV' for full summary & details from source.</p>}
                             </TooltipContent>
                         </Tooltip>
                       </TableCell>
-                      <TableCell className="text-center">
+                      <TableCell className="text-center align-top">
                         {job.isProcessingDetails || job.isCalculatingMatch ? (
                           <Loader2 className="h-5 w-5 animate-spin mx-auto text-primary" />
                         ) : typeof job.matchPercentage === 'number' ? (
@@ -750,7 +752,7 @@ export default function JobsRssPage() {
                           </Tooltip>
                         )}
                       </TableCell>
-                      <TableCell className="text-center">
+                      <TableCell className="text-center align-top">
                         <Button
                             variant="outline"
                             size="sm"
@@ -814,5 +816,3 @@ export default function JobsRssPage() {
     </TooltipProvider>
   );
 }
-
-    
