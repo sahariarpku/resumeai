@@ -36,7 +36,7 @@ import {
   DialogClose,
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { PlusCircle, Edit3, Trash2, Save, UserCircle, Briefcase, FolderKanban, GraduationCap, Wrench, Award, Loader2, Sparkles, Trophy, BookOpen, Contact, LayoutList, DownloadCloud, Printer } from "lucide-react";
+import { PlusCircle, Edit3, Trash2, Save, UserCircle, Briefcase, FolderKanban, GraduationCap, Wrench, Award, Loader2, Sparkles, Trophy, BookOpen, Contact, LayoutList, DownloadCloud, Printer, FileText } from "lucide-react";
 import type { UserProfile, WorkExperience, Project, Education, Skill, Certification, HonorAward, Publication, Reference, CustomSection, ProfileSectionKey } from "@/lib/types";
 import { DEFAULT_SECTION_ORDER } from "@/lib/types";
 import { 
