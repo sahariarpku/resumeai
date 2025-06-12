@@ -12,7 +12,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Rss, Search, Loader2, Briefcase, Building, FileText as FileTextIcon, CalendarDays, Percent, Sparkles as SparklesIcon, AlertTriangle, Link as LinkIcon, MapPin, ExternalLink } from "lucide-react";
+import { Rss, Search, Loader2, Briefcase, Building, FileText as FileTextIcon, CalendarDays, Percent, Sparkles as SparklesIcon, AlertTriangle, Link as LinkIcon, MapPin, ExternalLink, Filter } from "lucide-react";
 import { useRouter } from 'next/navigation';
 import type { JobPostingItem, UserProfile } from "@/lib/types";
 import { z } from "zod"; 
@@ -31,10 +31,12 @@ import { PREDEFINED_RSS_FEEDS, type RssFeed } from '@/lib/job-rss-feeds';
 const USER_PROFILE_STORAGE_KEY = "userProfile";
 const TAILOR_RESUME_PREFILL_JD_KEY = "tailorResumePrefillJD";
 const LAST_RSS_URL_STORAGE_KEY = "lastRssUrl";
+const LAST_RSS_KEYWORDS_STORAGE_KEY = "lastRssKeywords";
 
 
 const RssFormSchema = z.object({ 
   rssUrl: z.string().url({ message: "Please enter a valid RSS feed URL." }),
+  keywords: z.string().optional(),
 });
 type RssFormData = z.infer<typeof RssFormSchema>;
 
@@ -49,11 +51,14 @@ export default function JobsRssPage() {
   const [profileLoaded, setProfileLoaded] = useState(false);
   const [processingProgress, setProcessingProgress] = useState(0);
   const [totalItemsToProcess, setTotalItemsToProcess] = useState(0);
+  const [isRssUrlLoaded, setIsRssUrlLoaded] = useState(false);
+  const [isKeywordsLoaded, setIsKeywordsLoaded] = useState(false);
   
   const rssForm = useForm<RssFormData>({
     resolver: zodResolver(RssFormSchema),
     defaultValues: {
       rssUrl: "",
+      keywords: "",
     },
   });
 
@@ -79,8 +84,52 @@ export default function JobsRssPage() {
     } catch (error) {
         console.error("Failed to load last RSS URL from localStorage:", error);
     }
+    setIsRssUrlLoaded(true);
+
+    try {
+        const lastKeywords = localStorage.getItem(LAST_RSS_KEYWORDS_STORAGE_KEY);
+        if (lastKeywords) {
+            rssForm.setValue("keywords", lastKeywords);
+        }
+    } catch (error) {
+        console.error("Failed to load last keywords from localStorage:", error);
+    }
+    setIsKeywordsLoaded(true);
 
   }, [toast, rssForm]);
+
+  // Save rssUrl to localStorage
+  useEffect(() => {
+    if (isRssUrlLoaded) {
+      const subscription = rssForm.watch((value, { name }) => {
+        if (name === "rssUrl" && value.rssUrl) {
+          try {
+            localStorage.setItem(LAST_RSS_URL_STORAGE_KEY, value.rssUrl);
+          } catch (error) {
+            console.warn("Could not save last RSS URL to localStorage", error);
+          }
+        }
+      });
+      return () => subscription.unsubscribe();
+    }
+  }, [rssForm, isRssUrlLoaded]);
+
+  // Save keywords to localStorage
+  useEffect(() => {
+    if (isKeywordsLoaded) {
+      const subscription = rssForm.watch((value, { name }) => {
+        if (name === "keywords") {
+          try {
+            localStorage.setItem(LAST_RSS_KEYWORDS_STORAGE_KEY, value.keywords || "");
+          } catch (error) {
+            console.warn("Could not save last keywords to localStorage", error);
+          }
+        }
+      });
+      return () => subscription.unsubscribe();
+    }
+  }, [rssForm, isKeywordsLoaded]);
+
 
   const handleFetchAndProcessRss = async (data: RssFormData) => {
     setIsLoadingFeed(true);
@@ -89,12 +138,6 @@ export default function JobsRssPage() {
     setProcessingProgress(0);
     setTotalItemsToProcess(0);
     toast({ title: "Fetching RSS Feed...", description: `Fetching content from ${data.rssUrl}` });
-
-    try {
-        localStorage.setItem(LAST_RSS_URL_STORAGE_KEY, data.rssUrl);
-    } catch (error) {
-        console.warn("Could not save last RSS URL to localStorage", error);
-    }
 
     let rawRssContentString = "";
     try {
@@ -123,7 +166,7 @@ export default function JobsRssPage() {
         throw new Error(`Expected JSON response from API, but received ${contentType || 'unknown content type'}. Response: ${responseBodyAsText.substring(0,500)}...`);
       }
       
-      const responseData = JSON.parse(responseBodyAsText); // Safe to parse now
+      const responseData = JSON.parse(responseBodyAsText); 
       
       if (responseData.error) {
         setIsLoadingFeed(false);
@@ -158,13 +201,13 @@ export default function JobsRssPage() {
       setIsProcessingItems(true);
       setTotalItemsToProcess(itemXmls.length);
       
-      const processedJobs: JobPostingItem[] = [];
+      const initialProcessedJobs: JobPostingItem[] = [];
       for (let i = 0; i < itemXmls.length; i++) {
         const itemXml = itemXmls[i];
         try {
           const extractedDetails = await extractJobDetailsFromRssItem({ rssItemXml: itemXml });
           if (extractedDetails.role && extractedDetails.jobUrl) { 
-            processedJobs.push({
+            initialProcessedJobs.push({
               ...extractedDetails,
               id: `job-${Date.now()}-${i}`,
               isCalculatingMatch: !!userProfile, 
@@ -179,8 +222,26 @@ export default function JobsRssPage() {
         setProcessingProgress(i + 1);
       }
       
-      setJobPostings(processedJobs);
-      toast({ title: "Jobs Processed!", description: `${processedJobs.length} jobs extracted and displayed.` });
+      let finalJobs = initialProcessedJobs;
+      const keywordsToFilter = data.keywords?.trim().toLowerCase();
+      if (keywordsToFilter) {
+        const keywordArray = keywordsToFilter.split(/\s+|,/).filter(Boolean); // Split by space or comma, remove empty
+        if (keywordArray.length > 0) {
+            finalJobs = initialProcessedJobs.filter(job => {
+            const searchableText = [
+              job.role?.toLowerCase() || "",
+              job.company?.toLowerCase() || "",
+              job.requirementsSummary?.toLowerCase() || "",
+              job.location?.toLowerCase() || "",
+            ].join(" ");
+            return keywordArray.every(kw => searchableText.includes(kw));
+          });
+          toast({ title: "Keywords Applied", description: `Filtered ${initialProcessedJobs.length} jobs down to ${finalJobs.length} matching your keywords.` });
+        }
+      }
+      
+      setJobPostings(finalJobs);
+      toast({ title: "Jobs Processed!", description: `${finalJobs.length} jobs extracted and displayed.` });
 
     } catch (err) {
       console.error("Error in handleFetchAndProcessRss:", err);
@@ -258,11 +319,11 @@ export default function JobsRssPage() {
     }
   };
 
-  if (!profileLoaded) { 
+  if (!profileLoaded || !isRssUrlLoaded || !isKeywordsLoaded) { 
      return (
       <div className="container mx-auto py-8 text-center">
         <Loader2 className="mx-auto h-12 w-12 animate-spin text-primary" />
-        <p className="mt-4 text-muted-foreground">Loading profile...</p>
+        <p className="mt-4 text-muted-foreground">Loading settings...</p>
       </div>
     );
   }
@@ -281,39 +342,40 @@ export default function JobsRssPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="font-headline flex items-center"><Search className="mr-2 h-5 w-5" />Enter RSS Feed URL</CardTitle>
+          <CardTitle className="font-headline flex items-center"><Search className="mr-2 h-5 w-5" />Configure Job Feed</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="predefinedFeedSelect">Select a Predefined Feed (Optional)</Label>
-            <Select
-                value={rssForm.getValues("rssUrl")}
-                onValueChange={(value) => {
-                    if (value) {
-                        rssForm.setValue("rssUrl", value, { shouldValidate: true });
-                    }
-                }}
-            >
-                <SelectTrigger id="predefinedFeedSelect">
-                    <SelectValue placeholder="Choose a jobs.ac.uk feed..." />
-                </SelectTrigger>
-                <SelectContent position="popper" className="max-h-[400px]">
-                {PREDEFINED_RSS_FEEDS.map((feed) => (
-                    <SelectItem key={feed.url} value={feed.url}>
-                    {feed.name}
-                    </SelectItem>
-                ))}
-                </SelectContent>
-            </Select>
-          </div>
           <Form {...rssForm}>
-            <form onSubmit={rssForm.handleSubmit(handleFetchAndProcessRss)} className="flex flex-col sm:flex-row items-start gap-2">
+            <form onSubmit={rssForm.handleSubmit(handleFetchAndProcessRss)} className="space-y-4">
+              <div>
+                <Label htmlFor="predefinedFeedSelect">Select a Predefined Feed (Optional)</Label>
+                <Select
+                    value={rssForm.getValues("rssUrl")}
+                    onValueChange={(value) => {
+                        if (value) {
+                            rssForm.setValue("rssUrl", value, { shouldValidate: true });
+                        }
+                    }}
+                >
+                    <SelectTrigger id="predefinedFeedSelect">
+                        <SelectValue placeholder="Choose a jobs.ac.uk feed..." />
+                    </SelectTrigger>
+                    <SelectContent position="popper" className="max-h-[400px]">
+                    {PREDEFINED_RSS_FEEDS.map((feed) => (
+                        <SelectItem key={feed.url} value={feed.url}>
+                        {feed.name}
+                        </SelectItem>
+                    ))}
+                    </SelectContent>
+                </Select>
+              </div>
+            
               <FormField
                 control={rssForm.control}
                 name="rssUrl"
                 render={({ field }) => (
-                  <FormItem className="flex-grow w-full sm:w-auto">
-                    <FormLabel htmlFor="rssUrlInput" className="sr-only">RSS Feed URL</FormLabel>
+                  <FormItem>
+                    <FormLabel htmlFor="rssUrlInput">RSS Feed URL</FormLabel>
                     <FormControl>
                       <Input id="rssUrlInput" placeholder="https://example.com/jobs.rss (or select from above)" {...field} />
                     </FormControl>
@@ -321,6 +383,21 @@ export default function JobsRssPage() {
                   </FormItem>
                 )}
               />
+
+              <FormField
+                control={rssForm.control}
+                name="keywords"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel htmlFor="keywordsInput">Filter by Keywords (optional)</FormLabel>
+                    <FormControl>
+                      <Input id="keywordsInput" placeholder="e.g. research, python, remote" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
               <Button type="submit" disabled={isLoadingFeed || isProcessingItems} size="lg" className="w-full sm:w-auto">
                 {(isLoadingFeed || isProcessingItems) ? (
                   <Loader2 className="mr-2 h-5 w-5 animate-spin" />
@@ -350,7 +427,7 @@ export default function JobsRssPage() {
         <Card>
           <CardHeader>
             <CardTitle className="font-headline">Jobs from Feed</CardTitle>
-            <CardDescription>Review the jobs extracted from the RSS feed.</CardDescription>
+            <CardDescription>Review the jobs extracted from the RSS feed{rssForm.getValues("keywords") ? ` (filtered by: "${rssForm.getValues("keywords")}")` : ""}.</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="overflow-x-auto">
@@ -458,11 +535,11 @@ export default function JobsRssPage() {
          <Card className="text-center py-12">
             <CardHeader>
                 <Rss className="mx-auto h-16 w-16 text-muted-foreground mb-4" />
-                <CardTitle className="font-headline text-2xl">No Jobs Found in Feed</CardTitle>
+                <CardTitle className="font-headline text-2xl">No Jobs Found</CardTitle>
             </CardHeader>
             <CardContent>
                 <p className="text-muted-foreground">
-                    The RSS feed was fetched, but no job items could be extracted, or the feed was empty. Please check the URL or try a different feed.
+                    No jobs were found in the feed, or none matched your keywords: "{rssForm.getValues("keywords")}". Please check the URL, try different keywords, or try a different feed.
                 </p>
             </CardContent>
         </Card>
@@ -475,7 +552,7 @@ export default function JobsRssPage() {
             </CardHeader>
             <CardContent>
                 <p className="text-muted-foreground">
-                    Choose a predefined feed from the dropdown or paste a job RSS feed URL above to start discovering opportunities.
+                    Choose a predefined feed from the dropdown or paste a job RSS feed URL above to start discovering opportunities. You can also add keywords to filter the results.
                 </p>
             </CardContent>
         </Card>
@@ -484,3 +561,4 @@ export default function JobsRssPage() {
     </TooltipProvider>
   );
 }
+
