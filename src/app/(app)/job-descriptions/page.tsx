@@ -49,8 +49,8 @@ export default function JobDescriptionsPage() {
   const [jds, setJds] = useState<JobDescriptionItem[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingJd, setEditingJd] = useState<JobDescriptionItem | null>(null);
-  const [isExtracting, setIsExtracting] = useState(false);
-  const [isFetchingFromUrl, setIsFetchingFromUrl] = useState(false);
+  const [isExtractingDetails, setIsExtractingDetails] = useState(false);
+  const [isProcessingUrl, setIsProcessingUrl] = useState(false);
   const [jdUrl, setJdUrl] = useState("");
   const [isLoaded, setIsLoaded] = useState(false);
 
@@ -150,7 +150,7 @@ export default function JobDescriptionsPage() {
       return;
     }
 
-    setIsExtracting(true);
+    setIsExtractingDetails(true);
     try {
       const result = await extractJobDetails({ jobDescriptionText: descriptionValue });
       form.setValue("title", result.jobTitle, { shouldValidate: true });
@@ -172,11 +172,11 @@ export default function JobDescriptionsPage() {
         variant: "destructive",
       });
     } finally {
-      setIsExtracting(false);
+      setIsExtractingDetails(false);
     }
   };
 
-  const handleFetchFromUrl = async () => {
+  const handleFetchAndProcessUrl = async () => {
     if (!jdUrl.trim() || !jdUrl.startsWith("http")) {
       toast({
         title: "Invalid URL",
@@ -185,50 +185,55 @@ export default function JobDescriptionsPage() {
       });
       return;
     }
-    setIsFetchingFromUrl(true);
-    try {
-      // Simulate fetching HTML content from URL
-      // In a real app, this would be an actual fetch call, possibly via a backend proxy to avoid CORS
-      await new Promise(resolve => setTimeout(resolve, 1500)); // Simulate network delay
-      const simulatedHtmlContent = `
-        <html><head><title>Senior Software Engineer at Acme Corp</title></head>
-        <body>
-          <header><h1>Senior Software Engineer</h1><p>Acme Corp - Anytown, USA</p></header>
-          <nav>...</nav>
-          <main>
-            <h2>Job Description</h2>
-            <p>We are looking for a talented Senior Software Engineer to join our dynamic team at Acme Corp.</p>
-            <p>Responsibilities include designing, developing, and maintaining software applications.</p>
-            <h3>Requirements:</h3>
-            <ul>
-              <li>5+ years of experience in software development.</li>
-              <li>Proficiency in JavaScript, React, and Node.js.</li>
-              <li>Strong problem-solving skills.</li>
-            </ul>
-            <p>This is a full-time position based in Anytown.</p>
-          </main>
-          <footer>Copyright Acme Corp</footer>
-        </body></html>
-      `;
-      
-      toast({
-          title: "Simulating URL Fetch",
-          description: "Fetching content from URL (this is a simulation).",
-          variant: "default"
-      });
+    setIsProcessingUrl(true);
+    toast({
+        title: "Processing URL...",
+        description: "Fetching content and extracting text. This may take a moment.",
+        variant: "default"
+    });
 
-      const extractionResult = await extractTextFromHtml({ htmlContent: simulatedHtmlContent });
-      
-      if (extractionResult.extractedText) {
-        form.setValue("description", extractionResult.extractedText, { shouldValidate: true });
+    try {
+      // Step 1: Fetch HTML content via API route
+      const fetchResponse = await fetch(`/api/fetch-url-content?url=${encodeURIComponent(jdUrl)}`);
+      if (!fetchResponse.ok) {
+        const errorData = await fetchResponse.json();
+        throw new Error(errorData.error || `Failed to fetch URL: ${fetchResponse.statusText}`);
+      }
+      const { htmlContent } = await fetchResponse.json();
+
+      if (!htmlContent) {
         toast({
-          title: "Content Extracted!",
-          description: "Job description field has been populated from the URL. You can now use 'AI Extract Details' for title/company or save."
+          title: "No Content Fetched",
+          description: "The URL did not return any HTML content.",
+          variant: "default"
         });
+        setIsProcessingUrl(false);
+        return;
+      }
+      
+      // Step 2: Extract text from HTML using AI flow
+      const textExtractionResult = await extractTextFromHtml({ htmlContent });
+      
+      if (textExtractionResult.extractedText && textExtractionResult.extractedText.trim().length > 0) {
+        form.setValue("description", textExtractionResult.extractedText, { shouldValidate: true });
+        toast({
+          title: "Text Extracted!",
+          description: "Job description populated. Now extracting title & company..."
+        });
+
+        // Step 3: Extract job title and company from the extracted text
+        const detailsExtractionResult = await extractJobDetails({ jobDescriptionText: textExtractionResult.extractedText });
+        form.setValue("title", detailsExtractionResult.jobTitle, { shouldValidate: true });
+        form.setValue("company", detailsExtractionResult.companyName, { shouldValidate: true });
+        toast({
+          title: "Details Extracted!",
+          description: "Job title and company fields updated. Please review."
+        });
+
       } else {
         toast({
-          title: "No Content Extracted",
-          description: "Could not extract meaningful content from the simulated URL.",
+          title: "No Text Extracted",
+          description: "Could not extract meaningful job description text from the URL's content.",
           variant: "default"
         });
       }
@@ -245,7 +250,7 @@ export default function JobDescriptionsPage() {
         variant: "destructive",
       });
     } finally {
-      setIsFetchingFromUrl(false);
+      setIsProcessingUrl(false);
     }
   };
 
@@ -374,21 +379,21 @@ export default function JobDescriptionsPage() {
                             placeholder="https://example.com/job-posting" 
                             value={jdUrl}
                             onChange={(e) => setJdUrl(e.target.value)}
-                            disabled={isFetchingFromUrl}
+                            disabled={isProcessingUrl}
                         />
                     </div>
                     <Button 
                         type="button" 
-                        onClick={handleFetchFromUrl} 
-                        disabled={isFetchingFromUrl || !jdUrl.trim()}
+                        onClick={handleFetchAndProcessUrl} 
+                        disabled={isProcessingUrl || !jdUrl.trim()}
                         variant="outline"
                     >
-                        {isFetchingFromUrl ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <DownloadCloud className="mr-2 h-4 w-4" />}
-                        Fetch & Extract
+                        {isProcessingUrl ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <DownloadCloud className="mr-2 h-4 w-4" />}
+                        Fetch & Process
                     </Button>
                 </div>
                 <div className="text-xs text-muted-foreground">
-                    Pasting a URL will attempt to extract the job description text. Currently, this is a simulation.
+                    Pasting a URL will attempt to fetch the content, extract the job description text, and then extract the title/company.
                     The match meter for profile compatibility will be added in a future update.
                 </div>
             </div>
@@ -430,9 +435,9 @@ export default function JobDescriptionsPage() {
                           variant="outline"
                           size="sm"
                           onClick={handleExtractDetailsFromText}
-                          disabled={isExtracting}
+                          disabled={isExtractingDetails || isProcessingUrl}
                         >
-                          {isExtracting ? (
+                          {isExtractingDetails ? (
                             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                           ) : (
                             <Sparkles className="mr-2 h-4 w-4" />
@@ -449,7 +454,7 @@ export default function JobDescriptionsPage() {
                   <DialogClose asChild>
                     <Button type="button" variant="outline">Cancel</Button>
                   </DialogClose>
-                  <Button type="submit" disabled={isFetchingFromUrl || isExtracting}>{editingJd ? "Save Changes" : "Add Job Description"}</Button>
+                  <Button type="submit" disabled={isProcessingUrl || isExtractingDetails}>{editingJd ? "Save Changes" : "Add Job Description"}</Button>
                 </DialogFooter>
             </form>
             </Form>
@@ -458,3 +463,4 @@ export default function JobDescriptionsPage() {
     </div>
   );
 }
+
