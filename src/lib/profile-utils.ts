@@ -227,10 +227,16 @@ const PROFESSIONAL_DOCUMENT_STYLES = `
     .section-summary .section-title { /* Summary specific title styling */
       text-align: left; 
     }
-    .cover-letter-body .section-title { /* Cover letter title specific styling, if any */
-       border-bottom: none; /* No border for cover letter main content heading if not desired */
-       text-align: left;
-       margin-bottom: 1em; /* More space after cover letter intro title */
+    .document-body .section-title { /* For AI generated content's main sections */
+      /* Styles inherited */
+    }
+     .document-body h3.item-primary { /* For AI generated content's sub-sections */
+      font-family: 'Inter', sans-serif;
+      font-size: 12pt; 
+      font-weight: 600; 
+      color: #2a2a2a;
+      margin-top: 0.8em;
+      margin-bottom: 0.3em;
     }
 
 
@@ -253,7 +259,10 @@ const PROFESSIONAL_DOCUMENT_STYLES = `
     .publication-authors { font-style: italic; font-size: 10pt; margin-top: 0.1em; margin-bottom: 0.1em; }
     .publication-source { font-size: 10pt; margin-bottom: 0.1em; }
     
-    .cover-letter-body p { margin-bottom: 1em; } /* Spacing for cover letter paragraphs */
+    .document-body p { margin-bottom: 0.8em; } /* Spacing for paragraphs in AI generated content */
+    .document-body ul { margin-top: 0.2em; margin-bottom: 0.8em; padding-left: 1.5em; list-style-type: disc; }
+    .document-body li { margin-bottom: 0.25em; }
+
 
     /* Print-specific styles */
     @media print {
@@ -269,6 +278,7 @@ const PROFESSIONAL_DOCUMENT_STYLES = `
       .section-title { font-size: 13pt; }
       .item-primary, .item-secondary, .item-dates { font-size: 9.5pt; }
       .item-details p, .item-details ul, .description { font-size: 9.5pt; }
+      .document-body p, .document-body ul { font-size: 9.5pt; }
       .contact-info { font-size: 9pt; }
       a { color: #000000 !important; text-decoration: none !important; } /* Ensure links are black for printing */
       .item { page-break-inside: avoid; }
@@ -496,7 +506,60 @@ export function profileToResumeHtml(profile: UserProfile): string {
 
 
 export function textToProfessionalHtml(text: string, documentTitle: string): string {
-  const paragraphs = text.split('\n').map(p => `<p>${p}</p>`).join('');
+  let htmlBodyContent = '';
+  const lines = text.split('\n');
+  let inList = false;
+
+  lines.forEach(line => {
+    line = line.trimRight(); // Trim trailing spaces which might affect parsing
+
+    // Basic Markdown to HTML conversion
+    if (line.startsWith('### ')) {
+      if (inList) { htmlBodyContent += '</ul>\n'; inList = false; }
+      // Style for h3 from AI content should be less prominent than main section titles
+      htmlBodyContent += `<h3 class="item-primary" style="font-size: 11pt; font-weight: 600; margin-top: 0.7em; margin-bottom: 0.2em;">${line.substring(4)}</h3>\n`;
+    } else if (line.startsWith('## ')) {
+      if (inList) { htmlBodyContent += '</ul>\n'; inList = false; }
+      // Use section-title style for main sections from AI
+      htmlBodyContent += `<h2 class="section-title">${line.substring(3)}</h2>\n`;
+    } else if (line.startsWith('# ')) { // Less likely for body content, more for a document title
+      if (inList) { htmlBodyContent += '</ul>\n'; inList = false; }
+      htmlBodyContent += `<h1 class="main-name" style="text-align:left; font-size: 18pt; margin-bottom: 0.5em;">${line.substring(2)}</h1>\n`;
+    } else if (line.startsWith('* ') || line.startsWith('- ')) {
+      if (!inList) {
+        htmlBodyContent += '<ul style="margin-top: 0.2em; margin-bottom: 0.5em;">\n';
+        inList = true;
+      }
+      let listItem = line.substring(line.startsWith('* ') ? 2 : (line.startsWith('- ') ? 2 : 0));
+      listItem = listItem.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/__(.*?)__/g, '<strong>$1</strong>');
+      listItem = listItem.replace(/\*(.*?)\*/g, '<em>$1</em>').replace(/_(.*?)_/g, '<em>$1</em>');
+      htmlBodyContent += `  <li>${listItem}</li>\n`;
+    } else if (line.trim() === '') {
+      if (inList) { htmlBodyContent += '</ul>\n'; inList = false; }
+      // Avoid excessive <br> tags; paragraphs handle spacing.
+      // Consider if a <br> is truly needed or if it's just an empty line for paragraph separation.
+      // If the previous content was not a list, a new paragraph will start, effectively creating space.
+    } else {
+      if (inList) { htmlBodyContent += '</ul>\n'; inList = false; }
+      let pLine = line;
+      pLine = pLine.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+      pLine = pLine.replace(/__(.*?)__/g, '<strong>$1</strong>');
+      pLine = pLine.replace(/\*(.*?)\*/g, '<em>$1</em>');
+      pLine = pLine.replace(/_(.*?)_/g, '<em>$1</em>');
+      htmlBodyContent += `<p>${pLine}</p>\n`;
+    }
+  });
+
+  if (inList) {
+    htmlBodyContent += '</ul>\n';
+  }
+
+  // Clean up potentially empty paragraphs that might arise from multiple empty lines in source
+  htmlBodyContent = htmlBodyContent.replace(/<p>\s*<\/p>/g, '');
+  // Consolidate multiple <br> tags if they were aggressively added (though current logic avoids this)
+  htmlBodyContent = htmlBodyContent.replace(/(<br\s*\/?>\s*){2,}/gi, '<br>\n');
+
+
   return `
     <!DOCTYPE html>
     <html lang="en">
@@ -508,10 +571,13 @@ export function textToProfessionalHtml(text: string, documentTitle: string): str
     </head>
     <body>
       <div class="container">
-        <div class="section cover-letter-body">
-          <h2 class="section-title">${documentTitle}</h2>
+        <div class="section document-body">
+          ${documentTitle && !text.trim().toLowerCase().startsWith(documentTitle.trim().toLowerCase().split(" ")[0].toLowerCase()) && !text.trim().startsWith("# ") && !text.trim().startsWith("## ")
+            ? `<h2 class="section-title" style="text-align:center; border-bottom: none; margin-bottom: 1.5em;">${documentTitle}</h2>`
+            : ''
+          }
           <div class="item-details">
-            ${paragraphs}
+            ${htmlBodyContent}
           </div>
         </div>
       </div>

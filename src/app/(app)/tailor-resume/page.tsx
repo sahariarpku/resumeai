@@ -221,24 +221,15 @@ export default function TailorResumePage() {
     toast({title: "Download Started", description: `${filename} is downloading.`});
   };
 
-  const handleDownloadDocx = (content: string | null, baseFilename: string, type: string, isCoverLetter: boolean = false) => {
+  const handleDownloadDocx = (content: string | null, baseFilename: string, type: string) => {
     if (!content) {
       toast({ title: "Download Error", description: `No ${type} content to download.`, variant: "destructive" });
       return;
     }
     const filename = `${baseFilename.replace(/\s+/g, '_')}_${type.toLowerCase()}.docx`;
-    const htmlContent = isCoverLetter 
-        ? textToProfessionalHtml(content, `${baseFilename} Cover Letter`)
-        : userProfile ? profileToResumeText(userProfile) /* This should be tailored resume text, needs correction */ 
-                      : textToProfessionalHtml(content, `${baseFilename} Resume`); // Fallback
-    
-    // Correction: For DOCX download of tailored resume, we should use the tailored resume text
-    // and convert it to HTML, not the raw profile.
-    // For now, we'll use textToProfessionalHtml for both, assuming 'content' is the final text.
     const finalHtmlContent = textToProfessionalHtml(content, `${baseFilename} ${type}`);
 
-
-    const blob = new Blob([finalHtmlContent], { type: 'application/msword;charset=utf-8' });
+    const blob = new Blob([finalHtmlContent], { type: 'application/msword' }); 
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
     link.download = filename;
@@ -249,7 +240,7 @@ export default function TailorResumePage() {
     toast({ title: "Word (.docx) Download Started" });
   };
   
-  const handlePrintToPdf = (content: string | null, baseFilename: string, type: string, isCoverLetter: boolean = false) => {
+  const handlePrintToPdf = (content: string | null, baseFilename: string, type: string) => {
     if (!content) {
       toast({ title: "Print Error", description: `No ${type} content to print.`, variant: "destructive" });
       return;
@@ -262,6 +253,10 @@ export default function TailorResumePage() {
       printWindow.focus(); 
       setTimeout(() => {
         printWindow.print();
+        // It's good practice to close the window after print dialog is handled,
+        // but automatic closing can sometimes be blocked or undesirable.
+        // For now, let's leave it open, user can close manually.
+        // printWindow.close(); 
       }, 500); 
       toast({ title: `Preparing ${type} PDF for Print` });
     } else {
@@ -415,10 +410,10 @@ export default function TailorResumePage() {
                             <DropdownMenuItem onClick={() => handleDownloadMd(tailoredResume, jobTitleForSave, "Resume")}>
                                 <FileText className="mr-2 h-4 w-4" /> Download as .md
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleDownloadDocx(tailoredResume, jobTitleForSave, "Resume", false)}>
+                            <DropdownMenuItem onClick={() => handleDownloadDocx(tailoredResume, jobTitleForSave, "Resume")}>
                                 <FileText className="mr-2 h-4 w-4" /> Download as Word (.docx)
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handlePrintToPdf(tailoredResume, jobTitleForSave, "Resume", false)}>
+                            <DropdownMenuItem onClick={() => handlePrintToPdf(tailoredResume, jobTitleForSave, "Resume")}>
                                 <Printer className="mr-2 h-4 w-4" /> Print to PDF...
                             </DropdownMenuItem>
                         </DropdownMenuContent>
@@ -474,10 +469,10 @@ export default function TailorResumePage() {
                             <DropdownMenuItem onClick={() => handleDownloadMd(generatedCoverLetter, jobTitleForSave, "CoverLetter")}>
                                 <FileText className="mr-2 h-4 w-4" /> Download as .md
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleDownloadDocx(generatedCoverLetter, jobTitleForSave, "CoverLetter", true)}>
+                            <DropdownMenuItem onClick={() => handleDownloadDocx(generatedCoverLetter, jobTitleForSave, "CoverLetter")}>
                                 <FileText className="mr-2 h-4 w-4" /> Download as Word (.docx)
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handlePrintToPdf(generatedCoverLetter, jobTitleForSave, "CoverLetter", true)}>
+                            <DropdownMenuItem onClick={() => handlePrintToPdf(generatedCoverLetter, jobTitleForSave, "CoverLetter")}>
                                 <Printer className="mr-2 h-4 w-4" /> Print to PDF...
                             </DropdownMenuItem>
                         </DropdownMenuContent>
@@ -501,3 +496,4 @@ export default function TailorResumePage() {
     </div>
   );
 }
+
