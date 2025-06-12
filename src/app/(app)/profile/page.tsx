@@ -158,6 +158,19 @@ export default function ProfilePage() {
       let loadedProfile: UserProfile;
       if (storedProfileString) {
         const parsedProfile = JSON.parse(storedProfileString) as UserProfile;
+        
+        // Robust handling for sectionOrder
+        const validSectionOrder = 
+          parsedProfile.sectionOrder && 
+          Array.isArray(parsedProfile.sectionOrder) && 
+          parsedProfile.sectionOrder.length > 0
+          ? parsedProfile.sectionOrder.filter(key => DEFAULT_SECTION_ORDER.includes(key as ProfileSectionKey)) // Filter out invalid keys
+          : [...DEFAULT_SECTION_ORDER];
+        
+        // Ensure all default keys are present if user's order is incomplete
+        const finalSectionOrder = [...new Set([...validSectionOrder, ...DEFAULT_SECTION_ORDER])];
+
+
         loadedProfile = {
             ...fallbackInitialProfileData, 
             ...parsedProfile,
@@ -178,7 +191,7 @@ export default function ProfilePage() {
             publications: parsedProfile.publications || [],
             references: parsedProfile.references || [],
             customSections: parsedProfile.customSections || [],
-            sectionOrder: parsedProfile.sectionOrder && parsedProfile.sectionOrder.length > 0 ? parsedProfile.sectionOrder : [...DEFAULT_SECTION_ORDER],
+            sectionOrder: finalSectionOrder,
         };
       } else {
         loadedProfile = { ...fallbackInitialProfileData, sectionOrder: [...DEFAULT_SECTION_ORDER] };
@@ -456,19 +469,19 @@ export default function ProfilePage() {
   };
   
   const handleMoveSection = (sectionKey: ProfileSectionKey, direction: 'up' | 'down') => {
-    const currentOrder = [...((profileData.sectionOrder && profileData.sectionOrder.length > 0) ? profileData.sectionOrder : DEFAULT_SECTION_ORDER)];
-    const currentIndex = currentOrder.indexOf(sectionKey);
+    const currentActiveOrder = (profileData.sectionOrder && profileData.sectionOrder.length > 0) ? profileData.sectionOrder : DEFAULT_SECTION_ORDER;
+    const currentIndex = currentActiveOrder.indexOf(sectionKey);
   
     if (currentIndex === -1) return; 
   
     const newIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
   
-    if (newIndex < 0 || newIndex >= currentOrder.length) return; 
+    if (newIndex < 0 || newIndex >= currentActiveOrder.length) return; 
   
-    const itemToMove = currentOrder.splice(currentIndex, 1)[0];
-    currentOrder.splice(newIndex, 0, itemToMove);
+    const itemToMove = currentActiveOrder.splice(currentIndex, 1)[0];
+    currentActiveOrder.splice(newIndex, 0, itemToMove);
   
-    saveProfile({ ...profileData, sectionOrder: currentOrder });
+    saveProfile({ ...profileData, sectionOrder: currentActiveOrder });
     toast({ title: "Section Order Updated", description: `${formatSectionTitleLocal(sectionKey)} moved ${direction}.` });
   };
 
@@ -523,7 +536,7 @@ export default function ProfilePage() {
 
     // General Info
     if (data.fullName) updatedProfile.fullName = data.fullName;
-    if (data.email) updatedProfile.email = data.email; // Note: email in form is disabled, but good to have in profileData
+    if (data.email) updatedProfile.email = data.email; 
     if (data.phone) updatedProfile.phone = data.phone;
     if (data.address) updatedProfile.address = data.address;
     if (data.linkedin) updatedProfile.linkedin = data.linkedin;
@@ -565,9 +578,9 @@ export default function ProfilePage() {
         startDate: edu.startDate || "",
         endDate: edu.endDate || "",
         gpa: edu.gpa || "",
-        description: edu.description || "", // AI schema combines thesis, courses, description here
-        thesisTitle: undefined, // Or try to parse from edu.description
-        relevantCourses: undefined, // Or try to parse from edu.description
+        description: edu.description || "", 
+        thesisTitle: undefined, 
+        relevantCourses: undefined, 
       }));
     }
     
@@ -649,352 +662,13 @@ export default function ProfilePage() {
       }));
     }
 
-    setProfileData(updatedProfile); // This will trigger re-render of FormSectionLists
+    setProfileData(updatedProfile); 
   };
 
 
   if (!isProfileLoaded) {
     return <div className="container mx-auto py-8 text-center flex justify-center items-center min-h-[200px]"><Loader2 className="h-8 w-8 animate-spin text-primary" /> <span className="ml-2">Loading profile...</span></div>;
   }
-
-  const renderSection = (sectionKey: ProfileSectionKey, index: number) => {
-    const currentActiveOrder = (profileData.sectionOrder && profileData.sectionOrder.length > 0) ? profileData.sectionOrder : DEFAULT_SECTION_ORDER;
-    const totalReorderableSections = currentActiveOrder.length;
-    const canMoveUp = index > 0; 
-    const canMoveDown = index < totalReorderableSections - 1; 
-
-    switch (sectionKey) {
-      case 'workExperiences':
-        return (
-          <AccordionItem value="work-experience" id="work-experience" className="border-none" key={sectionKey}>
-            <FormSection
-              title="Work Experience"
-              description="Detail your past and current roles."
-              actions={<Button onClick={handleAddWorkExperience} variant="outline"><PlusCircle className="mr-2 h-4 w-4" /> Add Work Experience</Button>}
-              isReorderable={true}
-              canMoveUp={canMoveUp}
-              canMoveDown={canMoveDown}
-              onMoveUp={() => handleMoveSection(sectionKey, 'up')}
-              onMoveDown={() => handleMoveSection(sectionKey, 'down')}
-            >
-              <FormSectionList
-                items={profileData.workExperiences}
-                renderItem={(exp) => (
-                  <div key={exp.id} className="p-4 rounded-md border bg-card/50">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <h4 className="font-semibold">{exp.role} at {exp.company}</h4>
-                        <p className="text-sm text-muted-foreground">{exp.startDate} - {exp.endDate || 'Present'}</p>
-                        <p className="text-sm mt-1 whitespace-pre-line">{exp.description}</p>
-                        {exp.achievements && exp.achievements.length > 0 && (<ul className="list-disc list-inside text-sm text-muted-foreground mt-1">{exp.achievements.map((ach, i) => <li key={i}>{ach}</li>)}</ul>)}
-                      </div>
-                      <div className="flex gap-1">
-                        <Button variant="ghost" size="icon" onClick={() => handleEditWorkExperience(exp)}><Edit3 className="h-4 w-4" /></Button>
-                        <Button variant="ghost" size="icon" onClick={() => handleDeleteWorkExperience(exp.id)} className="text-destructive hover:text-destructive"><Trash2 className="h-4 w-4" /></Button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-                emptyState={<p className="text-sm text-muted-foreground">No work experience added yet.</p>}
-              />
-            </FormSection>
-          </AccordionItem>
-        );
-      case 'projects':
-        return (
-          <AccordionItem value="projects" id="projects" className="border-none" key={sectionKey}>
-            <FormSection
-              title="Projects"
-              description="Showcase your personal or professional projects."
-              actions={<Button onClick={handleAddProject} variant="outline"><PlusCircle className="mr-2 h-4 w-4" /> Add Project</Button>}
-              isReorderable={true}
-              canMoveUp={canMoveUp}
-              canMoveDown={canMoveDown}
-              onMoveUp={() => handleMoveSection(sectionKey, 'up')}
-              onMoveDown={() => handleMoveSection(sectionKey, 'down')}
-            >
-              <FormSectionList
-                items={profileData.projects}
-                renderItem={(proj) => (
-                  <div key={proj.id} className="p-4 rounded-md border bg-card/50">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <h4 className="font-semibold">{proj.name}</h4>
-                        {proj.link && <a href={proj.link} target="_blank" rel="noopener noreferrer" className="text-sm text-primary hover:underline">{proj.link}</a>}
-                        <p className="text-sm mt-1 whitespace-pre-line">{proj.description}</p>
-                        {proj.technologies && proj.technologies.length > 0 && <p className="text-xs text-muted-foreground mt-1">Tech: {proj.technologies.join(', ')}</p>}
-                        {proj.achievements && proj.achievements.length > 0 && (<ul className="list-disc list-inside text-sm text-muted-foreground mt-1">{proj.achievements.map((ach, i) => <li key={i}>{ach}</li>)}</ul>)}
-                      </div>
-                       <div className="flex gap-1">
-                        <Button variant="ghost" size="icon" onClick={() => handleEditProject(proj)}><Edit3 className="h-4 w-4" /></Button>
-                        <Button variant="ghost" size="icon" onClick={() => handleDeleteProject(proj.id)} className="text-destructive hover:text-destructive"><Trash2 className="h-4 w-4" /></Button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-                emptyState={<p className="text-sm text-muted-foreground">No projects added yet.</p>}
-              />
-            </FormSection>
-          </AccordionItem>
-        );
-      case 'education':
-        return (
-          <AccordionItem value="education" id="education" className="border-none" key={sectionKey}>
-            <FormSection
-              title="Education"
-              description="List your academic qualifications and achievements."
-              actions={<Button onClick={handleAddEducation} variant="outline"><PlusCircle className="mr-2 h-4 w-4" /> Add Education</Button>}
-              isReorderable={true}
-              canMoveUp={canMoveUp}
-              canMoveDown={canMoveDown}
-              onMoveUp={() => handleMoveSection(sectionKey, 'up')}
-              onMoveDown={() => handleMoveSection(sectionKey, 'down')}
-            >
-              <FormSectionList
-                items={profileData.education}
-                renderItem={(edu) => (
-                  <div key={edu.id} className="p-4 rounded-md border bg-card/50">
-                    <div className="flex justify-between items-start">
-                        <div>
-                            <h4 className="font-semibold">{edu.degree} in {edu.fieldOfStudy}</h4>
-                            <p className="text-sm text-muted-foreground">{edu.institution}</p>
-                            <p className="text-xs text-muted-foreground">{edu.startDate} - {edu.endDate || 'Expected'}</p>
-                            {edu.gpa && <p className="text-xs text-muted-foreground">GPA/Result: {edu.gpa}</p>}
-                            {edu.thesisTitle && <p className="text-xs text-muted-foreground mt-1">Thesis: {edu.thesisTitle}</p>}
-                            {edu.relevantCourses && edu.relevantCourses.length > 0 && <p className="text-xs text-muted-foreground mt-1">Courses: {edu.relevantCourses.join(', ')}</p>}
-                            {edu.description && <p className="text-xs text-muted-foreground mt-1 whitespace-pre-line">Notes: {edu.description}</p>}
-                        </div>
-                        <div className="flex gap-1">
-                            <Button variant="ghost" size="icon" onClick={() => handleEditEducation(edu)}><Edit3 className="h-4 w-4" /></Button>
-                            <Button variant="ghost" size="icon" onClick={() => handleDeleteEducation(edu.id)} className="text-destructive hover:text-destructive"><Trash2 className="h-4 w-4" /></Button>
-                        </div>
-                    </div>
-                  </div>
-                )}
-                emptyState={<p className="text-sm text-muted-foreground">No education entries added yet.</p>}
-              />
-            </FormSection>
-          </AccordionItem>
-        );
-      case 'honorsAndAwards':
-         return (
-            <AccordionItem value="honors-awards" id="honors-awards" className="border-none" key={sectionKey}>
-            <FormSection
-              title="Honors &amp; Awards"
-              description="List your recognitions and accolades."
-              actions={<Button onClick={handleAddHonorAward} variant="outline"><PlusCircle className="mr-2 h-4 w-4" /> Add Honor/Award</Button>}
-              isReorderable={true}
-              canMoveUp={canMoveUp}
-              canMoveDown={canMoveDown}
-              onMoveUp={() => handleMoveSection(sectionKey, 'up')}
-              onMoveDown={() => handleMoveSection(sectionKey, 'down')}
-            >
-              <FormSectionList
-                items={profileData.honorsAndAwards}
-                renderItem={(item) => (
-                  <div key={item.id} className="p-4 rounded-md border bg-card/50">
-                    <div className="flex justify-between items-start">
-                        <div>
-                            <h4 className="font-semibold">{item.name}</h4>
-                            {item.organization && <p className="text-sm text-muted-foreground">{item.organization}</p>}
-                            {item.date && <p className="text-xs text-muted-foreground">Date: {item.date}</p>}
-                            {item.description && <p className="text-xs text-muted-foreground mt-1 whitespace-pre-line">{item.description}</p>}
-                        </div>
-                        <div className="flex gap-1">
-                            <Button variant="ghost" size="icon" onClick={() => handleEditHonorAward(item)}><Edit3 className="h-4 w-4" /></Button>
-                            <Button variant="ghost" size="icon" onClick={() => handleDeleteHonorAward(item.id)} className="text-destructive hover:text-destructive"><Trash2 className="h-4 w-4" /></Button>
-                        </div>
-                    </div>
-                  </div>
-                )}
-                emptyState={<p className="text-sm text-muted-foreground">No honors or awards added yet.</p>}
-              />
-            </FormSection>
-        </AccordionItem>
-         );
-      case 'publications':
-        return (
-            <AccordionItem value="publications" id="publications" className="border-none" key={sectionKey}>
-            <FormSection
-              title="Publications"
-              description="Showcase your published work."
-              actions={<Button onClick={handleAddPublication} variant="outline"><PlusCircle className="mr-2 h-4 w-4" /> Add Publication</Button>}
-              isReorderable={true}
-              canMoveUp={canMoveUp}
-              canMoveDown={canMoveDown}
-              onMoveUp={() => handleMoveSection(sectionKey, 'up')}
-              onMoveDown={() => handleMoveSection(sectionKey, 'down')}
-            >
-              <FormSectionList
-                items={profileData.publications}
-                renderItem={(item) => (
-                  <div key={item.id} className="p-4 rounded-md border bg-card/50">
-                    <div className="flex justify-between items-start">
-                        <div>
-                            <h4 className="font-semibold">{item.title}</h4>
-                            {item.authors && item.authors.length > 0 && <p className="text-sm text-muted-foreground">Authors: {item.authors.join(', ')}</p>}
-                            {item.journalOrConference && <p className="text-sm text-muted-foreground">{item.journalOrConference}</p>}
-                            {item.publicationDate && <p className="text-xs text-muted-foreground">Date: {item.publicationDate}</p>}
-                            {item.doi && <p className="text-xs text-muted-foreground">DOI: {item.doi}</p>}
-                            {item.link && <a href={item.link} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline block">View Publication</a>}
-                            {item.description && <p className="text-xs text-muted-foreground mt-1 whitespace-pre-line">{item.description}</p>}
-                        </div>
-                        <div className="flex gap-1">
-                            <Button variant="ghost" size="icon" onClick={() => handleEditPublication(item)}><Edit3 className="h-4 w-4" /></Button>
-                            <Button variant="ghost" size="icon" onClick={() => handleDeletePublication(item.id)} className="text-destructive hover:text-destructive"><Trash2 className="h-4 w-4" /></Button>
-                        </div>
-                    </div>
-                  </div>
-                )}
-                emptyState={<p className="text-sm text-muted-foreground">No publications added yet.</p>}
-              />
-            </FormSection>
-        </AccordionItem>
-        );
-      case 'skills':
-        return (
-            <AccordionItem value="skills" id="skills" className="border-none" key={sectionKey}>
-            <FormSection
-              title="Skills"
-              description="Highlight your technical and soft skills."
-              actions={<Button onClick={handleAddSkill} variant="outline"><PlusCircle className="mr-2 h-4 w-4" /> Add Skill</Button>}
-              isReorderable={true}
-              canMoveUp={canMoveUp}
-              canMoveDown={canMoveDown}
-              onMoveUp={() => handleMoveSection(sectionKey, 'up')}
-              onMoveDown={() => handleMoveSection(sectionKey, 'down')}
-            >
-              <FormSectionList
-                items={profileData.skills}
-                renderItem={(skill) => (
-                  <div key={skill.id} className="p-4 rounded-md border bg-card/50">
-                     <div className="flex justify-between items-start">
-                        <div>
-                            <h4 className="font-semibold">{skill.name}</h4>
-                            {skill.category && <p className="text-xs text-muted-foreground">Category: {skill.category}</p>}
-                            {skill.proficiency && <p className="text-xs text-muted-foreground">Proficiency: {skill.proficiency}</p>}
-                        </div>
-                        <div className="flex gap-1">
-                            <Button variant="ghost" size="icon" onClick={() => handleEditSkill(skill)}><Edit3 className="h-4 w-4" /></Button>
-                            <Button variant="ghost" size="icon" onClick={() => handleDeleteSkill(skill.id)} className="text-destructive hover:text-destructive"><Trash2 className="h-4 w-4" /></Button>
-                        </div>
-                    </div>
-                  </div>
-                )}
-                emptyState={<p className="text-sm text-muted-foreground">No skills added yet.</p>}
-              />
-            </FormSection>
-        </AccordionItem>
-        );
-      case 'certifications':
-        return (
-            <AccordionItem value="certifications" id="certifications" className="border-none" key={sectionKey}>
-            <FormSection
-              title="Certifications"
-              description="Add any relevant certifications."
-              actions={<Button onClick={handleAddCertification} variant="outline"><PlusCircle className="mr-2 h-4 w-4" /> Add Certification</Button>}
-              isReorderable={true}
-              canMoveUp={canMoveUp}
-              canMoveDown={canMoveDown}
-              onMoveUp={() => handleMoveSection(sectionKey, 'up')}
-              onMoveDown={() => handleMoveSection(sectionKey, 'down')}
-            >
-              <FormSectionList
-                items={profileData.certifications}
-                renderItem={(cert) => (
-                  <div key={cert.id} className="p-4 rounded-md border bg-card/50">
-                    <div className="flex justify-between items-start">
-                        <div>
-                            <h4 className="font-semibold">{cert.name}</h4>
-                            <p className="text-sm text-muted-foreground">{cert.issuingOrganization} - Issued: {cert.issueDate}</p>
-                            {cert.credentialId && <p className="text-xs text-muted-foreground">ID: {cert.credentialId}</p>}
-                            {cert.credentialUrl && <a href={cert.credentialUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline">View Credential</a>}
-                        </div>
-                        <div className="flex gap-1">
-                            <Button variant="ghost" size="icon" onClick={() => handleEditCertification(cert)}><Edit3 className="h-4 w-4" /></Button>
-                            <Button variant="ghost" size="icon" onClick={() => handleDeleteCertification(cert.id)} className="text-destructive hover:text-destructive"><Trash2 className="h-4 w-4" /></Button>
-                        </div>
-                    </div>
-                  </div>
-                )}
-                emptyState={<p className="text-sm text-muted-foreground">No certifications added yet.</p>}
-              />
-            </FormSection>
-        </AccordionItem>
-        );
-      case 'references':
-        return (
-             <AccordionItem value="references" id="references" className="border-none" key={sectionKey}>
-            <FormSection
-              title="References"
-              description="Provide professional or academic references."
-              actions={<Button onClick={handleAddReference} variant="outline"><PlusCircle className="mr-2 h-4 w-4" /> Add Reference</Button>}
-              isReorderable={true}
-              canMoveUp={canMoveUp}
-              canMoveDown={canMoveDown}
-              onMoveUp={() => handleMoveSection(sectionKey, 'up')}
-              onMoveDown={() => handleMoveSection(sectionKey, 'down')}
-            >
-              <FormSectionList
-                items={profileData.references}
-                renderItem={(item) => (
-                  <div key={item.id} className="p-4 rounded-md border bg-card/50">
-                    <div className="flex justify-between items-start">
-                        <div>
-                            <h4 className="font-semibold">{item.name}</h4>
-                            {item.titleAndCompany && <p className="text-sm text-muted-foreground">{item.titleAndCompany}</p>}
-                            {item.contactDetailsOrNote && <p className="text-xs text-muted-foreground mt-1 whitespace-pre-line">{item.contactDetailsOrNote}</p>}
-                        </div>
-                        <div className="flex gap-1">
-                            <Button variant="ghost" size="icon" onClick={() => handleEditReference(item)}><Edit3 className="h-4 w-4" /></Button>
-                            <Button variant="ghost" size="icon" onClick={() => handleDeleteReference(item.id)} className="text-destructive hover:text-destructive"><Trash2 className="h-4 w-4" /></Button>
-                        </div>
-                    </div>
-                  </div>
-                )}
-                emptyState={<p className="text-sm text-muted-foreground">No references added yet. You can add contact details or simply state "Available upon request".</p>}
-              />
-            </FormSection>
-        </AccordionItem>
-        );
-      case 'customSections':
-        return (
-            <AccordionItem value="custom-sections" id="custom-sections" className="border-none" key={sectionKey}>
-            <FormSection
-              title="Custom Sections"
-              description="Add any other relevant sections to your profile."
-              actions={<Button onClick={handleAddCustomSection} variant="outline"><PlusCircle className="mr-2 h-4 w-4" /> Add Custom Section</Button>}
-              isReorderable={true}
-              canMoveUp={canMoveUp}
-              canMoveDown={canMoveDown}
-              onMoveUp={() => handleMoveSection(sectionKey, 'up')}
-              onMoveDown={() => handleMoveSection(sectionKey, 'down')}
-            >
-              <FormSectionList
-                items={profileData.customSections}
-                renderItem={(item) => (
-                  <div key={item.id} className="p-4 rounded-md border bg-card/50">
-                    <div className="flex justify-between items-start">
-                        <div>
-                            <h4 className="font-semibold uppercase">{item.heading}</h4>
-                            <p className="text-sm text-muted-foreground mt-1 whitespace-pre-line">{item.content}</p>
-                        </div>
-                        <div className="flex gap-1">
-                            <Button variant="ghost" size="icon" onClick={() => handleEditCustomSection(item)}><Edit3 className="h-4 w-4" /></Button>
-                            <Button variant="ghost" size="icon" onClick={() => handleDeleteCustomSection(item.id)} className="text-destructive hover:text-destructive"><Trash2 className="h-4 w-4" /></Button>
-                        </div>
-                    </div>
-                  </div>
-                )}
-                emptyState={<p className="text-sm text-muted-foreground">No custom sections added yet. Use this for things like 'Languages', 'Hobbies', etc.</p>}
-              />
-            </FormSection>
-        </AccordionItem>
-        );
-      default:
-        return null;
-    }
-  };
 
   const currentDisplayOrder = (profileData.sectionOrder && profileData.sectionOrder.length > 0) 
                               ? profileData.sectionOrder 
@@ -1175,7 +849,7 @@ export default function ProfilePage() {
             <DialogTitle className="font-headline">{editingEducation ? 'Edit Education' : 'Add New Education'}</DialogTitle>
             <DialogDescription>Provide your educational qualifications and details.</DialogDescription>
           </DialogHeader>
-          <div className="flex-grow overflow-y-auto pr-3"> {/* Adjusted for scrollbar */}
+          <div className="flex-grow overflow-y-auto pr-3"> 
             <Form {...educationForm}>
               <form id="educationForm" onSubmit={educationForm.handleSubmit(onEducationSubmit)} className="space-y-6 py-4">
                 <EducationFormFields control={educationForm.control} onPolishRequest={(fieldName) => handleAIPolish(fieldName, educationForm)} polishingField={polishingField as keyof EducationFormData | null} isSubmitting={educationForm.formState.isSubmitting} />
