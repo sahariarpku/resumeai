@@ -186,7 +186,7 @@ const SimulatedJobPostingSchema = z.object({
   requirementsSummary: z.string().describe("A brief 1-3 sentence summary of the key requirements for the job."),
   deadlineText: z.string().describe("A textual representation of the application deadline (e.g., 'In 2 weeks', 'August 15, 2024', 'Open until filled')."),
   location: z.string().optional().describe("The location of the job (e.g., 'Remote', 'New York, NY')."),
-  jobUrl: z.string().url().optional().describe("A fictional URL for the job posting."),
+  jobUrl: z.string().optional().describe("A fictional URL for the job posting."), // Removed .url()
 });
 
 export const FindJobsOutputSchema = z.object({
