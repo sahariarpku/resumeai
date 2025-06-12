@@ -1,12 +1,13 @@
+
 import { z } from "zod";
 
 export const workExperienceSchema = z.object({
-  id: z.string().optional(), // Optional for new entries
+  id: z.string().optional(),
   company: z.string().min(1, "Company name is required"),
   role: z.string().min(1, "Role/Title is required"),
-  startDate: z.string().min(1, "Start date is required"), // Consider specific date format validation
+  startDate: z.string().min(1, "Start date is required (YYYY-MM)"),
   endDate: z.string(), // Allow empty for "Present"
-  description: z.string().min(1, "Description is required").max(1000, "Description is too long"),
+  description: z.string().min(1, "Description is required").max(1500, "Description is too long"),
   achievements: z.string().optional(), // Storing as comma-separated string for simplicity in form
 });
 export type WorkExperienceFormData = z.infer<typeof workExperienceSchema>;
@@ -15,9 +16,9 @@ export type WorkExperienceFormData = z.infer<typeof workExperienceSchema>;
 export const projectSchema = z.object({
   id: z.string().optional(),
   name: z.string().min(1, "Project name is required"),
-  description: z.string().min(1, "Description is required").max(1000, "Description is too long"),
-  technologies: z.string().min(1, "Technologies are required (comma-separated)"),
-  achievements: z.string().optional(),
+  description: z.string().min(1, "Description is required").max(1500, "Description is too long"),
+  technologies: z.string().optional(), // Comma-separated
+  achievements: z.string().optional(), // Comma-separated
   link: z.string().url("Must be a valid URL").optional().or(z.literal('')),
 });
 export type ProjectFormData = z.infer<typeof projectSchema>;
@@ -27,8 +28,8 @@ export const educationSchema = z.object({
   institution: z.string().min(1, "Institution name is required"),
   degree: z.string().min(1, "Degree is required"),
   fieldOfStudy: z.string().min(1, "Field of study is required"),
-  startDate: z.string().min(1, "Start date is required"),
-  endDate: z.string(), // Allow empty for "Present" or expected
+  startDate: z.string().min(1, "Start date is required (YYYY-MM)"),
+  endDate: z.string(), // Allow empty for "Present" or expected (YYYY-MM)
 });
 export type EducationFormData = z.infer<typeof educationSchema>;
 
@@ -44,7 +45,7 @@ export const certificationSchema = z.object({
   id: z.string().optional(),
   name: z.string().min(1, "Certification name is required"),
   issuingOrganization: z.string().min(1, "Issuing organization is required"),
-  issueDate: z.string().min(1, "Issue date is required"),
+  issueDate: z.string().min(1, "Issue date is required (YYYY-MM)"), // Ensure YYYY-MM format if using type="month"
   credentialId: z.string().optional(),
   credentialUrl: z.string().url("Must be a valid URL").optional().or(z.literal('')),
 });
@@ -54,7 +55,7 @@ export const userProfileSchema = z.object({
   fullName: z.string().min(1, "Full name is required").optional(),
   email: z.string().email("Invalid email address").optional(),
   phone: z.string().optional(),
-  address: z.string().optional(), // Added address field
+  address: z.string().optional(),
   linkedin: z.string().url("Invalid LinkedIn URL").optional().or(z.literal('')),
   github: z.string().url("Invalid GitHub URL").optional().or(z.literal('')),
   portfolio: z.string().url("Invalid Portfolio URL").optional().or(z.literal('')),
@@ -76,3 +77,12 @@ export const tailorResumeFormSchema = z.object({
 });
 export type TailorResumeFormData = z.infer<typeof tailorResumeFormSchema>;
 
+export const polishTextSchema = z.object({
+  textToPolish: z.string().min(1, "Text to polish cannot be empty."),
+});
+export type PolishTextSchema = z.infer<typeof polishTextSchema>;
+
+export const polishTextOutputSchema = z.object({
+  polishedText: z.string(),
+});
+export type PolishTextOutputSchema = z.infer<typeof polishTextOutputSchema>;

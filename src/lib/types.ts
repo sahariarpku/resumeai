@@ -6,15 +6,15 @@ export interface WorkExperience {
   startDate: string;
   endDate: string; // Can be "Present"
   description: string;
-  achievements?: string[]; // Comma-separated or array
+  achievements?: string[];
 }
 
 export interface Project {
   id: string;
   name: string;
   description: string;
-  technologies: string[]; // Comma-separated or array
-  achievements?: string[]; // Comma-separated or array
+  technologies?: string[];
+  achievements?: string[];
   link?: string;
 }
 
@@ -38,7 +38,7 @@ export interface Certification {
   id: string;
   name: string;
   issuingOrganization: string;
-  issueDate: string;
+  issueDate: string; // Consider YYYY-MM format
   credentialId?: string;
   credentialUrl?: string;
 }
@@ -48,7 +48,7 @@ export interface UserProfile {
   fullName?: string;
   email?: string; // Usually from auth
   phone?: string;
-  address?: string; // Added address field
+  address?: string;
   linkedin?: string;
   github?: string;
   portfolio?: string;
@@ -80,7 +80,4 @@ export interface StoredResume {
   aiAnalysis?: string; // AI analysis of match
   aiSuggestions?: string; // AI suggestions for improvement
   createdAt: string; // ISO date string
-  // downloadUrl?: string; // if stored in R2, or generated on demand
 }
-
-    
