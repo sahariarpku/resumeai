@@ -11,7 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { Rss, Search, Loader2, Briefcase, Building, FileText as FileTextIcon, CalendarDays, Percent, Sparkles as SparklesIcon, BarChart3, AlertTriangle, Link as LinkIcon, MapPin, ExternalLink } from "lucide-react";
+import { Rss, Search, Loader2, Briefcase, Building, FileText as FileTextIcon, CalendarDays, Percent, Sparkles as SparklesIcon, AlertTriangle, Link as LinkIcon, MapPin, ExternalLink } from "lucide-react";
 import { useRouter } from 'next/navigation';
 import type { JobPostingItem, UserProfile } from "@/lib/types";
 import { z } from "zod"; 
@@ -92,24 +92,54 @@ export default function JobsRssPage() {
         console.warn("Could not save last RSS URL to localStorage", error);
     }
 
+    let rawRssContentString = "";
     try {
       const fetchResponse = await fetch(`/api/fetch-rss?url=${encodeURIComponent(data.rssUrl)}`);
-      if (!fetchResponse.ok) {
-        const errorData = await fetchResponse.json();
-        throw new Error(errorData.error || `Failed to fetch RSS feed: ${fetchResponse.statusText}`);
+      
+      let responseBodyAsText;
+      try {
+        responseBodyAsText = await fetchResponse.text(); // Always get text first
+      } catch (textError) {
+        setIsLoadingFeed(false);
+        throw new Error(`Failed to read response from API: ${textError instanceof Error ? textError.message : String(textError)}`);
       }
-      const { rawRssContent } = await fetchResponse.json();
+
+      if (!fetchResponse.ok) {
+        // Try to parse the error body as JSON, but fallback if it's not (e.g. HTML error page)
+        try {
+          const errorData = JSON.parse(responseBodyAsText);
+          throw new Error(errorData.error || `API Error (${fetchResponse.status}): ${fetchResponse.statusText}`);
+        } catch (e) {
+          throw new Error(`API Error (${fetchResponse.status}): ${fetchResponse.statusText}. Response: ${responseBodyAsText.substring(0, 300)}...`);
+        }
+      }
+
+      // If response.ok is true, try to parse as JSON, assuming success path from API
+      try {
+        const responseData = JSON.parse(responseBodyAsText);
+        if (responseData.error) { // Our API might return 200 OK with a JSON error object
+          throw new Error(responseData.error);
+        }
+        if (!responseData.rawRssContent) {
+          throw new Error("API returned success but no rawRssContent found.");
+        }
+        rawRssContentString = responseData.rawRssContent;
+      } catch (e) {
+        setIsLoadingFeed(false);
+        throw new Error(`Failed to parse successful API response. Expected JSON with rawRssContent. Received: ${responseBodyAsText.substring(0,300)}...`);
+      }
+      
       setIsLoadingFeed(false);
 
-      if (!rawRssContent) {
-        toast({ title: "No Content Fetched", description: "The RSS URL did not return any content.", variant: "default" });
+      if (!rawRssContentString) {
+        toast({ title: "No Content Fetched", description: "The RSS URL did not return any content via the API.", variant: "default" });
         return;
       }
       
       const itemRegex = /<item>([\s\S]*?)<\/item>/g;
       let match;
       const itemXmls: string[] = [];
-      while ((match = itemRegex.exec(rawRssContent)) !== null) {
+      while ((match = itemRegex.exec(rawRssContentString)) !== null) {
         itemXmls.push(match[0]);
       }
 
@@ -131,12 +161,14 @@ export default function JobsRssPage() {
             processedJobs.push({
               ...extractedDetails,
               id: `job-${Date.now()}-${i}`,
-              isCalculatingMatch: !!userProfile, // Start calculation only if profile exists
+              isCalculatingMatch: !!userProfile, 
             });
+          } else {
+             console.warn("Skipped RSS item due to missing role or jobUrl after AI extraction:", itemXml.substring(0,100));
           }
         } catch (extractionError) {
-          console.error("Error processing RSS item with AI:", extractionError);
-          // Optionally add a placeholder or skip the item
+          console.error("Error processing RSS item with AI:", extractionError, itemXml.substring(0,100));
+          toast({ title: `AI Processing Error (Item ${i+1})`, description: `Could not process an item. Skipping. ${extractionError instanceof Error ? extractionError.message : ''}`, variant: "destructive", duration: 5000 });
         }
         setProcessingProgress(i + 1);
       }
@@ -145,7 +177,7 @@ export default function JobsRssPage() {
       toast({ title: "Jobs Processed!", description: `${processedJobs.length} jobs extracted and displayed.` });
 
     } catch (err) {
-      console.error("Error fetching or processing RSS feed:", err);
+      console.error("Error in handleFetchAndProcessRss:", err);
       let errorMessage = "Could not process the RSS feed.";
       if (err instanceof Error) errorMessage = err.message;
       toast({ title: "RSS Processing Error", description: errorMessage, variant: "destructive" });
@@ -158,6 +190,10 @@ export default function JobsRssPage() {
   const calculateMatchForJob = useCallback(async (job: JobPostingItem, profileText: string) => {
     if (!profileText.trim()) {
       setJobPostings(prev => prev.map(j => j.id === job.id ? { ...j, matchPercentage: 0, matchSummary: "Profile is empty. Cannot calculate match.", matchCategory: "Poor Match", isCalculatingMatch: false } : j));
+      return;
+    }
+    if(!job.requirementsSummary || job.requirementsSummary.trim().length < 10){
+       setJobPostings(prev => prev.map(j => j.id === job.id ? { ...j, matchPercentage: 0, matchSummary: "Job requirements summary is too short or missing.", matchCategory: "Poor Match", isCalculatingMatch: false } : j));
       return;
     }
     
@@ -197,6 +233,10 @@ export default function JobsRssPage() {
   }, [jobPostings, userProfile, profileLoaded, calculateMatchForJob]);
 
   const handleTailorResume = (job: JobPostingItem) => {
+    if(!job.requirementsSummary) {
+        toast({title: "Cannot Tailor", description: "Job requirements summary is missing for this item.", variant: "destructive"});
+        return;
+    }
     localStorage.setItem(TAILOR_RESUME_PREFILL_JD_KEY, job.requirementsSummary);
     router.push('/tailor-resume');
   };
@@ -212,7 +252,7 @@ export default function JobsRssPage() {
     }
   };
 
-  if (!profileLoaded) { // Still wait for profile to load for context
+  if (!profileLoaded) { 
      return (
       <div className="container mx-auto py-8 text-center">
         <Loader2 className="mx-auto h-12 w-12 animate-spin text-primary" />
@@ -311,10 +351,10 @@ export default function JobsRssPage() {
                             className="hover:underline text-primary flex items-center"
                             title={`View job: ${job.role}`}
                           >
-                            {job.role} <ExternalLink className="inline-block ml-1.5 h-3.5 w-3.5 opacity-70" />
+                            {job.role || <span className="text-muted-foreground/70">N/A</span>} <ExternalLink className="inline-block ml-1.5 h-3.5 w-3.5 opacity-70" />
                           </a>
                         ) : (
-                          job.role
+                          job.role || <span className="text-muted-foreground/70">N/A</span>
                         )}
                       </TableCell>
                       <TableCell>{job.company || <span className="text-muted-foreground/70">N/A</span>}</TableCell>
@@ -322,11 +362,13 @@ export default function JobsRssPage() {
                       <TableCell className="max-w-xs">
                          <Tooltip>
                             <TooltipTrigger asChild>
-                                <p className="truncate hover:whitespace-normal cursor-help">{job.requirementsSummary}</p>
+                                <p className="truncate hover:whitespace-normal cursor-help">
+                                  {job.requirementsSummary || <span className="text-muted-foreground/70">N/A</span>}
+                                </p>
                             </TooltipTrigger>
                             <TooltipContent side="bottom" className="max-w-md p-2 bg-popover text-popover-foreground">
                                 <p className="text-sm font-medium">Full Requirements Summary:</p>
-                                <p className="text-xs">{job.requirementsSummary}</p>
+                                <p className="text-xs">{job.requirementsSummary || "Not available."}</p>
                             </TooltipContent>
                         </Tooltip>
                       </TableCell>
@@ -361,8 +403,8 @@ export default function JobsRssPage() {
                           variant="outline" 
                           size="sm" 
                           onClick={() => handleTailorResume(job)}
-                          disabled={!userProfile || !profileLoaded}
-                          title={(!userProfile || !profileLoaded) ? "Set up your profile to enable tailoring" : "Tailor your resume for this job"}
+                          disabled={!userProfile || !profileLoaded || !job.requirementsSummary}
+                          title={(!userProfile || !profileLoaded) ? "Set up your profile to enable tailoring" : (!job.requirementsSummary ? "Requirements summary missing" : "Tailor your resume for this job")}
                         >
                           <SparklesIcon className="mr-2 h-4 w-4" /> Tailor
                         </Button>
@@ -376,7 +418,7 @@ export default function JobsRssPage() {
         </Card>
       )}
 
-       {(isLoadingFeed || isProcessingItems) && jobPostings.length === 0 && (
+       {(isLoadingFeed || (isProcessingItems && jobPostings.length === 0)) && (
          <div className="text-center py-12">
             <Loader2 className="mx-auto h-12 w-12 animate-spin text-primary mb-4" />
             <p className="text-muted-foreground">
