@@ -30,38 +30,75 @@ const TAILOR_RESUME_PREFILL_RESUME_KEY = "tailorResumePrefillResume";
 
 const SimpleMarkdownToHtmlDisplay = ({ text }: { text: string | null }) => {
   if (!text) return null;
+
   let html = text;
+
+  // Headings
   html = html.replace(/^### (.*$)/gim, '<h3 class="text-lg font-semibold mt-3 mb-1">$1</h3>');
   html = html.replace(/^## (.*$)/gim, '<h2 class="text-xl font-semibold mt-4 mb-2">$1</h2>');
   html = html.replace(/^# (.*$)/gim, '<h1 class="text-2xl font-bold mt-5 mb-3">$1</h1>');
-  html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/__(.*?)__/g, '<strong>$1</strong>'); 
-  html = html.replace(/\*(.*?)\*/g, '<em>$1</em>').replace(/_(.*?)_/g, '<em>$1</em>'); 
-  const lines = html.split('\\n');
+
+  // Bold and Italic
+  html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/__(.*?)__/g, '<strong>$1</strong>');
+  html = html.replace(/\*(.*?)\*/g, '<em>$1</em>').replace(/_(.*?)_/g, '<em>$1</em>');
+
+  // Lists (ul and ol)
+  const lines = html.split('\n'); // Use single \n for splitting actual newlines
   let newHtmlLines = [];
-  let inList = false; let listType = '';
+  let inList = false;
+  let listType = ''; // 'ul' or 'ol'
+
   for (const line of lines) {
-    const ulMatch = line.match(/^(\* |\- )/); const olMatch = line.match(/^(\\d+\\. )/);
-    if (ulMatch || olMatch) {
-      const currentListType = ulMatch ? 'ul' : 'ol';
-      if (!inList || listType !== currentListType) {
+    const olMatch = line.match(/^(\d+)\.\s+(.*)/); // Matches "1. item"
+    const ulMatch = line.match(/^(\*|-)\s+(.*)/);  // Matches "* item" or "- item"
+
+    if (olMatch) {
+      const content = olMatch[2];
+      if (!inList || listType !== 'ol') {
         if (inList) newHtmlLines.push(`</${listType}>`);
-        newHtmlLines.push(`<${currentListType}>`); inList = true; listType = currentListType;
+        newHtmlLines.push(`<ol class="list-decimal pl-5">`);
+        inList = true;
+        listType = 'ol';
       }
-      newHtmlLines.push(`  <li>${line.substring(olMatch ? olMatch[0].length : 2)}</li>`);
+      newHtmlLines.push(`  <li>${content}</li>`);
+    } else if (ulMatch) {
+      const content = ulMatch[2];
+      if (!inList || listType !== 'ul') {
+        if (inList) newHtmlLines.push(`</${listType}>`);
+        newHtmlLines.push(`<ul class="list-disc pl-5">`);
+        inList = true;
+        listType = 'ul';
+      }
+      newHtmlLines.push(`  <li>${content}</li>`);
     } else {
-      if (inList) { newHtmlLines.push(`</${listType}>`); inList = false; listType = ''; }
+      if (inList) {
+        newHtmlLines.push(`</${listType}>`);
+        inList = false;
+        listType = '';
+      }
       newHtmlLines.push(line);
     }
   }
-  if (inList) { newHtmlLines.push(`</${listType}>`); }
-  html = newHtmlLines.join('\\n');
-  html = html.split(/\\n\\s*\\n/).map(paragraph => {
-    if (paragraph.trim() === '') return '';
-    if (paragraph.match(/^\\s*<(ul|ol|h[1-6]|div|section|article|aside|header|footer|nav|figure|table|blockquote|hr|pre|form)/i)) return paragraph;
-    return `<p>${paragraph.replace(/\\n/g, '<br />')}</p>`;
-  }).join('');
-  html = html.replace(/<p>\\s*(<(ul|ol)>.*?<\\/(ul|ol)>)\\s*<\\/p>/gs, '$1');
-  html = html.replace(/<p>\\s*<\\/p>/g, '');
+
+  if (inList) {
+    newHtmlLines.push(`</${listType}>`);
+  }
+  html = newHtmlLines.join('\n'); // Use single \n for joining
+
+  // Paragraphs
+  html = html.split(/\n\s*\n/) 
+    .map(paragraph => {
+      paragraph = paragraph.trim();
+      if (paragraph === '') return '';
+      if (paragraph.match(/^\s*<(ul|ol|li|h[1-6]|div|section|article|aside|header|footer|nav|figure|table|blockquote|hr|pre|form)/i)) {
+        return paragraph; 
+      }
+      return `<p>${paragraph.replace(/\n/g, '<br />')}</p>`;
+    }).join('');
+  
+  html = html.replace(/<p>\s*(<(ul|ol)>.*?<\/(ul|ol)>)\s*<\/p>/gs, '$1'); 
+  html = html.replace(/<p>\s*<\/p>/g, ''); 
+
   return <div className="prose prose-sm dark:prose-invert max-w-none break-words" dangerouslySetInnerHTML={{ __html: html }} />;
 };
 
@@ -107,6 +144,8 @@ export default function TailorResumePage() {
                 description = "Failed to load profile: You appear to be offline. Please check your internet connection.";
             } else if (e instanceof Error && e.message.includes("FIRESTORE_UNAVAILABLE")) {
                 description = "Firestore is currently unavailable. Profile cannot be loaded. Please check your Firebase setup and internet connection.";
+            } else if (e instanceof Error && e.message.includes("Failed to get document because the client is offline")) {
+                description = "Failed to load profile: You appear to be offline. Please check your internet connection.";
             } else if (e instanceof Error) {
                 description = `Could not load your profile: ${e.message}.`;
             }
@@ -155,8 +194,8 @@ export default function TailorResumePage() {
   }, [generatedCoverLetter]);
 
   const extractJobTitleFromJD = (jdText: string): string => {
-    const jdLines = jdText.split('\\n');
-    let extractedTitle = jdLines.find(line => /title/i.test(line) && !/job title/i.test(line) && line.length < 100)?.replace(/.*title\\s*[:=-]?\\s*/i, '').trim();
+    const jdLines = jdText.split('\n');
+    let extractedTitle = jdLines.find(line => /title/i.test(line) && !/job title/i.test(line) && line.length < 100)?.replace(/.*title\s*[:=-]?\s*/i, '').trim();
     if (!extractedTitle && jdLines[0] && jdLines[0].length < 100) extractedTitle = jdLines[0].trim();
     return extractedTitle || "Untitled";
   };
@@ -195,6 +234,8 @@ export default function TailorResumePage() {
         description = "Failed to save resume: You appear to be offline. Please check your internet connection. Resume not saved to cloud.";
       } else if (e instanceof Error && e.message.includes("FIRESTORE_UNAVAILABLE")) {
          description = "Firestore is currently unavailable. Resume could not be saved. Please check your Firebase setup and internet connection.";
+      } else if (e instanceof Error && e.message.includes("Failed to get document because the client is offline")) {
+        description = "Failed to save resume: You appear to be offline. Resume not saved to cloud.";
       } else if (e instanceof Error) {
         description = `Could not save resume: ${e.message}.`;
       }
@@ -209,14 +250,6 @@ export default function TailorResumePage() {
     setJobTitleForSave(currentJobTitle);
     
     let jobDescIdForResume: string | undefined = undefined;
-    // Attempt to find if this JD matches one stored, to link them
-    // This is a simple match based on exact description text which might not always work
-    // A more robust solution would involve passing the JD ID if coming from the JD page
-    // For now, this is a best-effort.
-    // const matchingJd = (await getDocs(collection(db, "users", currentUser.uid, "jobDescriptions"))).docs
-    //    .find(doc => doc.data().description === data.jobDescription)?.id;
-    // if(matchingJd) jobDescIdForResume = matchingJd;
-    // Disabling direct JD lookup for now to simplify, rely on localStorage prefill or no link
 
     try {
       const [tailorResult, improveResult] = await Promise.all([
@@ -258,7 +291,6 @@ export default function TailorResumePage() {
     }
     setIsLoadingCoverLetter(true);
     setGeneratedCoverLetter(null); setError(null); 
-    // Clear resume-specific results when generating only cover letter
     setTailoredResume(null); setAnalysis(null); setSuggestions(null); 
 
     const currentJobTitle = extractJobTitleFromJD(data.jobDescription);
