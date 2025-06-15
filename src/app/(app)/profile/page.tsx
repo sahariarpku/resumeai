@@ -818,13 +818,13 @@ export default function ProfilePage() {
               <Form {...generalInfoForm}>
                 <form onSubmit={generalInfoForm.handleSubmit(onGeneralInfoSubmit)} className="space-y-6">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FormField control={generalInfoForm.control} name="fullName" render={({ field }) => (<FormItem><FormLabel>Full Name</FormLabel><FormControl><Input {...field} defaultValue={field.value || currentUser?.displayName || ''} /></FormControl><FormMessage /></FormItem>)} />
-                    <FormField control={generalInfoForm.control} name="email" render={({ field }) => (<FormItem><FormLabel>Email</FormLabel><FormControl><Input type="email" {...field} defaultValue={field.value || currentUser?.email || ''} disabled/></FormControl><FormDescription>Email is managed via your account.</FormDescription><FormMessage /></FormItem>)} />
-                    <FormField control={generalInfoForm.control} name="phone" render={({ field }) => (<FormItem><FormLabel>Phone (Optional)</FormLabel><FormControl><Input {...field} defaultValue={field.value || ''} /></FormControl><FormMessage /></FormItem>)} />
-                    <FormField control={generalInfoForm.control} name="address" render={({ field }) => (<FormItem><FormLabel>Address (Optional)</FormLabel><FormControl><Input placeholder="e.g. 123 Main St, Anytown, USA" {...field} defaultValue={field.value || ''} /></FormControl><FormMessage /></FormItem>)} />
-                    <FormField control={generalInfoForm.control} name="linkedin" render={({ field }) => (<FormItem><FormLabel>LinkedIn Profile URL (Optional)</FormLabel><FormControl><Input placeholder="https://linkedin.com/in/yourprofile" {...field} defaultValue={field.value || ''} /></FormControl><FormMessage /></FormItem>)} />
-                    <FormField control={generalInfoForm.control} name="github" render={({ field }) => (<FormItem><FormLabel>GitHub Profile URL (Optional)</FormLabel><FormControl><Input placeholder="https://github.com/yourusername" {...field} defaultValue={field.value || ''} /></FormControl><FormMessage /></FormItem>)} />
-                    <FormField control={generalInfoForm.control} name="portfolio" render={({ field }) => (<FormItem><FormLabel>Portfolio URL (Optional)</FormLabel><FormControl><Input placeholder="https://yourportfolio.com" {...field} defaultValue={field.value || ''} /></FormControl><FormMessage /></FormItem>)} />
+                    <FormField control={generalInfoForm.control} name="fullName" render={({ field }) => (<FormItem><FormLabel>Full Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
+                    <FormField control={generalInfoForm.control} name="email" render={({ field }) => (<FormItem><FormLabel>Email</FormLabel><FormControl><Input type="email" {...field} disabled/></FormControl><FormDescription>Email is managed via your account.</FormDescription><FormMessage /></FormItem>)} />
+                    <FormField control={generalInfoForm.control} name="phone" render={({ field }) => (<FormItem><FormLabel>Phone (Optional)</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
+                    <FormField control={generalInfoForm.control} name="address" render={({ field }) => (<FormItem><FormLabel>Address (Optional)</FormLabel><FormControl><Input placeholder="e.g. 123 Main St, Anytown, USA" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                    <FormField control={generalInfoForm.control} name="linkedin" render={({ field }) => (<FormItem><FormLabel>LinkedIn Profile URL (Optional)</FormLabel><FormControl><Input placeholder="https://linkedin.com/in/yourprofile" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                    <FormField control={generalInfoForm.control} name="github" render={({ field }) => (<FormItem><FormLabel>GitHub Profile URL (Optional)</FormLabel><FormControl><Input placeholder="https://github.com/yourusername" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                    <FormField control={generalInfoForm.control} name="portfolio" render={({ field }) => (<FormItem><FormLabel>Portfolio URL (Optional)</FormLabel><FormControl><Input placeholder="https://yourportfolio.com" {...field} /></FormControl><FormMessage /></FormItem>)} />
                   </div>
                   <FormField control={generalInfoForm.control} name="summary"
                     render={({ field }) => (
@@ -835,7 +835,7 @@ export default function ProfilePage() {
                                 {polishingField === 'summary' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4 text-primary" />}
                             </Button>
                         </div>
-                        <FormControl><Textarea placeholder="A brief summary of your career..." {...field} defaultValue={field.value || ''} rows={4} /></FormControl><FormMessage />
+                        <FormControl><Textarea placeholder="A brief summary of your career..." {...field} rows={4} /></FormControl><FormMessage />
                       </FormItem> )} />
                   <Button type="submit" size="lg" disabled={generalInfoForm.formState.isSubmitting || !currentUser || isSaving}>
                     <Save className="mr-2 h-4 w-4"/> {isSaving ? <Loader2 className="animate-spin"/> : "Save General Info"}
