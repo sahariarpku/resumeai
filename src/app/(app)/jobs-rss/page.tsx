@@ -37,8 +37,12 @@ import {
     ALL_SUBJECT_AREAS_URL,
     ALL_LOCATIONS_URL
 } from '@/lib/job-rss-feeds';
+import { useAuth } from '@/contexts/auth-context';
+import { db } from '@/lib/firebase';
+import { doc, getDoc } from "firebase/firestore";
 
-const USER_PROFILE_STORAGE_KEY = "userProfile";
+
+// const USER_PROFILE_STORAGE_KEY = "userProfile"; // No longer using this for primary profile data
 const LAST_SELECTED_SUBJECT_URL_KEY = "lastSelectedSubjectUrl_v2";
 const LAST_SELECTED_LOCATION_URL_KEY = "lastSelectedLocationUrl_v2";
 const LAST_KEYWORDS_KEY = "lastKeywords_v2";
@@ -78,10 +82,11 @@ function parseBasicRssItem(itemXml: string, id: string): JobPostingRssItem {
 export default function JobsRssPage() {
   const { toast } = useToast();
   const router = useRouter();
+  const { currentUser } = useAuth();
   const [jobPostings, setJobPostings] = useState<JobPostingRssItem[]>([]);
   const [isLoadingFeed, setIsLoadingFeed] = useState(false);
-  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
-  const [profileLoaded, setProfileLoaded] = useState(false);
+  // const [userProfile, setUserProfile] = useState<UserProfile | null>(null); // Profile fetched on-demand
+  const [initialSettingsLoaded, setInitialSettingsLoaded] = useState(false); // For localStorage filters
   
   const [areFiltersLoaded, setAreFiltersLoaded] = useState(false);
   const [initialFetchDone, setInitialFetchDone] = useState(false);
@@ -104,17 +109,6 @@ export default function JobsRssPage() {
   const subjectAreaFeeds = useMemo(() => getFeedCategoriesByType('subjectArea'), []);
   const locationFeeds = useMemo(() => getFeedCategoriesByType('location'), []);
 
-  useEffect(() => {
-    try {
-      const storedProfileString = localStorage.getItem(USER_PROFILE_STORAGE_KEY);
-      if (storedProfileString) setUserProfile(JSON.parse(storedProfileString));
-    } catch (error) {
-      console.error("Failed to load user profile:", error);
-      toast({ title: "Profile Load Error", variant: "destructive" });
-    }
-    setProfileLoaded(true);
-  }, [toast]);
-
   // Load filters from localStorage and initialize form
   useEffect(() => {
     try {
@@ -130,9 +124,9 @@ export default function JobsRssPage() {
       console.log("Filters loaded from localStorage:", { lastSubject, lastLocation, lastKeywords });
     } catch (error) {
       console.error("Failed to load last filters from localStorage:", error);
-      // Form defaults will be used
     }
     setAreFiltersLoaded(true);
+    setInitialSettingsLoaded(true); // Indicate all initial settings (filters) are loaded
   }, [filtersForm]);
 
   // Save filters to localStorage when they change
@@ -164,7 +158,6 @@ export default function JobsRssPage() {
     let targetRssUrl = "";
     let feedDescription = "selected filters";
 
-    // Determine targetRssUrl based on selections
     if (data.selectedSubjectUrl && data.selectedSubjectUrl !== ALL_SUBJECT_AREAS_URL) {
         targetRssUrl = data.selectedSubjectUrl;
         const feedDetails = PREDEFINED_RSS_FEEDS.find(f => f.url === data.selectedSubjectUrl);
@@ -174,7 +167,6 @@ export default function JobsRssPage() {
         const feedDetails = PREDEFINED_RSS_FEEDS.find(f => f.url === data.selectedLocationUrl);
         feedDescription = `location: ${feedDetails?.categoryDetail || 'Selected Location'}`;
     } else { 
-        // Default to a general feed if no specific subject or location is chosen
         targetRssUrl = ALL_LOCATIONS_URL; 
         feedDescription = "general feed (all jobs)";
     }
@@ -204,7 +196,6 @@ export default function JobsRssPage() {
         }
       }
       
-      // If response.ok is true, assume it's JSON, then check for content
       const responseData = JSON.parse(responseBodyAsText);
       if (responseData.error) { setIsLoadingFeed(false); throw new Error(responseData.error); }
       if (!responseData.rawRssContent) { setIsLoadingFeed(false); throw new Error("API returned success but no rawRssContent found.");}
@@ -268,12 +259,34 @@ export default function JobsRssPage() {
     initialFetchDone, 
     filtersForm, 
     handleFetchRssFeed,
-    watchedSubjectUrl, // Ensure re-run if these specific watched values change after initial load
+    watchedSubjectUrl, 
     watchedLocationUrl, 
     watchedKeywords     
   ]);
 
-  // Fetches details for a single job using its RSS XML (AI call)
+  const fetchUserProfile = async (): Promise<UserProfile | null> => {
+    if (!currentUser) {
+      toast({ title: "Not Authenticated", description: "Please sign in to use this feature.", variant: "destructive" });
+      router.push('/auth/signin');
+      return null;
+    }
+    try {
+      const userDocRef = doc(db, "users", currentUser.uid);
+      const userDocSnap = await getDoc(userDocRef);
+      if (userDocSnap.exists()) {
+        return userDocSnap.data() as UserProfile;
+      } else {
+        toast({ title: "Profile Not Found", description: "Please complete your profile first.", variant: "default" });
+        router.push('/profile');
+        return null;
+      }
+    } catch (error) {
+      console.error("Error fetching user profile:", error);
+      toast({ title: "Profile Load Error", description: "Could not load your profile.", variant: "destructive" });
+      return null;
+    }
+  };
+
   const fetchAndSetJobDetailsFromRssXml = async (jobId: string): Promise<JobPostingRssItem | null> => {
     let updatedJob = null;
     setJobPostings(prev => prev.map(j => j.id === jobId ? { ...j, isProcessingDetails: true } : j));
@@ -303,12 +316,11 @@ export default function JobsRssPage() {
       toast({ title: "No Jobs Selected", description: "Please select at least one job to process.", variant: "default" });
       return;
     }
-    if (!userProfile) {
-      toast({ title: "Profile Needed", description: "Please set up your profile to calculate CV matches.", variant: "default" });
-      router.push('/profile');
-      return;
-    }
-    const profileText = profileToResumeText(userProfile);
+    
+    const userProfileData = await fetchUserProfile();
+    if (!userProfileData) return;
+
+    const profileText = profileToResumeText(userProfileData);
     if (!profileText.trim()) {
         toast({ title: "Profile Empty", description: "Your profile is empty. Please add details to calculate matches.", variant: "default" });
         router.push('/profile');
@@ -324,8 +336,7 @@ export default function JobsRssPage() {
       let jobData = jobPostings.find(j => j.id === jobId);
       if (!jobData) continue;
 
-      // Fetch details from RSS XML if not already fetched
-      if (!jobData.company && jobData.rssItemXml) { // Using company as an indicator details were fetched
+      if (!jobData.company && jobData.rssItemXml) { 
         jobData = await fetchAndSetJobDetailsFromRssXml(jobId);
       }
       
@@ -421,16 +432,10 @@ export default function JobsRssPage() {
         company: detailsExtractionResult.companyName || j.company, 
       } : j));
 
-      const storedProfileString = localStorage.getItem(USER_PROFILE_STORAGE_KEY);
-      if (!storedProfileString) {
-        toast({ title: "Profile Not Found", description: "Please complete your profile first.", variant: "default" });
-        router.push('/profile');
-        setTailoringJobId(null);
-        return;
-      }
-      const userProfileData = JSON.parse(storedProfileString) as UserProfile;
-      const baseResumeText = profileToResumeText(userProfileData);
+      const userProfileData = await fetchUserProfile();
+      if (!userProfileData) { setTailoringJobId(null); return; }
 
+      const baseResumeText = profileToResumeText(userProfileData);
       if (!baseResumeText.trim()) {
          toast({ title: "Profile Incomplete", description: "Your profile seems empty.", variant: "default" });
         router.push('/profile');
@@ -453,12 +458,10 @@ export default function JobsRssPage() {
   };
   
   const handleProcessSingleJobMatch = async (jobId: string) => {
-      if (!userProfile) {
-        toast({ title: "Profile Needed", description: "Please set up your profile to calculate CV matches.", variant: "default" });
-        router.push('/profile');
-        return;
-      }
-      const profileText = profileToResumeText(userProfile);
+      const userProfileData = await fetchUserProfile();
+      if (!userProfileData) return;
+      
+      const profileText = profileToResumeText(userProfileData);
       if (!profileText.trim()) {
           toast({ title: "Profile Empty", description: "Your profile is empty.", variant: "default" });
           router.push('/profile');
@@ -490,7 +493,7 @@ export default function JobsRssPage() {
   };
 
 
-  if (!profileLoaded || !areFiltersLoaded) { 
+  if (!initialSettingsLoaded) { 
      return (
       <div className="container mx-auto py-8 text-center">
         <Loader2 className="mx-auto h-12 w-12 animate-spin text-primary" />
@@ -638,7 +641,7 @@ export default function JobsRssPage() {
               </div>
               <Button 
                 onClick={handleProcessSelectedJobs} 
-                disabled={selectedJobIds.size === 0 || jobPostings.some(job => job.isProcessingDetails || job.isCalculatingMatch) || totalToProcess > 0}
+                disabled={selectedJobIds.size === 0 || jobPostings.some(job => job.isProcessingDetails || job.isCalculatingMatch) || totalToProcess > 0 || !currentUser}
                 size="lg"
               >
                 <SparklesIcon className="mr-2 h-5 w-5" />
@@ -743,7 +746,7 @@ export default function JobsRssPage() {
                                 size="icon" 
                                 className="h-7 w-7" 
                                 onClick={() => handleProcessSingleJobMatch(job.id)}
-                                disabled={!job.rssItemXml || tailoringJobId === job.id}
+                                disabled={!job.rssItemXml || tailoringJobId === job.id || !currentUser}
                               >
                                 <SparklesIcon className="h-4 w-4 text-muted-foreground/70 hover:text-primary" />
                               </Button>
@@ -757,7 +760,7 @@ export default function JobsRssPage() {
                             variant="outline"
                             size="sm"
                             onClick={() => handleTailorCvForJob(job.id)}
-                            disabled={tailoringJobId === job.id || !!job.isCalculatingMatch || !job.link || job.link === '#'}
+                            disabled={tailoringJobId === job.id || !!job.isCalculatingMatch || !job.link || job.link === '#' || !currentUser}
                         >
                             {tailoringJobId === job.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ArrowRight className="mr-2 h-4 w-4" /> }
                             Tailor CV
@@ -802,11 +805,11 @@ export default function JobsRssPage() {
                 <p className="text-muted-foreground">
                     Choose a subject area and/or location, optionally add keywords, then click "Fetch RSS Feed", or wait for auto-fetch.
                 </p>
-                 {profileLoaded && !userProfile && (
+                 {initialSettingsLoaded && !currentUser && ( // Show after initial settings load to avoid flicker
                     <p className="text-sm text-amber-600 mt-4 flex items-center justify-center">
                         <AlertTriangle className="mr-2 h-4 w-4" />
-                        Your profile is not set up. CV matching will be disabled until profile is complete.
-                        <Button variant="link" size="sm" className="p-0 h-auto ml-1" onClick={() => router.push('/profile')}>Set up profile</Button>
+                        Please sign in to use CV matching and tailoring features.
+                        <Button variant="link" size="sm" className="p-0 h-auto ml-1" onClick={() => router.push('/auth/signin')}>Sign In</Button>
                     </p>
                 )}
             </CardContent>
@@ -816,3 +819,6 @@ export default function JobsRssPage() {
     </TooltipProvider>
   );
 }
+
+
+    
