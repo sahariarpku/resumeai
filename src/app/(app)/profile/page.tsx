@@ -68,12 +68,12 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { Label } from '@/components/ui/label';
 import { useAuth } from '@/contexts/auth-context';
 import { db } from '@/lib/firebase';
-import { doc, getDoc, setDoc, serverTimestamp, enableNetwork } from "firebase/firestore";
+import { doc, getDoc, setDoc, serverTimestamp, enableNetwork, Timestamp } from "firebase/firestore";
 import { CvCustomizationModal } from '@/components/cv-customization-modal';
 
 
 const fallbackInitialProfileData: UserProfile = {
-  id: "", // Will be set by currentUser.uid
+  id: "", 
   fullName: "",
   email: "", 
   phone: "",
@@ -190,7 +190,7 @@ export default function ProfilePage() {
               email: currentUser.email || "",
               fullName: currentUser.displayName || "",
               sectionOrder: [...DEFAULT_SECTION_ORDER],
-              createdAt: serverTimestamp(), 
+              createdAt: serverTimestamp() as Timestamp, 
             };
           }
           setProfileData(loadedProfile);
@@ -209,7 +209,7 @@ export default function ProfilePage() {
           let description = "Could not load your profile. Starting fresh.";
           if (error instanceof Error && error.message.toLowerCase().includes("offline")) {
             description = "Failed to load profile: You appear to be offline. Please check your internet connection.";
-          } else if (error instanceof Error && error.message.includes("FIRESTORE_UNAVAILABLE")) {
+          } else if (error instanceof Error && error.message.toLowerCase().includes("firestore_unavailable")) {
             description = "Firestore is currently unavailable. Profile cannot be loaded. Please check your Firebase setup and internet connection.";
           } else if (error instanceof Error) {
             description = `Could not load your profile: ${error.message}. Starting fresh.`;
@@ -246,10 +246,10 @@ export default function ProfilePage() {
       ...updatedProfile,
       id: currentUser.uid, 
       email: currentUser.email || updatedProfile.email,
-      updatedAt: serverTimestamp(), 
+      updatedAt: serverTimestamp() as Timestamp, 
     };
     if (!profileToSave.createdAt) { 
-        profileToSave.createdAt = serverTimestamp();
+        profileToSave.createdAt = serverTimestamp() as Timestamp;
     }
 
     try {
@@ -263,7 +263,7 @@ export default function ProfilePage() {
       let description = "Could not save profile.";
       if (error instanceof Error && error.message.toLowerCase().includes("offline")) {
         description = "Failed to save profile: You appear to be offline. Changes might be saved locally if offline persistence is enabled and will sync when online.";
-      } else if (error instanceof Error && error.message.includes("FIRESTORE_UNAVAILABLE")) {
+      } else if (error instanceof Error && error.message.toLowerCase().includes("firestore_unavailable")) {
          description = "Firestore is currently unavailable. Profile could not be saved. Please check your Firebase setup and internet connection.";
       } else if (error instanceof Error) {
         description = `Could not save profile: ${error.message}.`;
@@ -534,7 +534,9 @@ export default function ProfilePage() {
     let updatedProfile = { ...profileData };
 
     updatedProfile.id = currentUser.uid;
-    updatedProfile.email = currentUser.email || "";
+    if (currentUser.email) updatedProfile.email = currentUser.email;
+    else if (data.email) updatedProfile.email = data.email;
+
 
     if (data.fullName) updatedProfile.fullName = data.fullName;
     if (data.phone) updatedProfile.phone = data.phone;
@@ -611,6 +613,8 @@ export default function ProfilePage() {
         id: `imp-cs-${Date.now()}-${index}`, heading: item.heading || "", content: item.content || "",
       }));
     }
+    // Update the main profileData state. This will trigger a re-render.
+    // The user still needs to click "Save General Info" or save individual sections if those dialogs were opened.
     setProfileData(updatedProfile); 
   };
 
@@ -835,7 +839,7 @@ export default function ProfilePage() {
                     <FormField control={generalInfoForm.control} name="address" render={({ field }) => (<FormItem><FormLabel>Address (Optional)</FormLabel><FormControl><Input placeholder="e.g. 123 Main St, Anytown, USA" {...field} /></FormControl><FormMessage /></FormItem>)} />
                     <FormField control={generalInfoForm.control} name="linkedin" render={({ field }) => (<FormItem><FormLabel>LinkedIn Profile URL (Optional)</FormLabel><FormControl><Input placeholder="https://linkedin.com/in/yourprofile" {...field} /></FormControl><FormMessage /></FormItem>)} />
                     <FormField control={generalInfoForm.control} name="github" render={({ field }) => (<FormItem><FormLabel>GitHub Profile URL (Optional)</FormLabel><FormControl><Input placeholder="https://github.com/yourusername" {...field} /></FormControl><FormMessage /></FormItem>)} />
-                    <FormField control={generalInfoForm.control} name="portfolio" render={({ field }) => (<FormItem><FormLabel>Portfolio URL (Optional)</FormLabel><FormControl><Input placeholder="https://yourportfolio.com" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                    <FormField control={generalInfoForm.control} name="portfolio" render={({ field }) => (<FormItem><FormLabel>Portfolio URL (Optional)</FormLabel><FormControl><Input placeholder="https://yourportfolio.com" type="url" {...field} /></FormControl><FormMessage /></FormItem>)} />
                   </div>
                   <FormField control={generalInfoForm.control} name="summary"
                     render={({ field }) => (
