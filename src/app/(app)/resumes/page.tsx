@@ -28,10 +28,13 @@ import {
 import { useAuth } from '@/contexts/auth-context';
 import { db } from '@/lib/firebase';
 import { collection, query, orderBy, onSnapshot, doc, deleteDoc, Timestamp, enableNetwork } from "firebase/firestore";
+import { useRouter } from 'next/navigation';
+
 
 export default function MyResumesPage() {
   const { toast } = useToast();
   const { currentUser } = useAuth();
+  const router = useRouter();
   const [resumes, setResumes] = useState<StoredResume[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -61,6 +64,8 @@ export default function MyResumesPage() {
       let description = "Could not load resumes.";
       if (error instanceof Error && error.message.toLowerCase().includes("offline")) {
         description = "Failed to load resumes: You appear to be offline. Please check your internet connection.";
+      } else if (error instanceof Error && error.message.includes("FIRESTORE_UNAVAILABLE")) {
+         description = "Firestore is currently unavailable. Resumes cannot be loaded. Please check your Firebase setup and internet connection.";
       } else if (error instanceof Error) {
         description = `Could not load resumes: ${error.message}.`;
       }
@@ -85,6 +90,8 @@ export default function MyResumesPage() {
       let description = "Could not delete resume.";
        if (error instanceof Error && error.message.toLowerCase().includes("offline")) {
         description = "Failed to delete resume: You appear to be offline. Please check your internet connection.";
+      } else if (error instanceof Error && error.message.includes("FIRESTORE_UNAVAILABLE")) {
+         description = "Firestore is currently unavailable. Resume could not be deleted. Please check your Firebase setup and internet connection.";
       } else if (error instanceof Error) {
         description = `Could not delete resume: ${error.message}.`;
       }
@@ -157,3 +164,4 @@ export default function MyResumesPage() {
     </TooltipProvider>
   );
 }
+

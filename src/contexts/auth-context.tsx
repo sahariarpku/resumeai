@@ -52,6 +52,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             errorMessage = `Sign-in was cancelled. Please try again.`;
         } else if (authError.code === 'auth/unauthorized-domain') {
             errorMessage = `This domain is not authorized for ${providerName} sign-in. Please contact support or check Firebase console configuration.`;
+        } else if (authError.code === 'auth/operation-not-allowed') {
+            errorMessage = `${providerName} sign-in is not enabled. Please contact support or check Firebase console configuration.`;
         }
     }
     toast({
@@ -141,3 +143,4 @@ export const useAuth = (): AuthContextType => {
   }
   return context;
 };
+

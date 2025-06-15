@@ -105,6 +105,8 @@ export default function TailorResumePage() {
            let description = "Could not load profile from cloud.";
             if (e instanceof Error && e.message.toLowerCase().includes("offline")) {
                 description = "Failed to load profile: You appear to be offline. Please check your internet connection.";
+            } else if (e instanceof Error && e.message.includes("FIRESTORE_UNAVAILABLE")) {
+                description = "Firestore is currently unavailable. Profile cannot be loaded. Please check your Firebase setup and internet connection.";
             } else if (e instanceof Error) {
                 description = `Could not load your profile: ${e.message}.`;
             }
@@ -188,6 +190,8 @@ export default function TailorResumePage() {
       let description = "Could not save resume to cloud.";
       if (e instanceof Error && e.message.toLowerCase().includes("offline")) {
         description = "Failed to save resume: You appear to be offline. Resume will be saved locally and synced when online.";
+      } else if (e instanceof Error && e.message.includes("FIRESTORE_UNAVAILABLE")) {
+         description = "Firestore is currently unavailable. Resume could not be saved. Please check your Firebase setup and internet connection.";
       } else if (e instanceof Error) {
         description = `Could not save resume: ${e.message}.`;
       }
@@ -217,7 +221,10 @@ export default function TailorResumePage() {
       }
     } catch (err) {
       console.error("Error tailoring resume:", err);
-      const errorMessage = err instanceof Error ? err.message : "Could not tailor resume. Please try again.";
+      let errorMessage = err instanceof Error ? err.message : "Could not tailor resume. Please try again.";
+      if (err instanceof Error && err.message.toLowerCase().includes("offline")) {
+        errorMessage = "Failed to tailor resume: You appear to be offline. Please check your internet connection.";
+      }
       setError(errorMessage);
       toast({ title: "Error", description: errorMessage, variant: "destructive" });
     } finally {
@@ -245,7 +252,10 @@ export default function TailorResumePage() {
       }
     } catch (err) {
       console.error("Error generating cover letter:", err);
-      const errorMessage = err instanceof Error ? err.message : "Could not generate cover letter. Please try again.";
+      let errorMessage = err instanceof Error ? err.message : "Could not generate cover letter. Please try again.";
+      if (err instanceof Error && err.message.toLowerCase().includes("offline")) {
+        errorMessage = "Failed to generate cover letter: You appear to be offline. Please check your internet connection.";
+      }
       setError(errorMessage);
       toast({ title: "Error", description: errorMessage, variant: "destructive" });
     } finally {
@@ -316,3 +326,4 @@ export default function TailorResumePage() {
     </div>
   );
 }
+

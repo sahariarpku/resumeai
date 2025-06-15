@@ -125,8 +125,8 @@ export interface UserProfile {
   customSections: CustomSection[];
   sectionOrder?: ProfileSectionKey[];
   // Timestamps for tracking, managed by Firestore or server-side logic
-  createdAt?: Timestamp | string; 
-  updatedAt?: Timestamp | string;
+  createdAt?: Timestamp | any; // Allow 'any' for serverTimestamp() before conversion
+  updatedAt?: Timestamp | any; // Allow 'any' for serverTimestamp() before conversion
 }
 
 export interface JobDescriptionItem {
@@ -178,3 +178,4 @@ export interface JobPostingRssItem {
   isProcessingDetails?: boolean; // UI loading state for AI processing this item
   isCalculatingMatch?: boolean; // UI loading state for CV match calculation for this item (can reuse or differentiate)
 }
+

@@ -68,7 +68,7 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { Label } from '@/components/ui/label';
 import { useAuth } from '@/contexts/auth-context';
 import { db } from '@/lib/firebase';
-import { doc, getDoc, setDoc, serverTimestamp, enableNetwork, disableNetwork } from "firebase/firestore";
+import { doc, getDoc, setDoc, serverTimestamp, enableNetwork } from "firebase/firestore";
 import { CvCustomizationModal } from '@/components/cv-customization-modal';
 
 
@@ -159,7 +159,7 @@ export default function ProfilePage() {
     const loadProfile = async () => {
       if (currentUser) {
         try {
-          await enableNetwork(db); // Attempt to ensure network is enabled for the fetch
+          await enableNetwork(db); 
           const userDocRef = doc(db, "users", currentUser.uid);
           const userDocSnap = await getDoc(userDocRef);
           let loadedProfile: UserProfile;
@@ -209,6 +209,8 @@ export default function ProfilePage() {
           let description = "Could not load your profile. Starting fresh.";
           if (error instanceof Error && error.message.toLowerCase().includes("offline")) {
             description = "Failed to load profile: You appear to be offline. Please check your internet connection.";
+          } else if (error instanceof Error && error.message.includes("FIRESTORE_UNAVAILABLE")) {
+            description = "Firestore is currently unavailable. Profile cannot be loaded. Please check your Firebase setup and internet connection.";
           } else if (error instanceof Error) {
             description = `Could not load your profile: ${error.message}. Starting fresh.`;
           }
@@ -251,7 +253,7 @@ export default function ProfilePage() {
     }
 
     try {
-      await enableNetwork(db); // Attempt to ensure network is enabled for the save
+      await enableNetwork(db); 
       const userDocRef = doc(db, "users", currentUser.uid);
       await setDoc(userDocRef, profileToSave, { merge: true }); 
       setProfileData(profileToSave); 
@@ -261,6 +263,8 @@ export default function ProfilePage() {
       let description = "Could not save profile.";
       if (error instanceof Error && error.message.toLowerCase().includes("offline")) {
         description = "Failed to save profile: You appear to be offline. Changes might be saved locally if offline persistence is enabled and will sync when online.";
+      } else if (error instanceof Error && error.message.includes("FIRESTORE_UNAVAILABLE")) {
+         description = "Firestore is currently unavailable. Profile could not be saved. Please check your Firebase setup and internet connection.";
       } else if (error instanceof Error) {
         description = `Could not save profile: ${error.message}.`;
       }
@@ -288,7 +292,11 @@ export default function ProfilePage() {
       toast({ title: "Text Polished!", description: `${fieldName.charAt(0).toUpperCase() + fieldName.slice(1)} has been updated by AI.` });
     } catch (err) {
       console.error(`Error polishing ${fieldName}:`, err);
-      toast({ title: "AI Polish Error", description: `Could not polish ${fieldName}.`, variant: "destructive" });
+      let description = `Could not polish ${fieldName}.`;
+      if (err instanceof Error && err.message.toLowerCase().includes("offline")) {
+        description = `Could not polish ${fieldName}: You appear to be offline. Please check your internet connection.`;
+      }
+      toast({ title: "AI Polish Error", description, variant: "destructive" });
     } finally {
       setPolishingField(null);
     }
@@ -471,7 +479,7 @@ export default function ProfilePage() {
   const handleCvFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      if (file.type === "text/plain" || file.type === "text/markdown") {
+      if (file.type === "text/plain" || file.type === "text/markdown" || file.name.endsWith('.md') || file.name.endsWith('.txt')) {
         const reader = new FileReader();
         reader.onload = (e) => {
           setCvFileContent(e.target?.result as string);
@@ -508,7 +516,11 @@ export default function ProfilePage() {
 
     } catch (err) {
       console.error("Error importing CV data:", err);
-      toast({ title: "CV Import Error", description: `Could not process CV: ${err instanceof Error ? err.message : 'Unknown error'}.`, variant: "destructive" });
+      let description = `Could not process CV: ${err instanceof Error ? err.message : 'Unknown error'}.`;
+      if (err instanceof Error && err.message.toLowerCase().includes("offline")) {
+        description = "Failed to process CV: You appear to be offline. Please check your internet connection.";
+      }
+      toast({ title: "CV Import Error", description, variant: "destructive" });
     } finally {
       setIsImportingCv(false);
       setCvFileContent(null); 
@@ -850,7 +862,7 @@ export default function ProfilePage() {
         <DialogContent className="sm:max-w-lg">
           <DialogHeader><DialogTitle className="font-headline">Import CV</DialogTitle><DialogDescription>Upload your CV (.txt or .md file) to automatically populate your profile. Data will be saved to Firestore after review and explicit save actions.</DialogDescription></DialogHeader>
           <div className="py-4 space-y-4">
-            <div><Label htmlFor="cv-file-input">CV File (.txt, .md)</Label><Input id="cv-file-input" type="file" accept=".txt,.md" onChange={handleCvFileChange} ref={fileInputRef} className="mt-1"/></div>
+            <div><Label htmlFor="cv-file-input">CV File (.txt, .md)</Label><Input id="cv-file-input" type="file" accept=".txt,.md,text/plain,text/markdown" onChange={handleCvFileChange} ref={fileInputRef} className="mt-1"/></div>
             {cvFileContent && (<div className="p-2 border rounded-md bg-muted max-h-40 overflow-y-auto text-xs"><h4 className="font-medium mb-1">File Preview:</h4><pre className="whitespace-pre-wrap">{cvFileContent.substring(0, 300)}{cvFileContent.length > 300 ? "..." : ""}</pre></div>)}
           </div>
           <DialogFooter><DialogClose asChild><Button type="button" variant="outline">Cancel</Button></DialogClose>
@@ -882,3 +894,4 @@ export default function ProfilePage() {
     </TooltipProvider>
   );
 }
+

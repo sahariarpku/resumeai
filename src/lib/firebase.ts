@@ -25,3 +25,4 @@ const auth: Auth = getAuth(app);
 const db: Firestore = getFirestore(app); // Initialize Firestore
 
 export { app, auth, db };
+

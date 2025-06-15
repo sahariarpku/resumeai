@@ -84,6 +84,8 @@ export default function JobDescriptionsPage() {
       let description = "Could not load job applications.";
       if (error instanceof Error && error.message.toLowerCase().includes("offline")) {
         description = "Failed to load job applications: You appear to be offline. Please check your internet connection.";
+      } else if (error instanceof Error && error.message.includes("FIRESTORE_UNAVAILABLE")) {
+         description = "Firestore is currently unavailable. Job applications cannot be loaded. Please check your Firebase setup and internet connection.";
       } else if (error instanceof Error) {
         description = `Could not load job applications: ${error.message}.`;
       }
@@ -133,6 +135,8 @@ export default function JobDescriptionsPage() {
       let description = "Could not save job application.";
       if (error instanceof Error && error.message.toLowerCase().includes("offline")) {
         description = "Failed to save job application: You appear to be offline. Please check your internet connection.";
+      } else if (error instanceof Error && error.message.includes("FIRESTORE_UNAVAILABLE")) {
+         description = "Firestore is currently unavailable. Job application could not be saved. Please check your Firebase setup and internet connection.";
       } else if (error instanceof Error) {
         description = `Could not save job application: ${error.message}.`;
       }
@@ -169,6 +173,8 @@ export default function JobDescriptionsPage() {
       let description = "Could not delete job application.";
       if (error instanceof Error && error.message.toLowerCase().includes("offline")) {
         description = "Failed to delete job application: You appear to be offline. Please check your connection.";
+      } else if (error instanceof Error && error.message.includes("FIRESTORE_UNAVAILABLE")) {
+         description = "Firestore is currently unavailable. Job application could not be deleted. Please check your Firebase setup and internet connection.";
       } else if (error instanceof Error) {
         description = `Could not delete job application: ${error.message}.`;
       }
@@ -190,7 +196,11 @@ export default function JobDescriptionsPage() {
       toast({ title: "Extraction Attempted!", description: "Job title and company name fields have been updated. Please review them." });
     } catch (err) {
       console.error("Error extracting job details from text:", err);
-      toast({ title: "Extraction Error", description: `Extraction failed: ${err instanceof Error ? err.message : 'Unknown error'}`, variant: "destructive" });
+      let description = `Extraction failed: ${err instanceof Error ? err.message : 'Unknown error'}`;
+      if (err instanceof Error && err.message.toLowerCase().includes("offline")) {
+        description = "Extraction failed: You appear to be offline. Please check your internet connection.";
+      }
+      toast({ title: "Extraction Error", description, variant: "destructive" });
     } finally {
       setIsExtractingDetails(false);
     }
@@ -221,7 +231,11 @@ export default function JobDescriptionsPage() {
       }
     } catch (err) {
       console.error("Error fetching/extracting from URL:", err);
-      toast({ title: "URL Processing Error", description: `Processing failed: ${err instanceof Error ? err.message : 'Unknown error'}`, variant: "destructive" });
+      let description = `Processing failed: ${err instanceof Error ? err.message : 'Unknown error'}`;
+      if (err instanceof Error && err.message.toLowerCase().includes("offline")) {
+        description = "URL Processing failed: You appear to be offline. Please check your internet connection.";
+      }
+      toast({ title: "URL Processing Error", description, variant: "destructive" });
     } finally {
       setIsProcessingUrl(false);
     }
@@ -251,6 +265,8 @@ export default function JobDescriptionsPage() {
       let description = "Could not prepare data for resume tailoring.";
       if (error instanceof Error && error.message.toLowerCase().includes("offline")) {
         description = "Failed to prepare for tailoring: You appear to be offline. Please check your internet connection.";
+      } else if (error instanceof Error && error.message.includes("FIRESTORE_UNAVAILABLE")) {
+         description = "Firestore is currently unavailable. Cannot prepare for tailoring. Please check your Firebase setup and internet connection.";
       } else if (error instanceof Error) {
         description = `Could not prepare data: ${error.message}.`;
       }
@@ -292,6 +308,8 @@ export default function JobDescriptionsPage() {
       let description = `Calculation failed: ${error instanceof Error ? error.message : 'Unknown error'}`;
       if (error instanceof Error && error.message.toLowerCase().includes("offline")) {
         description = "Failed to calculate match score: You appear to be offline. Please check your internet connection.";
+      } else if (error instanceof Error && error.message.includes("FIRESTORE_UNAVAILABLE")) {
+         description = "Firestore is currently unavailable. Match score could not be calculated. Please check your Firebase setup and internet connection.";
       }
       toast({ title: "Match Score Error", description, variant: "destructive" });
     } finally {
@@ -388,3 +406,4 @@ export default function JobDescriptionsPage() {
     </TooltipProvider>
   );
 }
+
