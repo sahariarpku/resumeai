@@ -66,6 +66,10 @@ export default function SignUpPage() {
       let errorMessage = "Failed to create account. Please try again.";
       if (error.code === 'auth/email-already-in-use') {
         errorMessage = "This email is already registered. Please sign in or use a different email.";
+      } else if (error.code === 'auth/weak-password') {
+        errorMessage = "The password is too weak. Please choose a stronger password.";
+      } else if (error.code === 'auth/invalid-email') {
+        errorMessage = "The email address is not valid. Please check and try again.";
       }
       toast({
         title: "Sign Up Failed",
@@ -91,7 +95,7 @@ export default function SignUpPage() {
             onClick={signInWithGoogle}
             disabled={socialLoading || isLoadingEmail}
           >
-            {socialLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <GoogleIcon />}
+            {socialLoading && !isLoadingEmail ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <GoogleIcon />}
             Sign up with Google
           </Button>
           <Button 
@@ -100,7 +104,7 @@ export default function SignUpPage() {
             onClick={signInWithGitHub}
             disabled={socialLoading || isLoadingEmail}
           >
-            {socialLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Github className="mr-2 h-4 w-4" />}
+            {socialLoading && !isLoadingEmail ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Github className="mr-2 h-4 w-4" />}
             Sign up with GitHub
           </Button>
 
