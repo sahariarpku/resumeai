@@ -50,6 +50,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             errorMessage = `Sign-in popup was closed. Please try again.`;
         } else if (authError.code === 'auth/cancelled-popup-request') {
             errorMessage = `Sign-in was cancelled. Please try again.`;
+        } else if (authError.code === 'auth/unauthorized-domain') {
+            errorMessage = `This domain is not authorized for ${providerName} sign-in. Please contact support or check Firebase console configuration.`;
         }
     }
     toast({
