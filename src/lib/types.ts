@@ -1,4 +1,6 @@
 
+import type { Timestamp } from 'firebase/firestore';
+
 export interface WorkExperience {
   id: string;
   company: string;
@@ -103,9 +105,9 @@ export const DEFAULT_SECTION_ORDER: ProfileSectionKey[] = [
 ];
 
 export interface UserProfile {
-  id: string;
+  id: string; // Should map to currentUser.uid
   fullName?: string;
-  email?: string;
+  email?: string; // Should map to currentUser.email
   phone?: string;
   address?: string;
   linkedin?: string;
@@ -122,28 +124,33 @@ export interface UserProfile {
   references: Reference[];
   customSections: CustomSection[];
   sectionOrder?: ProfileSectionKey[];
+  // Timestamps for tracking, managed by Firestore or server-side logic
+  createdAt?: Timestamp | string; 
+  updatedAt?: Timestamp | string;
 }
 
 export interface JobDescriptionItem {
-  id: string;
+  id: string; // Firestore document ID
   title: string;
   company?: string;
   description: string; // The full job description text
-  createdAt: string; // ISO date string
+  createdAt: Timestamp | string; // Firestore Timestamp or ISO string for client
+  userId?: string; // To associate with a user if stored in a top-level collection
   matchPercentage?: number;
   matchSummary?: string;
   matchCategory?: 'Excellent Match' | 'Good Match' | 'Fair Match' | 'Poor Match';
 }
 
 export interface StoredResume {
-  id: string;
+  id: string; // Firestore document ID
   name: string; // e.g., "Resume for Software Engineer at Google"
   jobDescriptionId?: string; // Link to the JD it was tailored for
   baseResumeSnapshot?: string; // Snapshot of user profile data used
   tailoredContent: string; // The tailored resume text (e.g., Markdown or plain text)
   aiAnalysis?: string; // AI analysis of match
   aiSuggestions?: string; // AI suggestions for improvement
-  createdAt: string; // ISO date string
+  createdAt: Timestamp | string; // Firestore Timestamp or ISO string for client
+  userId?: string; // To associate with a user
 }
 
 // For the "Jobs RSS" feature
@@ -171,4 +178,3 @@ export interface JobPostingRssItem {
   isProcessingDetails?: boolean; // UI loading state for AI processing this item
   isCalculatingMatch?: boolean; // UI loading state for CV match calculation for this item (can reuse or differentiate)
 }
-
