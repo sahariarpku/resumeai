@@ -165,7 +165,8 @@ export default function TailorResumePage() {
     currentTailoredResume: string | null,
     currentAnalysis: string | null,
     currentSuggestions: string | null,
-    title: string
+    title: string,
+    jobDescId?: string // Optional job description ID
   ) => {
     if (!currentUser || !currentTailoredResume) {
       toast({ title: "Error", description: "Cannot save resume without user or content.", variant: "destructive" });
@@ -180,16 +181,18 @@ export default function TailorResumePage() {
       aiSuggestions: currentSuggestions || undefined,
       createdAt: Timestamp.now(),
       userId: currentUser.uid,
+      jobDescriptionId: jobDescId || undefined,
     };
     try {
       await enableNetwork(db);
       const resumeDocRef = doc(db, "users", currentUser.uid, "resumes", newResumeId);
       await setDoc(resumeDocRef, newResume);
+      toast({ title: "Resume Saved!", description: "Your tailored resume has been saved to the cloud." });
     } catch (e) {
       console.error("Failed to save resume to Firestore:", e);
       let description = "Could not save resume to cloud.";
       if (e instanceof Error && e.message.toLowerCase().includes("offline")) {
-        description = "Failed to save resume: You appear to be offline. Resume will be saved locally and synced when online.";
+        description = "Failed to save resume: You appear to be offline. Please check your internet connection. Resume not saved to cloud.";
       } else if (e instanceof Error && e.message.includes("FIRESTORE_UNAVAILABLE")) {
          description = "Firestore is currently unavailable. Resume could not be saved. Please check your Firebase setup and internet connection.";
       } else if (e instanceof Error) {
@@ -204,26 +207,42 @@ export default function TailorResumePage() {
     setTailoredResume(null); setAnalysis(null); setSuggestions(null); setError(null); setGeneratedCoverLetter(null); 
     const currentJobTitle = extractJobTitleFromJD(data.jobDescription);
     setJobTitleForSave(currentJobTitle);
+    
+    let jobDescIdForResume: string | undefined = undefined;
+    // Attempt to find if this JD matches one stored, to link them
+    // This is a simple match based on exact description text which might not always work
+    // A more robust solution would involve passing the JD ID if coming from the JD page
+    // For now, this is a best-effort.
+    // const matchingJd = (await getDocs(collection(db, "users", currentUser.uid, "jobDescriptions"))).docs
+    //    .find(doc => doc.data().description === data.jobDescription)?.id;
+    // if(matchingJd) jobDescIdForResume = matchingJd;
+    // Disabling direct JD lookup for now to simplify, rely on localStorage prefill or no link
+
     try {
       const [tailorResult, improveResult] = await Promise.all([
         tailorResumeToJobDescription({ resume: data.resumeContent, jobDescription: data.jobDescription }),
         improveResume({ resume: data.resumeContent, jobDescription: data.jobDescription })
       ]);
-      if (tailorResult.tailoredResume) setTailoredResume(tailorResult.tailoredResume);
-      else setError("The AI could not generate a tailored resume based on the input.");
+      if (tailorResult.tailoredResume) {
+        setTailoredResume(tailorResult.tailoredResume);
+        await handleSaveResumeToFirestore(tailorResult.tailoredResume, tailorResult.analysis, improveResult.suggestions, currentJobTitle + " Resume", jobDescIdForResume);
+      } else {
+        setError("The AI could not generate a tailored resume based on the input.");
+      }
       if (tailorResult.analysis) setAnalysis(tailorResult.analysis);
       if (improveResult.suggestions) setSuggestions(improveResult.suggestions);
-      if (tailorResult.tailoredResume) {
-        toast({ title: "Resume Tailored!", description: "AI has customized your resume. It has been automatically saved to the cloud." });
-        await handleSaveResumeToFirestore(tailorResult.tailoredResume, tailorResult.analysis, improveResult.suggestions, currentJobTitle + " Resume");
-      } else {
-         toast({ title: "Suggestions Provided", description: "AI has provided suggestions for your resume." });
+      
+      if (!tailorResult.tailoredResume && improveResult.suggestions) {
+         toast({ title: "Suggestions Provided", description: "AI has provided suggestions for your resume. No tailored resume was generated this time." });
       }
+
     } catch (err) {
       console.error("Error tailoring resume:", err);
       let errorMessage = err instanceof Error ? err.message : "Could not tailor resume. Please try again.";
       if (err instanceof Error && err.message.toLowerCase().includes("offline")) {
         errorMessage = "Failed to tailor resume: You appear to be offline. Please check your internet connection.";
+      } else if (err instanceof Error) {
+        errorMessage = `Error tailoring resume: ${err.message}.`;
       }
       setError(errorMessage);
       toast({ title: "Error", description: errorMessage, variant: "destructive" });
@@ -238,7 +257,10 @@ export default function TailorResumePage() {
       toast({ title: "Missing Information", description: "Please provide both resume content and job description.", variant: "destructive"}); return;
     }
     setIsLoadingCoverLetter(true);
-    setGeneratedCoverLetter(null); setError(null); setTailoredResume(null); setAnalysis(null); setSuggestions(null);
+    setGeneratedCoverLetter(null); setError(null); 
+    // Clear resume-specific results when generating only cover letter
+    setTailoredResume(null); setAnalysis(null); setSuggestions(null); 
+
     const currentJobTitle = extractJobTitleFromJD(data.jobDescription);
     setJobTitleForSave(currentJobTitle);
     try {
@@ -255,6 +277,8 @@ export default function TailorResumePage() {
       let errorMessage = err instanceof Error ? err.message : "Could not generate cover letter. Please try again.";
       if (err instanceof Error && err.message.toLowerCase().includes("offline")) {
         errorMessage = "Failed to generate cover letter: You appear to be offline. Please check your internet connection.";
+      } else if (err instanceof Error) {
+        errorMessage = `Error generating cover letter: ${err.message}.`;
       }
       setError(errorMessage);
       toast({ title: "Error", description: errorMessage, variant: "destructive" });
@@ -314,7 +338,7 @@ export default function TailorResumePage() {
       {(tailoredResume || analysis || suggestions) && !error && (
         <div ref={resultsSectionRef} className="space-y-8 pt-8"><Separator /><h2 className="font-headline text-2xl font-bold text-center">AI-Powered Resume Results</h2>
           <Tabs defaultValue="tailoredResume" className="w-full"><TabsList className="grid w-full grid-cols-3"><TabsTrigger value="tailoredResume" disabled={!tailoredResume}>Tailored Resume</TabsTrigger><TabsTrigger value="analysis" disabled={!analysis}>AI Analysis</TabsTrigger><TabsTrigger value="suggestions" disabled={!suggestions}>AI Suggestions</TabsTrigger></TabsList>
-            <TabsContent value="tailoredResume">{tailoredResume && (<Card><CardHeader><div className="flex justify-between items-center flex-wrap gap-2"><CardTitle className="font-headline flex items-center"><FileText className="mr-2 h-5 w-5 text-primary"/> Tailored Resume</CardTitle><div className="flex gap-2 flex-wrap"><Button variant="outline" size="sm" onClick={() => handleCopyToClipboard(tailoredResume, "Resume")}><Copy className="mr-2 h-4 w-4" />Copy</Button><DropdownMenu><DropdownMenuTrigger asChild><Button variant="outline" size="sm"><Download className="mr-2 h-4 w-4" />Download</Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onClick={() => handleDownloadMd(tailoredResume, jobTitleForSave, "Resume")}><FileText className="mr-2 h-4 w-4" /> .md</DropdownMenuItem><DropdownMenuItem onClick={() => handleDownloadDocx(tailoredResume, jobTitleForSave, "Resume")}><FileText className="mr-2 h-4 w-4" /> .docx</DropdownMenuItem><DropdownMenuItem onClick={() => handlePrintToPdf(tailoredResume, jobTitleForSave, "Resume")}><Printer className="mr-2 h-4 w-4" /> PDF...</DropdownMenuItem></DropdownMenuContent></DropdownMenu></div></div><p className="text-xs text-muted-foreground pt-2">Your tailored resume has been automatically saved. Use the download options for different formats.</p></CardHeader><CardContent><div className="bg-muted/50 p-4 rounded-md max-h-[600px] overflow-y-auto"><SimpleMarkdownToHtmlDisplay text={tailoredResume} /></div></CardContent></Card>)}</TabsContent>
+            <TabsContent value="tailoredResume">{tailoredResume && (<Card><CardHeader><div className="flex justify-between items-center flex-wrap gap-2"><CardTitle className="font-headline flex items-center"><FileText className="mr-2 h-5 w-5 text-primary"/> Tailored Resume</CardTitle><div className="flex gap-2 flex-wrap"><Button variant="outline" size="sm" onClick={() => handleCopyToClipboard(tailoredResume, "Resume")}><Copy className="mr-2 h-4 w-4" />Copy</Button><DropdownMenu><DropdownMenuTrigger asChild><Button variant="outline" size="sm"><Download className="mr-2 h-4 w-4" />Download</Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onClick={() => handleDownloadMd(tailoredResume, jobTitleForSave, "Resume")}><FileText className="mr-2 h-4 w-4" /> .md</DropdownMenuItem><DropdownMenuItem onClick={() => handleDownloadDocx(tailoredResume, jobTitleForSave, "Resume")}><FileText className="mr-2 h-4 w-4" /> .docx</DropdownMenuItem><DropdownMenuItem onClick={() => handlePrintToPdf(tailoredResume, jobTitleForSave, "Resume")}><Printer className="mr-2 h-4 w-4" /> PDF...</DropdownMenuItem></DropdownMenuContent></DropdownMenu></div></div></CardHeader><CardContent><div className="bg-muted/50 p-4 rounded-md max-h-[600px] overflow-y-auto"><SimpleMarkdownToHtmlDisplay text={tailoredResume} /></div></CardContent></Card>)}</TabsContent>
             <TabsContent value="analysis">{analysis && (<Card><CardHeader><div className="flex justify-between items-center flex-wrap gap-2"><CardTitle className="font-headline flex items-center"><Brain className="mr-2 h-5 w-5 text-primary"/> AI Resume Analysis</CardTitle><Button variant="outline" size="sm" onClick={() => handleCopyToClipboard(analysis, "Analysis")}><Copy className="mr-2 h-4 w-4" />Copy</Button></div></CardHeader><CardContent><div className="bg-muted/50 p-4 rounded-md max-h-[600px] overflow-y-auto"><SimpleMarkdownToHtmlDisplay text={analysis} /></div></CardContent></Card>)}</TabsContent>
             <TabsContent value="suggestions">{suggestions && (<Card><CardHeader><div className="flex justify-between items-center flex-wrap gap-2"><CardTitle className="font-headline flex items-center"><Lightbulb className="mr-2 h-5 w-5 text-primary"/> AI Resume Suggestions</CardTitle><Button variant="outline" size="sm" onClick={() => handleCopyToClipboard(suggestions, "Suggestions")}><Copy className="mr-2 h-4 w-4" />Copy</Button></div></CardHeader><CardContent><div className="bg-muted/50 p-4 rounded-md max-h-[600px] overflow-y-auto"><SimpleMarkdownToHtmlDisplay text={suggestions} /></div></CardContent></Card>)}</TabsContent>
           </Tabs>

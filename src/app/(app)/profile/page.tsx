@@ -141,7 +141,10 @@ export default function ProfilePage() {
 
   const generalInfoForm = useForm<UserProfileFormData>({
     resolver: zodResolver(userProfileSchema),
-    defaultValues: { ...fallbackInitialProfileData }, 
+    defaultValues: { 
+      fullName: "", email: "", phone: "", address: "", 
+      linkedin: "", github: "", portfolio: "", summary: "" 
+    }, 
   });
 
   const workExperienceForm = useForm<WorkExperienceFormData>({ resolver: zodResolver(workExperienceSchema), defaultValues: { company: '', role: '', startDate: '', endDate: '', description: '', achievements: ''} });
@@ -196,7 +199,7 @@ export default function ProfilePage() {
           setProfileData(loadedProfile);
           generalInfoForm.reset({
             fullName: loadedProfile.fullName || "",
-            email: loadedProfile.email || "",
+            email: loadedProfile.email || "", // This will be disabled in the form anyway
             phone: loadedProfile.phone || "",
             address: loadedProfile.address || "",
             linkedin: loadedProfile.linkedin || "",
@@ -223,11 +226,11 @@ export default function ProfilePage() {
             sectionOrder: [...DEFAULT_SECTION_ORDER]
           };
           setProfileData(freshProfile);
-          generalInfoForm.reset({ email: currentUser.email || "", fullName: currentUser.displayName || "" });
+          generalInfoForm.reset({ fullName: currentUser.displayName || "", email: currentUser.email || "", phone: "", address: "", linkedin: "", github: "", portfolio: "", summary: "" });
         }
       } else {
         setProfileData(fallbackInitialProfileData);
-        generalInfoForm.reset(fallbackInitialProfileData);
+        generalInfoForm.reset({ fullName: "", email: "", phone: "", address: "", linkedin: "", github: "", portfolio: "", summary: ""});
       }
       setIsProfileLoaded(true);
     };
@@ -242,21 +245,38 @@ export default function ProfilePage() {
       return;
     }
     setIsSaving(true);
+
+    // Create a clean object for saving, removing any undefined top-level properties
+    const profileToSaveCleaned: Partial<UserProfile> = {};
+    Object.keys(updatedProfile).forEach(keyStr => {
+      const key = keyStr as keyof UserProfile;
+      if (updatedProfile[key] !== undefined) {
+        (profileToSaveCleaned as any)[key] = updatedProfile[key];
+      }
+    });
+    
     const profileToSave: UserProfile = {
-      ...updatedProfile,
+      ...(profileToSaveCleaned as UserProfile), // Cast back after cleaning
       id: currentUser.uid, 
-      email: currentUser.email || updatedProfile.email,
+      email: currentUser.email || updatedProfile.email, // Email is primarily from auth, but keep a copy
       updatedAt: serverTimestamp() as Timestamp, 
     };
+
     if (!profileToSave.createdAt) { 
         profileToSave.createdAt = serverTimestamp() as Timestamp;
     }
+
 
     try {
       await enableNetwork(db); 
       const userDocRef = doc(db, "users", currentUser.uid);
       await setDoc(userDocRef, profileToSave, { merge: true }); 
-      setProfileData(profileToSave); 
+      
+      // After successful save, update local state with potentially server-generated timestamps
+      // This requires fetching the doc again or being careful with local state if timestamps are critical for immediate UI.
+      // For now, we'll just update with the data we sent, assuming timestamps are handled.
+      setProfileData(prev => ({...prev, ...profileToSave})); 
+
       toast({ title: "Profile Saved!", description: "Your profile has been saved to the cloud." });
     } catch (error) {
       console.error("Failed to save profile to Firestore:", error);
@@ -275,7 +295,19 @@ export default function ProfilePage() {
   };
 
   const onGeneralInfoSubmit = (data: UserProfileFormData) => {
-    const updatedProfile = { ...profileData, ...data, email: currentUser?.email || profileData.email };
+    const currentProfileState = profileData;
+    const updatedGeneralInfo = {
+      fullName: data.fullName || currentProfileState.fullName,
+      // email is primarily from auth, but we can keep it in sync if provided
+      email: currentUser?.email || data.email || currentProfileState.email, 
+      phone: data.phone || "", // Ensure empty strings if optional and not provided
+      address: data.address || "",
+      linkedin: data.linkedin || "",
+      github: data.github || "",
+      portfolio: data.portfolio || "",
+      summary: data.summary || "",
+    };
+    const updatedProfile = { ...currentProfileState, ...updatedGeneralInfo };
     saveProfile(updatedProfile);
   };
 
@@ -295,6 +327,8 @@ export default function ProfilePage() {
       let description = `Could not polish ${fieldName}.`;
       if (err instanceof Error && err.message.toLowerCase().includes("offline")) {
         description = `Could not polish ${fieldName}: You appear to be offline. Please check your internet connection.`;
+      } else if (err instanceof Error) {
+        description = `Could not polish ${fieldName}: ${err.message}.`;
       }
       toast({ title: "AI Polish Error", description, variant: "destructive" });
     } finally {
@@ -311,14 +345,14 @@ export default function ProfilePage() {
       updatedItems = [...currentItems, { ...itemData, id: `${sectionKey.slice(0,2)}-${Date.now()}` }];
     }
     const updatedProfile = { ...profileData, [sectionKey]: updatedItems };
-    saveProfile(updatedProfile);
+    saveProfile(updatedProfile); // This will also call setProfileData internally after successful save
   };
 
   const handleDeleteSectionItem = (sectionKey: ProfileSectionKey, itemId: string) => {
     const currentItems = (profileData[sectionKey] as any[] || []);
     const updatedItems = currentItems.filter(item => item.id !== itemId);
     const updatedProfile = { ...profileData, [sectionKey]: updatedItems };
-    saveProfile(updatedProfile);
+    saveProfile(updatedProfile); // This will also call setProfileData internally
   };
 
   const handleAddWorkExperience = () => { setEditingWorkExperience(null); workExperienceForm.reset({ company: '', role: '', startDate: '', endDate: '', description: '', achievements: '' }); setIsWorkExperienceModalOpen(true); };
@@ -519,6 +553,8 @@ export default function ProfilePage() {
       let description = `Could not process CV: ${err instanceof Error ? err.message : 'Unknown error'}.`;
       if (err instanceof Error && err.message.toLowerCase().includes("offline")) {
         description = "Failed to process CV: You appear to be offline. Please check your internet connection.";
+      } else if (err instanceof Error) {
+        description = `Could not process CV: ${err.message}.`;
       }
       toast({ title: "CV Import Error", description, variant: "destructive" });
     } finally {
@@ -547,14 +583,14 @@ export default function ProfilePage() {
     if (data.summary) updatedProfile.summary = data.summary;
     
     generalInfoForm.reset({
-      fullName: updatedProfile.fullName,
-      email: updatedProfile.email,
-      phone: updatedProfile.phone,
-      address: updatedProfile.address,
-      linkedin: updatedProfile.linkedin,
-      github: updatedProfile.github,
-      portfolio: updatedProfile.portfolio,
-      summary: updatedProfile.summary,
+      fullName: updatedProfile.fullName || "",
+      email: updatedProfile.email || "",
+      phone: updatedProfile.phone || "",
+      address: updatedProfile.address || "",
+      linkedin: updatedProfile.linkedin || "",
+      github: updatedProfile.github || "",
+      portfolio: updatedProfile.portfolio || "",
+      summary: updatedProfile.summary || "",
     });
 
     if (data.workExperiences) {
@@ -563,56 +599,65 @@ export default function ProfilePage() {
         startDate: exp.startDate || "", endDate: exp.endDate || "", description: exp.description || "",
         achievements: exp.achievements || [],
       }));
-    }
+    } else { updatedProfile.workExperiences = []; }
+
     if (data.education) {
       updatedProfile.education = data.education.map((edu, index) => ({
         id: `imp-edu-${Date.now()}-${index}`, institution: edu.institution || "", degree: edu.degree || "",
         fieldOfStudy: edu.fieldOfStudy || "", startDate: edu.startDate || "", endDate: edu.endDate || "",
         gpa: edu.gpa || "", description: edu.description || "", thesisTitle: undefined, relevantCourses: undefined,
       }));
-    }
+    } else { updatedProfile.education = []; }
+
     if (data.projects) {
       updatedProfile.projects = data.projects.map((proj, index) => ({
         id: `imp-proj-${Date.now()}-${index}`, name: proj.name || "", description: proj.description || "",
         technologies: proj.technologies || [], achievements: proj.achievements || [], link: proj.link || "",
       }));
-    }
+    } else { updatedProfile.projects = []; }
+
     if (data.skills) {
       updatedProfile.skills = data.skills.map((skill, index) => ({
         id: `imp-skill-${Date.now()}-${index}`, name: skill.name || "", category: skill.category || "",
         proficiency: skill.proficiency as Skill['proficiency'] || undefined,
       }));
-    }
+    } else { updatedProfile.skills = []; }
+
     if (data.certifications) {
       updatedProfile.certifications = data.certifications.map((cert, index) => ({
         id: `imp-cert-${Date.now()}-${index}`, name: cert.name || "", issuingOrganization: cert.issuingOrganization || "",
         issueDate: cert.issueDate || "", credentialId: cert.credentialId || "", credentialUrl: cert.credentialUrl || "",
       }));
-    }
+    } else { updatedProfile.certifications = []; }
+
     if (data.honorsAndAwards) {
       updatedProfile.honorsAndAwards = data.honorsAndAwards.map((item, index) => ({
         id: `imp-ha-${Date.now()}-${index}`, name: item.name || "", organization: item.organization || "",
         date: item.date || "", description: item.description || "",
       }));
-    }
+    } else { updatedProfile.honorsAndAwards = []; }
+
     if (data.publications) {
       updatedProfile.publications = data.publications.map((item, index) => ({
         id: `imp-pub-${Date.now()}-${index}`, title: item.title || "", authors: item.authors || [],
         journalOrConference: item.journalOrConference || "", publicationDate: item.publicationDate || "",
         link: item.link || "", doi: item.doi || "", description: item.description || "",
       }));
-    }
+    } else { updatedProfile.publications = []; }
+
     if (data.references) {
       updatedProfile.references = data.references.map((item, index) => ({
         id: `imp-ref-${Date.now()}-${index}`, name: item.name || "", titleAndCompany: item.titleAndCompany || "",
         contactDetailsOrNote: item.contactDetailsOrNote || "",
       }));
-    }
+    } else { updatedProfile.references = []; }
+
     if (data.customSections) {
       updatedProfile.customSections = data.customSections.map((item, index) => ({
         id: `imp-cs-${Date.now()}-${index}`, heading: item.heading || "", content: item.content || "",
       }));
-    }
+    } else { updatedProfile.customSections = []; }
+    
     // Update the main profileData state. This will trigger a re-render.
     // The user still needs to click "Save General Info" or save individual sections if those dialogs were opened.
     setProfileData(updatedProfile); 
@@ -651,7 +696,7 @@ export default function ProfilePage() {
               actions={<Button onClick={handleAddWorkExperience}><PlusCircle className="mr-2 h-4 w-4" /> Add Work Experience</Button>}
               isReorderable={true} onMoveUp={() => handleMoveSection(sectionKey, 'up')} onMoveDown={() => handleMoveSection(sectionKey, 'down')}
               canMoveUp={canMoveUp} canMoveDown={canMoveDown} >
-              <FormSectionList items={profileData.workExperiences}
+              <FormSectionList items={profileData.workExperiences || []}
                 renderItem={(exp) => (
                   <div key={exp.id} className="flex justify-between items-center py-2">
                     <div><h4 className="font-semibold">{exp.role} at {exp.company}</h4><p className="text-sm text-muted-foreground">{exp.startDate} - {exp.endDate || 'Present'}</p></div>
@@ -667,7 +712,7 @@ export default function ProfilePage() {
               actions={<Button onClick={handleAddProject}><PlusCircle className="mr-2 h-4 w-4" /> Add Project</Button>}
               isReorderable={true} onMoveUp={() => handleMoveSection(sectionKey, 'up')} onMoveDown={() => handleMoveSection(sectionKey, 'down')}
               canMoveUp={canMoveUp} canMoveDown={canMoveDown} >
-              <FormSectionList items={profileData.projects}
+              <FormSectionList items={profileData.projects || []}
                 renderItem={(item) => (
                   <div key={item.id} className="flex justify-between items-center py-2">
                     <div><h4 className="font-semibold">{item.name}</h4><p className="text-sm text-muted-foreground truncate max-w-md">{item.description}</p></div>
@@ -683,7 +728,7 @@ export default function ProfilePage() {
               actions={<Button onClick={handleAddEducation}><PlusCircle className="mr-2 h-4 w-4" /> Add Education</Button>}
               isReorderable={true} onMoveUp={() => handleMoveSection(sectionKey, 'up')} onMoveDown={() => handleMoveSection(sectionKey, 'down')}
               canMoveUp={canMoveUp} canMoveDown={canMoveDown} >
-              <FormSectionList items={profileData.education}
+              <FormSectionList items={profileData.education || []}
                 renderItem={(item) => (
                   <div key={item.id} className="flex justify-between items-center py-2">
                     <div><h4 className="font-semibold">{item.degree} - {item.institution}</h4><p className="text-sm text-muted-foreground">{item.fieldOfStudy}</p></div>
@@ -699,7 +744,7 @@ export default function ProfilePage() {
                 actions={<Button onClick={handleAddSkill}><PlusCircle className="mr-2 h-4 w-4" /> Add Skill</Button>}
                 isReorderable={true} onMoveUp={() => handleMoveSection(sectionKey, 'up')} onMoveDown={() => handleMoveSection(sectionKey, 'down')}
                 canMoveUp={canMoveUp} canMoveDown={canMoveDown} >
-                <FormSectionList items={profileData.skills}
+                <FormSectionList items={profileData.skills || []}
                   renderItem={(item) => (
                     <div key={item.id} className="flex justify-between items-center py-2">
                       <div><h4 className="font-semibold">{item.name}</h4><p className="text-sm text-muted-foreground">{item.category && <span>{item.category}</span>}{item.category && item.proficiency && <span> - </span>}{item.proficiency && <span>{item.proficiency}</span>}</p></div>
@@ -715,7 +760,7 @@ export default function ProfilePage() {
               actions={<Button onClick={handleAddCertification}><PlusCircle className="mr-2 h-4 w-4" /> Add Certification</Button>}
               isReorderable={true} onMoveUp={() => handleMoveSection(sectionKey, 'up')} onMoveDown={() => handleMoveSection(sectionKey, 'down')}
               canMoveUp={canMoveUp} canMoveDown={canMoveDown} >
-              <FormSectionList items={profileData.certifications}
+              <FormSectionList items={profileData.certifications || []}
                 renderItem={(item) => (
                   <div key={item.id} className="flex justify-between items-center py-2">
                     <div><h4 className="font-semibold">{item.name}</h4><p className="text-sm text-muted-foreground">{item.issuingOrganization} - {item.issueDate}</p></div>
@@ -731,7 +776,7 @@ export default function ProfilePage() {
                 actions={<Button onClick={handleAddHonorAward}><PlusCircle className="mr-2 h-4 w-4" /> Add Honor/Award</Button>}
                 isReorderable={true} onMoveUp={() => handleMoveSection(sectionKey, 'up')} onMoveDown={() => handleMoveSection(sectionKey, 'down')}
                 canMoveUp={canMoveUp} canMoveDown={canMoveDown} >
-                <FormSectionList items={profileData.honorsAndAwards}
+                <FormSectionList items={profileData.honorsAndAwards || []}
                   renderItem={(item) => (
                     <div key={item.id} className="flex justify-between items-center py-2">
                       <div><h4 className="font-semibold">{item.name}</h4><p className="text-sm text-muted-foreground">{item.organization && <span>{item.organization}</span>}{item.organization && item.date && <span> - </span>}{item.date && <span>{item.date}</span>}</p></div>
@@ -747,7 +792,7 @@ export default function ProfilePage() {
               actions={<Button onClick={handleAddPublication}><PlusCircle className="mr-2 h-4 w-4" /> Add Publication</Button>}
               isReorderable={true} onMoveUp={() => handleMoveSection(sectionKey, 'up')} onMoveDown={() => handleMoveSection(sectionKey, 'down')}
               canMoveUp={canMoveUp} canMoveDown={canMoveDown} >
-              <FormSectionList items={profileData.publications}
+              <FormSectionList items={profileData.publications || []}
                 renderItem={(item) => (
                   <div key={item.id} className="flex justify-between items-center py-2">
                     <div><h4 className="font-semibold">{item.title}</h4><p className="text-sm text-muted-foreground">{item.journalOrConference && <span>{item.journalOrConference}</span>}{item.journalOrConference && item.publicationDate && <span> - </span>}{item.publicationDate && <span>{item.publicationDate}</span>}</p></div>
@@ -763,7 +808,7 @@ export default function ProfilePage() {
               actions={<Button onClick={handleAddReference}><PlusCircle className="mr-2 h-4 w-4" /> Add Reference</Button>}
               isReorderable={true} onMoveUp={() => handleMoveSection(sectionKey, 'up')} onMoveDown={() => handleMoveSection(sectionKey, 'down')}
               canMoveUp={canMoveUp} canMoveDown={canMoveDown} >
-              <FormSectionList items={profileData.references}
+              <FormSectionList items={profileData.references || []}
                 renderItem={(item) => (
                   <div key={item.id} className="flex justify-between items-center py-2">
                     <div><h4 className="font-semibold">{item.name}</h4><p className="text-sm text-muted-foreground">{item.titleAndCompany || item.contactDetailsOrNote}</p></div>
@@ -779,7 +824,7 @@ export default function ProfilePage() {
               actions={<Button onClick={handleAddCustomSection}><PlusCircle className="mr-2 h-4 w-4" /> Add Custom Section</Button>}
               isReorderable={true} onMoveUp={() => handleMoveSection(sectionKey, 'up')} onMoveDown={() => handleMoveSection(sectionKey, 'down')}
               canMoveUp={canMoveUp} canMoveDown={canMoveDown} >
-              <FormSectionList items={profileData.customSections}
+              <FormSectionList items={profileData.customSections || []}
                 renderItem={(item) => (
                   <div key={item.id} className="flex justify-between items-center py-2">
                     <div><h4 className="font-semibold">{item.heading}</h4><p className="text-sm text-muted-foreground truncate max-w-md">{item.content}</p></div>
@@ -853,7 +898,8 @@ export default function ProfilePage() {
                         <FormControl><Textarea placeholder="A brief summary of your career..." {...field} rows={4} /></FormControl><FormMessage />
                       </FormItem> )} />
                   <Button type="submit" size="lg" disabled={generalInfoForm.formState.isSubmitting || !currentUser || isSaving}>
-                    <Save className="mr-2 h-4 w-4"/> {isSaving ? <Loader2 className="animate-spin"/> : "Save General Info"}
+                    {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Save className="mr-2 h-4 w-4"/> }
+                    Save General Info
                   </Button>
                 </form>
               </Form>
@@ -885,15 +931,15 @@ export default function ProfilePage() {
         onOrderUpdate={handleSectionOrderUpdate}
       />
 
-      <Dialog open={isWorkExperienceModalOpen} onOpenChange={setIsWorkExperienceModalOpen}><DialogContent className="sm:max-w-2xl"><DialogHeader><DialogTitle className="font-headline">{editingWorkExperience ? 'Edit Work Experience' : 'Add New Work Experience'}</DialogTitle><DialogDescription>Provide details about your professional role.</DialogDescription></DialogHeader><Form {...workExperienceForm}><form onSubmit={workExperienceForm.handleSubmit(onWorkExperienceSubmit)} className="space-y-6 py-4"><WorkExperienceFormFields control={workExperienceForm.control} onPolishRequest={(fieldName) => handleAIPolish(fieldName, workExperienceForm)} polishingField={polishingField as keyof WorkExperienceFormData | null} isSubmitting={workExperienceForm.formState.isSubmitting || isSaving} /><DialogFooter><DialogClose asChild><Button type="button" variant="outline">Cancel</Button></DialogClose><Button type="submit" disabled={workExperienceForm.formState.isSubmitting || isSaving}><Save className="mr-2 h-4 w-4"/>{isSaving ? <Loader2 className="animate-spin"/> : (editingWorkExperience ? 'Save Changes' : 'Add Experience')}</Button></DialogFooter></form></Form></DialogContent></Dialog>
-      <Dialog open={isProjectModalOpen} onOpenChange={setIsProjectModalOpen}><DialogContent className="sm:max-w-2xl"><DialogHeader><DialogTitle className="font-headline">{editingProject ? 'Edit Project' : 'Add New Project'}</DialogTitle><DialogDescription>Detail your project.</DialogDescription></DialogHeader><Form {...projectForm}><form onSubmit={projectForm.handleSubmit(onProjectSubmit)} className="space-y-6 py-4"><ProjectFormFields control={projectForm.control} onPolishRequest={(fieldName) => handleAIPolish(fieldName, projectForm)} polishingField={polishingField as keyof ProjectFormData | null} isSubmitting={projectForm.formState.isSubmitting || isSaving} /><DialogFooter><DialogClose asChild><Button type="button" variant="outline">Cancel</Button></DialogClose><Button type="submit" disabled={projectForm.formState.isSubmitting || isSaving}><Save className="mr-2 h-4 w-4"/>{isSaving ? <Loader2 className="animate-spin"/> : (editingProject ? 'Save Changes' : 'Add Project')}</Button></DialogFooter></form></Form></DialogContent></Dialog>
-      <Dialog open={isEducationModalOpen} onOpenChange={setIsEducationModalOpen}><DialogContent className="sm:max-w-2xl max-h-[85vh] flex flex-col"><DialogHeader><DialogTitle className="font-headline">{editingEducation ? 'Edit Education' : 'Add New Education'}</DialogTitle><DialogDescription>Provide your educational qualifications and details.</DialogDescription></DialogHeader><div className="flex-grow overflow-y-auto pr-3"><Form {...educationForm}><form id="educationFormModal" onSubmit={educationForm.handleSubmit(onEducationSubmit)} className="space-y-6 py-4"><EducationFormFields control={educationForm.control} onPolishRequest={(fieldName) => handleAIPolish(fieldName, educationForm)} polishingField={polishingField as keyof EducationFormData | null} isSubmitting={educationForm.formState.isSubmitting || isSaving} /></form></Form></div><DialogFooter className="pt-4 mt-auto border-t"><DialogClose asChild><Button type="button" variant="outline">Cancel</Button></DialogClose><Button type="submit" form="educationFormModal" disabled={educationForm.formState.isSubmitting || isSaving}><Save className="mr-2 h-4 w-4"/>{isSaving ? <Loader2 className="animate-spin"/> : (editingEducation ? 'Save Changes' : 'Add Education')}</Button></DialogFooter></DialogContent></Dialog>
-      <Dialog open={isHonorAwardModalOpen} onOpenChange={setIsHonorAwardModalOpen}><DialogContent className="sm:max-w-xl"><DialogHeader><DialogTitle className="font-headline">{editingHonorAward ? 'Edit Honor/Award' : 'Add New Honor/Award'}</DialogTitle><DialogDescription>Detail your honors and awards.</DialogDescription></DialogHeader><Form {...honorAwardForm}><form onSubmit={honorAwardForm.handleSubmit(onHonorAwardSubmit)} className="space-y-6 py-4"><HonorAwardFormFields control={honorAwardForm.control} onPolishRequest={(fieldName) => handleAIPolish(fieldName, honorAwardForm)} polishingField={polishingField as keyof HonorAwardFormData | null} isSubmitting={honorAwardForm.formState.isSubmitting || isSaving} /><DialogFooter><DialogClose asChild><Button type="button" variant="outline">Cancel</Button></DialogClose><Button type="submit" disabled={honorAwardForm.formState.isSubmitting || isSaving}><Save className="mr-2 h-4 w-4"/>{isSaving ? <Loader2 className="animate-spin"/> : (editingHonorAward ? 'Save Changes' : 'Add Honor/Award')}</Button></DialogFooter></form></Form></DialogContent></Dialog>
-      <Dialog open={isPublicationModalOpen} onOpenChange={setIsPublicationModalOpen}><DialogContent className="sm:max-w-2xl"><DialogHeader><DialogTitle className="font-headline">{editingPublication ? 'Edit Publication' : 'Add New Publication'}</DialogTitle><DialogDescription>Detail your published work.</DialogDescription></DialogHeader><Form {...publicationForm}><form onSubmit={publicationForm.handleSubmit(onPublicationSubmit)} className="space-y-6 py-4"><PublicationFormFields control={publicationForm.control} onPolishRequest={(fieldName) => handleAIPolish(fieldName, publicationForm)} polishingField={polishingField as keyof PublicationFormData | null} isSubmitting={publicationForm.formState.isSubmitting || isSaving} /><DialogFooter><DialogClose asChild><Button type="button" variant="outline">Cancel</Button></DialogClose><Button type="submit" disabled={publicationForm.formState.isSubmitting || isSaving}><Save className="mr-2 h-4 w-4"/>{isSaving ? <Loader2 className="animate-spin"/> : (editingPublication ? 'Save Changes' : 'Add Publication')}</Button></DialogFooter></form></Form></DialogContent></Dialog>
-      <Dialog open={isReferenceModalOpen} onOpenChange={setIsReferenceModalOpen}><DialogContent className="sm:max-w-xl"><DialogHeader><DialogTitle className="font-headline">{editingReference ? 'Edit Reference' : 'Add New Reference'}</DialogTitle><DialogDescription>Provide reference details.</DialogDescription></DialogHeader><Form {...referenceForm}><form onSubmit={referenceForm.handleSubmit(onReferenceSubmit)} className="space-y-6 py-4"><ReferenceFormFields control={referenceForm.control} onPolishRequest={(fieldName) => handleAIPolish(fieldName, referenceForm)} polishingField={polishingField as keyof ReferenceFormData | null} isSubmitting={referenceForm.formState.isSubmitting || isSaving} /><DialogFooter><DialogClose asChild><Button type="button" variant="outline">Cancel</Button></DialogClose><Button type="submit" disabled={referenceForm.formState.isSubmitting || isSaving}><Save className="mr-2 h-4 w-4"/>{isSaving ? <Loader2 className="animate-spin"/> : (editingReference ? 'Save Changes' : 'Add Reference')}</Button></DialogFooter></form></Form></DialogContent></Dialog>
-      <Dialog open={isCustomSectionModalOpen} onOpenChange={setIsCustomSectionModalOpen}><DialogContent className="sm:max-w-xl"><DialogHeader><DialogTitle className="font-headline">{editingCustomSection ? 'Edit Custom Section' : 'Add New Custom Section'}</DialogTitle><DialogDescription>Define a custom heading and content for your profile.</DialogDescription></DialogHeader><Form {...customSectionForm}><form onSubmit={customSectionForm.handleSubmit(onCustomSectionSubmit)} className="space-y-6 py-4"><CustomSectionFormFields control={customSectionForm.control} onPolishRequest={(fieldName) => handleAIPolish(fieldName, customSectionForm)} polishingField={polishingField as keyof CustomSectionFormData | null} isSubmitting={customSectionForm.formState.isSubmitting || isSaving} /><DialogFooter><DialogClose asChild><Button type="button" variant="outline">Cancel</Button></DialogClose><Button type="submit" disabled={customSectionForm.formState.isSubmitting || isSaving}><Save className="mr-2 h-4 w-4"/>{isSaving ? <Loader2 className="animate-spin"/> : (editingCustomSection ? 'Save Changes' : 'Add Custom Section')}</Button></DialogFooter></form></Form></DialogContent></Dialog>
-      <Dialog open={isSkillModalOpen} onOpenChange={setIsSkillModalOpen}><DialogContent className="sm:max-w-md"><DialogHeader><DialogTitle className="font-headline">{editingSkill ? 'Edit Skill' : 'Add New Skill'}</DialogTitle><DialogDescription>Add a skill and optionally categorize it.</DialogDescription></DialogHeader><Form {...skillForm}><form onSubmit={skillForm.handleSubmit(onSkillSubmit)} className="space-y-6 py-4"><SkillFormFields control={skillForm.control} /><DialogFooter><DialogClose asChild><Button type="button" variant="outline">Cancel</Button></DialogClose><Button type="submit" disabled={skillForm.formState.isSubmitting || isSaving}><Save className="mr-2 h-4 w-4"/>{isSaving ? <Loader2 className="animate-spin"/> : (editingSkill ? 'Save Changes' : 'Add Skill')}</Button></DialogFooter></form></Form></DialogContent></Dialog>
-      <Dialog open={isCertificationModalOpen} onOpenChange={setIsCertificationModalOpen}><DialogContent className="sm:max-w-xl"><DialogHeader><DialogTitle className="font-headline">{editingCertification ? 'Edit Certification' : 'Add New Certification'}</DialogTitle><DialogDescription>Detail your certifications.</DialogDescription></DialogHeader><Form {...certificationForm}><form onSubmit={certificationForm.handleSubmit(onCertificationSubmit)} className="space-y-6 py-4"><CertificationFormFields control={certificationForm.control} /><DialogFooter><DialogClose asChild><Button type="button" variant="outline">Cancel</Button></DialogClose><Button type="submit" disabled={certificationForm.formState.isSubmitting || isSaving}><Save className="mr-2 h-4 w-4"/>{isSaving ? <Loader2 className="animate-spin"/> : (editingCertification ? 'Save Changes' : 'Add Certification')}</Button></DialogFooter></form></Form></DialogContent></Dialog>
+      <Dialog open={isWorkExperienceModalOpen} onOpenChange={setIsWorkExperienceModalOpen}><DialogContent className="sm:max-w-2xl"><DialogHeader><DialogTitle className="font-headline">{editingWorkExperience ? 'Edit Work Experience' : 'Add New Work Experience'}</DialogTitle><DialogDescription>Provide details about your professional role.</DialogDescription></DialogHeader><Form {...workExperienceForm}><form onSubmit={workExperienceForm.handleSubmit(onWorkExperienceSubmit)} className="space-y-6 py-4"><WorkExperienceFormFields control={workExperienceForm.control} onPolishRequest={(fieldName) => handleAIPolish(fieldName, workExperienceForm)} polishingField={polishingField as keyof WorkExperienceFormData | null} isSubmitting={workExperienceForm.formState.isSubmitting || isSaving} /><DialogFooter><DialogClose asChild><Button type="button" variant="outline">Cancel</Button></DialogClose><Button type="submit" disabled={workExperienceForm.formState.isSubmitting || isSaving}>{isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Save className="mr-2 h-4 w-4"/>}{editingWorkExperience ? 'Save Changes' : 'Add Experience'}</Button></DialogFooter></form></Form></DialogContent></Dialog>
+      <Dialog open={isProjectModalOpen} onOpenChange={setIsProjectModalOpen}><DialogContent className="sm:max-w-2xl"><DialogHeader><DialogTitle className="font-headline">{editingProject ? 'Edit Project' : 'Add New Project'}</DialogTitle><DialogDescription>Detail your project.</DialogDescription></DialogHeader><Form {...projectForm}><form onSubmit={projectForm.handleSubmit(onProjectSubmit)} className="space-y-6 py-4"><ProjectFormFields control={projectForm.control} onPolishRequest={(fieldName) => handleAIPolish(fieldName, projectForm)} polishingField={polishingField as keyof ProjectFormData | null} isSubmitting={projectForm.formState.isSubmitting || isSaving} /><DialogFooter><DialogClose asChild><Button type="button" variant="outline">Cancel</Button></DialogClose><Button type="submit" disabled={projectForm.formState.isSubmitting || isSaving}>{isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Save className="mr-2 h-4 w-4"/>}{editingProject ? 'Save Changes' : 'Add Project'}</Button></DialogFooter></form></Form></DialogContent></Dialog>
+      <Dialog open={isEducationModalOpen} onOpenChange={setIsEducationModalOpen}><DialogContent className="sm:max-w-2xl max-h-[85vh] flex flex-col"><DialogHeader><DialogTitle className="font-headline">{editingEducation ? 'Edit Education' : 'Add New Education'}</DialogTitle><DialogDescription>Provide your educational qualifications and details.</DialogDescription></DialogHeader><div className="flex-grow overflow-y-auto pr-3"><Form {...educationForm}><form id="educationFormModal" onSubmit={educationForm.handleSubmit(onEducationSubmit)} className="space-y-6 py-4"><EducationFormFields control={educationForm.control} onPolishRequest={(fieldName) => handleAIPolish(fieldName, educationForm)} polishingField={polishingField as keyof EducationFormData | null} isSubmitting={educationForm.formState.isSubmitting || isSaving} /></form></Form></div><DialogFooter className="pt-4 mt-auto border-t"><DialogClose asChild><Button type="button" variant="outline">Cancel</Button></DialogClose><Button type="submit" form="educationFormModal" disabled={educationForm.formState.isSubmitting || isSaving}>{isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Save className="mr-2 h-4 w-4"/>}{editingEducation ? 'Save Changes' : 'Add Education'}</Button></DialogFooter></DialogContent></Dialog>
+      <Dialog open={isHonorAwardModalOpen} onOpenChange={setIsHonorAwardModalOpen}><DialogContent className="sm:max-w-xl"><DialogHeader><DialogTitle className="font-headline">{editingHonorAward ? 'Edit Honor/Award' : 'Add New Honor/Award'}</DialogTitle><DialogDescription>Detail your honors and awards.</DialogDescription></DialogHeader><Form {...honorAwardForm}><form onSubmit={honorAwardForm.handleSubmit(onHonorAwardSubmit)} className="space-y-6 py-4"><HonorAwardFormFields control={honorAwardForm.control} onPolishRequest={(fieldName) => handleAIPolish(fieldName, honorAwardForm)} polishingField={polishingField as keyof HonorAwardFormData | null} isSubmitting={honorAwardForm.formState.isSubmitting || isSaving} /><DialogFooter><DialogClose asChild><Button type="button" variant="outline">Cancel</Button></DialogClose><Button type="submit" disabled={honorAwardForm.formState.isSubmitting || isSaving}>{isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Save className="mr-2 h-4 w-4"/>}{editingHonorAward ? 'Save Changes' : 'Add Honor/Award'}</Button></DialogFooter></form></Form></DialogContent></Dialog>
+      <Dialog open={isPublicationModalOpen} onOpenChange={setIsPublicationModalOpen}><DialogContent className="sm:max-w-2xl"><DialogHeader><DialogTitle className="font-headline">{editingPublication ? 'Edit Publication' : 'Add New Publication'}</DialogTitle><DialogDescription>Detail your published work.</DialogDescription></DialogHeader><Form {...publicationForm}><form onSubmit={publicationForm.handleSubmit(onPublicationSubmit)} className="space-y-6 py-4"><PublicationFormFields control={publicationForm.control} onPolishRequest={(fieldName) => handleAIPolish(fieldName, publicationForm)} polishingField={polishingField as keyof PublicationFormData | null} isSubmitting={publicationForm.formState.isSubmitting || isSaving} /><DialogFooter><DialogClose asChild><Button type="button" variant="outline">Cancel</Button></DialogClose><Button type="submit" disabled={publicationForm.formState.isSubmitting || isSaving}>{isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Save className="mr-2 h-4 w-4"/>}{editingPublication ? 'Save Changes' : 'Add Publication'}</Button></DialogFooter></form></Form></DialogContent></Dialog>
+      <Dialog open={isReferenceModalOpen} onOpenChange={setIsReferenceModalOpen}><DialogContent className="sm:max-w-xl"><DialogHeader><DialogTitle className="font-headline">{editingReference ? 'Edit Reference' : 'Add New Reference'}</DialogTitle><DialogDescription>Provide reference details.</DialogDescription></DialogHeader><Form {...referenceForm}><form onSubmit={referenceForm.handleSubmit(onReferenceSubmit)} className="space-y-6 py-4"><ReferenceFormFields control={referenceForm.control} onPolishRequest={(fieldName) => handleAIPolish(fieldName, referenceForm)} polishingField={polishingField as keyof ReferenceFormData | null} isSubmitting={referenceForm.formState.isSubmitting || isSaving} /><DialogFooter><DialogClose asChild><Button type="button" variant="outline">Cancel</Button></DialogClose><Button type="submit" disabled={referenceForm.formState.isSubmitting || isSaving}>{isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Save className="mr-2 h-4 w-4"/>}{editingReference ? 'Save Changes' : 'Add Reference'}</Button></DialogFooter></form></Form></DialogContent></Dialog>
+      <Dialog open={isCustomSectionModalOpen} onOpenChange={setIsCustomSectionModalOpen}><DialogContent className="sm:max-w-xl"><DialogHeader><DialogTitle className="font-headline">{editingCustomSection ? 'Edit Custom Section' : 'Add New Custom Section'}</DialogTitle><DialogDescription>Define a custom heading and content for your profile.</DialogDescription></DialogHeader><Form {...customSectionForm}><form onSubmit={customSectionForm.handleSubmit(onCustomSectionSubmit)} className="space-y-6 py-4"><CustomSectionFormFields control={customSectionForm.control} onPolishRequest={(fieldName) => handleAIPolish(fieldName, customSectionForm)} polishingField={polishingField as keyof CustomSectionFormData | null} isSubmitting={customSectionForm.formState.isSubmitting || isSaving} /><DialogFooter><DialogClose asChild><Button type="button" variant="outline">Cancel</Button></DialogClose><Button type="submit" disabled={customSectionForm.formState.isSubmitting || isSaving}>{isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Save className="mr-2 h-4 w-4"/>}{editingCustomSection ? 'Save Changes' : 'Add Custom Section'}</Button></DialogFooter></form></Form></DialogContent></Dialog>
+      <Dialog open={isSkillModalOpen} onOpenChange={setIsSkillModalOpen}><DialogContent className="sm:max-w-md"><DialogHeader><DialogTitle className="font-headline">{editingSkill ? 'Edit Skill' : 'Add New Skill'}</DialogTitle><DialogDescription>Add a skill and optionally categorize it.</DialogDescription></DialogHeader><Form {...skillForm}><form onSubmit={skillForm.handleSubmit(onSkillSubmit)} className="space-y-6 py-4"><SkillFormFields control={skillForm.control} /><DialogFooter><DialogClose asChild><Button type="button" variant="outline">Cancel</Button></DialogClose><Button type="submit" disabled={skillForm.formState.isSubmitting || isSaving}>{isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Save className="mr-2 h-4 w-4"/>}{editingSkill ? 'Save Changes' : 'Add Skill'}</Button></DialogFooter></form></Form></DialogContent></Dialog>
+      <Dialog open={isCertificationModalOpen} onOpenChange={setIsCertificationModalOpen}><DialogContent className="sm:max-w-xl"><DialogHeader><DialogTitle className="font-headline">{editingCertification ? 'Edit Certification' : 'Add New Certification'}</DialogTitle><DialogDescription>Detail your certifications.</DialogDescription></DialogHeader><Form {...certificationForm}><form onSubmit={certificationForm.handleSubmit(onCertificationSubmit)} className="space-y-6 py-4"><CertificationFormFields control={certificationForm.control} /><DialogFooter><DialogClose asChild><Button type="button" variant="outline">Cancel</Button></DialogClose><Button type="submit" disabled={certificationForm.formState.isSubmitting || isSaving}>{isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Save className="mr-2 h-4 w-4"/>}{editingCertification ? 'Save Changes' : 'Add Certification'}</Button></DialogFooter></form></Form></DialogContent></Dialog>
     </div>
     </TooltipProvider>
   );

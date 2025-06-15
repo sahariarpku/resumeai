@@ -99,13 +99,15 @@ export default function JobDescriptionsPage() {
 
   const handleAddOrEditJd = async (data: JobDescriptionFormData) => {
     if (!currentUser) {
-      toast({ title: "Not Authenticated", variant: "destructive" });
+      toast({ title: "Not Authenticated", description: "Please sign in to save job applications.", variant: "destructive" });
       return;
     }
 
-    const jdDataToSave = {
-        ...data,
-        createdAt: editingJd?.createdAt ? (typeof editingJd.createdAt === 'string' ? Timestamp.fromDate(new Date(editingJd.createdAt)) : editingJd.createdAt) : Timestamp.now(),
+    const jdDataToSave: Omit<JobDescriptionItem, 'id' | 'createdAt'> & { createdAt: Timestamp, userId: string } = {
+        title: data.title,
+        company: data.company || "",
+        description: data.description,
+        createdAt: editingJd?.createdAt ? (typeof editingJd.createdAt === 'string' ? Timestamp.fromDate(new Date(editingJd.createdAt)) : editingJd.createdAt as Timestamp) : Timestamp.now(),
         userId: currentUser.uid,
         ...(editingJd && { 
             matchPercentage: editingJd.matchPercentage,
@@ -116,14 +118,16 @@ export default function JobDescriptionsPage() {
 
     try {
       await enableNetwork(db);
+      let jdIdToUse: string;
       if (editingJd && editingJd.id) {
-        const jdDocRef = doc(db, "users", currentUser.uid, "jobDescriptions", editingJd.id);
+        jdIdToUse = editingJd.id;
+        const jdDocRef = doc(db, "users", currentUser.uid, "jobDescriptions", jdIdToUse);
         await setDoc(jdDocRef, jdDataToSave, { merge: true });
         toast({ title: "Job Application Updated!" });
       } else {
-        const newJdId = `jd-${Date.now()}`; 
-        const jdDocRef = doc(db, "users", currentUser.uid, "jobDescriptions", newJdId);
-        await setDoc(jdDocRef, { ...jdDataToSave, id: newJdId }); 
+        jdIdToUse = `jd-${Date.now()}`; 
+        const jdDocRef = doc(db, "users", currentUser.uid, "jobDescriptions", jdIdToUse);
+        await setDoc(jdDocRef, { ...jdDataToSave, id: jdIdToUse }); 
         toast({ title: "Job Application Saved!" });
       }
       setIsModalOpen(false);
@@ -153,14 +157,14 @@ export default function JobDescriptionsPage() {
 
   const openEditModal = (jd: JobDescriptionItem) => {
     setEditingJd(jd);
-    form.reset({title: jd.title, company: jd.company, description: jd.description}); 
+    form.reset({title: jd.title, company: jd.company || "", description: jd.description}); 
     setJdUrl("");
     setIsModalOpen(true);
   };
 
   const handleDeleteJd = async (id: string) => {
     if (!currentUser) {
-      toast({ title: "Not Authenticated", variant: "destructive" });
+      toast({ title: "Not Authenticated", description: "Please sign in to delete job applications.", variant: "destructive" });
       return;
     }
     try {
@@ -199,6 +203,8 @@ export default function JobDescriptionsPage() {
       let description = `Extraction failed: ${err instanceof Error ? err.message : 'Unknown error'}`;
       if (err instanceof Error && err.message.toLowerCase().includes("offline")) {
         description = "Extraction failed: You appear to be offline. Please check your internet connection.";
+      } else if (err instanceof Error) {
+        description = `Extraction failed: ${err.message}.`;
       }
       toast({ title: "Extraction Error", description, variant: "destructive" });
     } finally {
@@ -234,6 +240,8 @@ export default function JobDescriptionsPage() {
       let description = `Processing failed: ${err instanceof Error ? err.message : 'Unknown error'}`;
       if (err instanceof Error && err.message.toLowerCase().includes("offline")) {
         description = "URL Processing failed: You appear to be offline. Please check your internet connection.";
+      } else if (err instanceof Error) {
+        description = `Processing failed: ${err.message}.`;
       }
       toast({ title: "URL Processing Error", description, variant: "destructive" });
     } finally {
@@ -242,7 +250,7 @@ export default function JobDescriptionsPage() {
   };
 
   const handleTailorResumeWithProfile = async (jd: JobDescriptionItem) => {
-    if (!currentUser) { toast({ title: "Not Authenticated", variant: "destructive" }); return; }
+    if (!currentUser) { toast({ title: "Not Authenticated", description: "Please sign in to tailor resumes.", variant: "destructive" }); return; }
     try {
       await enableNetwork(db);
       const userDocRef = doc(db, "users", currentUser.uid);
@@ -254,7 +262,7 @@ export default function JobDescriptionsPage() {
       const userProfile = userDocSnap.data() as UserProfile;
       const baseResumeText = profileToResumeText(userProfile);
       if (!baseResumeText.trim()) {
-         toast({ title: "Profile Incomplete", description: "Your profile seems empty.", variant: "default" });
+         toast({ title: "Profile Incomplete", description: "Your profile seems empty. Please complete it before tailoring.", variant: "default" });
          router.push('/profile'); return;
       }
       localStorage.setItem(TAILOR_RESUME_PREFILL_RESUME_KEY, baseResumeText);
@@ -275,20 +283,20 @@ export default function JobDescriptionsPage() {
   };
 
   const handleCalculateMatchScore = async (jdId: string) => {
-    if (!currentUser) { toast({ title: "Not Authenticated", variant: "destructive" }); return; }
+    if (!currentUser) { toast({ title: "Not Authenticated", description: "Please sign in to calculate match scores.", variant: "destructive" }); return; }
     setCalculatingMatchId(jdId);
     try {
       await enableNetwork(db);
       const userDocRef = doc(db, "users", currentUser.uid);
       const userDocSnap = await getDoc(userDocRef);
       if (!userDocSnap.exists()) {
-        toast({ title: "Profile Not Found", description: "Please complete your profile first.", variant: "default" });
+        toast({ title: "Profile Not Found", description: "Please complete your profile first to calculate match score.", variant: "default" });
         router.push('/profile'); setCalculatingMatchId(null); return;
       }
       const userProfile = userDocSnap.data() as UserProfile;
       const profileText = profileToResumeText(userProfile);
       if (!profileText.trim()) {
-        toast({ title: "Profile Incomplete", description: "Your profile is empty.", variant: "default" });
+        toast({ title: "Profile Incomplete", description: "Your profile is empty. Please complete it to calculate match score.", variant: "default" });
         router.push('/profile'); setCalculatingMatchId(null); return;
       }
       const currentJd = jds.find(jd => jd.id === jdId);
@@ -310,6 +318,8 @@ export default function JobDescriptionsPage() {
         description = "Failed to calculate match score: You appear to be offline. Please check your internet connection.";
       } else if (error instanceof Error && error.message.includes("FIRESTORE_UNAVAILABLE")) {
          description = "Firestore is currently unavailable. Match score could not be calculated. Please check your Firebase setup and internet connection.";
+      } else if (error instanceof Error) {
+        description = `Calculation failed: ${error.message}.`;
       }
       toast({ title: "Match Score Error", description, variant: "destructive" });
     } finally {
@@ -398,7 +408,7 @@ export default function JobDescriptionsPage() {
                         </Button>
                       </div><FormControl><Textarea placeholder="Paste the full job description here, or use the URL fetch option above." {...field} rows={10} /></FormControl><FormMessage />
                     </FormItem> )}/>
-                <DialogFooter><DialogClose asChild><Button type="button" variant="outline">Cancel</Button></DialogClose><Button type="submit" disabled={isProcessingUrl || isExtractingDetails}>{editingJd ? "Save Changes" : "Add Job Application"}</Button></DialogFooter>
+                <DialogFooter><DialogClose asChild><Button type="button" variant="outline">Cancel</Button></DialogClose><Button type="submit" disabled={isProcessingUrl || isExtractingDetails || form.formState.isSubmitting}>{form.formState.isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : null}{editingJd ? "Save Changes" : "Add Job Application"}</Button></DialogFooter>
             </form></Form>
         </DialogContent>
       </Dialog>

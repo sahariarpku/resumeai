@@ -77,7 +77,7 @@ export default function MyResumesPage() {
 
   const handleDeleteResume = async (id: string) => {
     if (!currentUser) {
-      toast({ title: "Not Authenticated", variant: "destructive" });
+      toast({ title: "Not Authenticated", description: "Please sign in to delete resumes.", variant: "destructive" });
       return;
     }
     try {
@@ -130,7 +130,7 @@ export default function MyResumesPage() {
 
       {!currentUser ? (
          <Card className="text-center py-12"><CardHeader><FileSearch className="mx-auto h-16 w-16 text-muted-foreground mb-4" /><CardTitle className="font-headline text-2xl">Sign In to View Resumes</CardTitle></CardHeader><CardContent><p className="text-muted-foreground mb-4">Please sign in to access your saved resumes.</p><Button onClick={() => router.push('/auth/signin')}>Sign In</Button></CardContent></Card>
-      ) : resumes.length === 0 ? (
+      ) : resumes.length === 0 && !isLoading ? (
          <Card className="text-center py-12"><CardHeader><FileSearch className="mx-auto h-16 w-16 text-muted-foreground mb-4" /><CardTitle className="font-headline text-2xl">No Resumes Yet</CardTitle></CardHeader><CardContent><p className="text-muted-foreground mb-4">Tailor your first resume to see it appear here. It will be saved automatically to the cloud.</p><Button asChild><Link href="/tailor-resume"><PlusCircle className="mr-2 h-4 w-4" /> Tailor a Resume</Link></Button></CardContent></Card>
       ) : (
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
@@ -144,7 +144,7 @@ export default function MyResumesPage() {
                     )}
                 </div>
                 <CardTitle className="font-headline text-xl">{resume.name}</CardTitle>
-                <CardDescription>Created: {new Date(resume.createdAt).toLocaleDateString()}{resume.jobDescriptionId && (<span className="block text-xs">For JD: {resume.jobDescriptionId}</span>)}</CardDescription>
+                <CardDescription>Created: {new Date(resume.createdAt as string).toLocaleDateString()}{resume.jobDescriptionId && (<span className="block text-xs">For JD: {resume.jobDescriptionId}</span>)}</CardDescription>
               </CardHeader>
               <CardContent className="flex-grow"><p className="text-sm text-muted-foreground line-clamp-3">{resume.tailoredContent.substring(0, 150)}...</p></CardContent>
               <CardFooter className="grid grid-cols-2 gap-2">
