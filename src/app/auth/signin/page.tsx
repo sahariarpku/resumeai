@@ -59,9 +59,13 @@ export default function SignInPage() {
       router.push("/dashboard"); 
     } catch (error: any) {
       console.error("Sign in error:", error);
-      let errorMessage = "Failed to sign in. Please check your credentials.";
+      let errorMessage = "Failed to sign in. Please check your credentials and try again.";
       if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
-        errorMessage = "Invalid email or password.";
+        errorMessage = "Invalid email or password. Please check your details and try again.";
+      } else if (error.code === 'auth/user-disabled') {
+        errorMessage = "This account has been disabled. Please contact support.";
+      } else if (error.code === 'auth/too-many-requests') {
+        errorMessage = "Access to this account has been temporarily disabled due to many failed login attempts. You can try again later or reset your password.";
       }
       toast({
         title: "Sign In Failed",
@@ -87,7 +91,7 @@ export default function SignInPage() {
             onClick={signInWithGoogle}
             disabled={socialLoading || isLoadingEmail}
           >
-            {socialLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <GoogleIcon />}
+            {socialLoading && !isLoadingEmail ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <GoogleIcon />}
             Sign in with Google
           </Button>
           <Button 
@@ -96,7 +100,7 @@ export default function SignInPage() {
             onClick={signInWithGitHub}
             disabled={socialLoading || isLoadingEmail}
           >
-            {socialLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Github className="mr-2 h-4 w-4" />}
+            {socialLoading && !isLoadingEmail ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Github className="mr-2 h-4 w-4" />}
             Sign in with GitHub
           </Button>
 
