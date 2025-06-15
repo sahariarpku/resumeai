@@ -33,7 +33,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAuth } from '@/contexts/auth-context';
 import { db } from '@/lib/firebase';
-import { collection, query, orderBy, onSnapshot, doc, setDoc, deleteDoc, Timestamp, getDoc, enableNetwork } from "firebase/firestore"; // Added getDoc, enableNetwork
+import { collection, query, orderBy, onSnapshot, doc, setDoc, deleteDoc, Timestamp, getDoc, enableNetwork } from "firebase/firestore"; 
 
 const TAILOR_RESUME_PREFILL_JD_KEY = "tailorResumePrefillJD";
 const TAILOR_RESUME_PREFILL_RESUME_KEY = "tailorResumePrefillResume";
@@ -52,6 +52,11 @@ export default function JobDescriptionsPage() {
   const [isLoaded, setIsLoaded] = useState(false);
   const [calculatingMatchId, setCalculatingMatchId] = useState<string | null>(null);
 
+
+  const form = useForm<JobDescriptionFormData>({
+    resolver: zodResolver(jobDescriptionFormSchema),
+    defaultValues: { title: "", company: "", description: "" },
+  });
 
   useEffect(() => {
     if (!currentUser) {
@@ -122,12 +127,12 @@ export default function JobDescriptionsPage() {
       setIsModalOpen(false);
       setEditingJd(null);
       setJdUrl("");
-      form.reset();
+      form.reset({ title: "", company: "", description: "" });
     } catch (error) {
       console.error("Error saving JD to Firestore:", error);
       let description = "Could not save job application.";
       if (error instanceof Error && error.message.toLowerCase().includes("offline")) {
-        description = "Failed to save job application: You appear to be offline. Changes might be saved locally and will sync when online.";
+        description = "Failed to save job application: You appear to be offline. Please check your internet connection.";
       } else if (error instanceof Error) {
         description = `Could not save job application: ${error.message}.`;
       }
@@ -137,7 +142,7 @@ export default function JobDescriptionsPage() {
 
   const openAddModal = () => {
     setEditingJd(null);
-    form.reset();
+    form.reset({ title: "", company: "", description: "" });
     setJdUrl("");
     setIsModalOpen(true);
   };
