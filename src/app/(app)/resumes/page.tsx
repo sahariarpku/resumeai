@@ -27,7 +27,7 @@ import {
 } from "@/components/ui/tooltip";
 import { useAuth } from '@/contexts/auth-context';
 import { db } from '@/lib/firebase';
-import { collection, query, orderBy, onSnapshot, doc, deleteDoc, Timestamp } from "firebase/firestore";
+import { collection, query, orderBy, onSnapshot, doc, deleteDoc, Timestamp, enableNetwork } from "firebase/firestore";
 
 export default function MyResumesPage() {
   const { toast } = useToast();
@@ -58,7 +58,13 @@ export default function MyResumesPage() {
       setIsLoading(false);
     }, (error) => {
       console.error("Error fetching resumes:", error);
-      toast({ title: "Load Error", description: "Could not load resumes.", variant: "destructive" });
+      let description = "Could not load resumes.";
+      if (error instanceof Error && error.message.toLowerCase().includes("offline")) {
+        description = "Failed to load resumes: You appear to be offline. Please check your internet connection.";
+      } else if (error instanceof Error) {
+        description = `Could not load resumes: ${error.message}.`;
+      }
+      toast({ title: "Load Error", description, variant: "destructive" });
       setIsLoading(false);
     });
     return () => unsubscribe();
@@ -70,13 +76,19 @@ export default function MyResumesPage() {
       return;
     }
     try {
+      await enableNetwork(db);
       const resumeDocRef = doc(db, "users", currentUser.uid, "resumes", id);
       await deleteDoc(resumeDocRef);
       toast({ title: "Resume Deleted", variant: "destructive" });
-      // Realtime listener will update the state
     } catch (error) {
       console.error("Error deleting resume from Firestore:", error);
-      toast({ title: "Delete Error", description: "Could not delete resume.", variant: "destructive" });
+      let description = "Could not delete resume.";
+       if (error instanceof Error && error.message.toLowerCase().includes("offline")) {
+        description = "Failed to delete resume: You appear to be offline. Please check your internet connection.";
+      } else if (error instanceof Error) {
+        description = `Could not delete resume: ${error.message}.`;
+      }
+      toast({ title: "Delete Error", description, variant: "destructive" });
     }
   };
 

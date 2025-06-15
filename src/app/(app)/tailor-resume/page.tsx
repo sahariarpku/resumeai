@@ -23,7 +23,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from '@/contexts/auth-context';
 import { db } from '@/lib/firebase';
-import { doc, getDoc, setDoc, Timestamp } from "firebase/firestore";
+import { doc, getDoc, setDoc, Timestamp, enableNetwork } from "firebase/firestore";
 
 const TAILOR_RESUME_PREFILL_JD_KEY = "tailorResumePrefillJD";
 const TAILOR_RESUME_PREFILL_RESUME_KEY = "tailorResumePrefillResume";
@@ -36,11 +36,11 @@ const SimpleMarkdownToHtmlDisplay = ({ text }: { text: string | null }) => {
   html = html.replace(/^# (.*$)/gim, '<h1 class="text-2xl font-bold mt-5 mb-3">$1</h1>');
   html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/__(.*?)__/g, '<strong>$1</strong>'); 
   html = html.replace(/\*(.*?)\*/g, '<em>$1</em>').replace(/_(.*?)_/g, '<em>$1</em>'); 
-  const lines = html.split('\n');
+  const lines = html.split('\\n');
   let newHtmlLines = [];
   let inList = false; let listType = '';
   for (const line of lines) {
-    const ulMatch = line.match(/^(\* |\- )/); const olMatch = line.match(/^(\d+\. )/);
+    const ulMatch = line.match(/^(\* |\- )/); const olMatch = line.match(/^(\\d+\\. )/);
     if (ulMatch || olMatch) {
       const currentListType = ulMatch ? 'ul' : 'ol';
       if (!inList || listType !== currentListType) {
@@ -54,14 +54,14 @@ const SimpleMarkdownToHtmlDisplay = ({ text }: { text: string | null }) => {
     }
   }
   if (inList) { newHtmlLines.push(`</${listType}>`); }
-  html = newHtmlLines.join('\n');
-  html = html.split(/\n\s*\n/).map(paragraph => {
+  html = newHtmlLines.join('\\n');
+  html = html.split(/\\n\\s*\\n/).map(paragraph => {
     if (paragraph.trim() === '') return '';
-    if (paragraph.match(/^\s*<(ul|ol|h[1-6]|div|section|article|aside|header|footer|nav|figure|table|blockquote|hr|pre|form)/i)) return paragraph;
-    return `<p>${paragraph.replace(/\n/g, '<br />')}</p>`;
+    if (paragraph.match(/^\\s*<(ul|ol|h[1-6]|div|section|article|aside|header|footer|nav|figure|table|blockquote|hr|pre|form)/i)) return paragraph;
+    return `<p>${paragraph.replace(/\\n/g, '<br />')}</p>`;
   }).join('');
-  html = html.replace(/<p>\s*(<(ul|ol)>.*?<\/(ul|ol)>)\s*<\/p>/gs, '$1');
-  html = html.replace(/<p>\s*<\/p>/g, '');
+  html = html.replace(/<p>\\s*(<(ul|ol)>.*?<\\/(ul|ol)>)\\s*<\\/p>/gs, '$1');
+  html = html.replace(/<p>\\s*<\\/p>/g, '');
   return <div className="prose prose-sm dark:prose-invert max-w-none break-words" dangerouslySetInnerHTML={{ __html: html }} />;
 };
 
@@ -93,6 +93,7 @@ export default function TailorResumePage() {
       let loadedProfile: UserProfile | null = null;
       if (currentUser) {
         try {
+          await enableNetwork(db);
           const userDocRef = doc(db, "users", currentUser.uid);
           const userDocSnap = await getDoc(userDocRef);
           if (userDocSnap.exists()) {
@@ -101,7 +102,13 @@ export default function TailorResumePage() {
           }
         } catch (e) {
           console.error("Error fetching profile from Firestore:", e);
-          toast({ title: "Profile Load Error", description: "Could not load profile from cloud.", variant: "destructive" });
+           let description = "Could not load profile from cloud.";
+            if (e instanceof Error && e.message.toLowerCase().includes("offline")) {
+                description = "Failed to load profile: You appear to be offline. Please check your internet connection.";
+            } else if (e instanceof Error) {
+                description = `Could not load your profile: ${e.message}.`;
+            }
+          toast({ title: "Profile Load Error", description, variant: "destructive" });
         }
       }
 
@@ -146,8 +153,8 @@ export default function TailorResumePage() {
   }, [generatedCoverLetter]);
 
   const extractJobTitleFromJD = (jdText: string): string => {
-    const jdLines = jdText.split('\n');
-    let extractedTitle = jdLines.find(line => /title/i.test(line) && !/job title/i.test(line) && line.length < 100)?.replace(/.*title\s*[:=-]?\s*/i, '').trim();
+    const jdLines = jdText.split('\\n');
+    let extractedTitle = jdLines.find(line => /title/i.test(line) && !/job title/i.test(line) && line.length < 100)?.replace(/.*title\\s*[:=-]?\\s*/i, '').trim();
     if (!extractedTitle && jdLines[0] && jdLines[0].length < 100) extractedTitle = jdLines[0].trim();
     return extractedTitle || "Untitled";
   };
@@ -173,12 +180,18 @@ export default function TailorResumePage() {
       userId: currentUser.uid,
     };
     try {
+      await enableNetwork(db);
       const resumeDocRef = doc(db, "users", currentUser.uid, "resumes", newResumeId);
       await setDoc(resumeDocRef, newResume);
-      // No need to update local state here as ResumesPage fetches fresh from Firestore
     } catch (e) {
       console.error("Failed to save resume to Firestore:", e);
-      toast({ title: "Save Error", description: "Could not save resume to cloud.", variant: "destructive"});
+      let description = "Could not save resume to cloud.";
+      if (e instanceof Error && e.message.toLowerCase().includes("offline")) {
+        description = "Failed to save resume: You appear to be offline. Resume will be saved locally and synced when online.";
+      } else if (e instanceof Error) {
+        description = `Could not save resume: ${e.message}.`;
+      }
+      toast({ title: "Save Error", description, variant: "destructive"});
     }
   };
 

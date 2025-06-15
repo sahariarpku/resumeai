@@ -33,7 +33,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAuth } from '@/contexts/auth-context';
 import { db } from '@/lib/firebase';
-import { collection, query, orderBy, onSnapshot, doc, setDoc, deleteDoc, Timestamp, where, getDocs } from "firebase/firestore";
+import { collection, query, orderBy, onSnapshot, doc, setDoc, deleteDoc, Timestamp, getDoc, enableNetwork } from "firebase/firestore"; // Added getDoc, enableNetwork
 
 const TAILOR_RESUME_PREFILL_JD_KEY = "tailorResumePrefillJD";
 const TAILOR_RESUME_PREFILL_RESUME_KEY = "tailorResumePrefillResume";
@@ -76,18 +76,19 @@ export default function JobDescriptionsPage() {
       setIsLoaded(true);
     }, (error) => {
       console.error("Error fetching job descriptions:", error);
-      toast({ title: "Load Error", description: "Could not load job applications.", variant: "destructive" });
+      let description = "Could not load job applications.";
+      if (error instanceof Error && error.message.toLowerCase().includes("offline")) {
+        description = "Failed to load job applications: You appear to be offline. Please check your internet connection.";
+      } else if (error instanceof Error) {
+        description = `Could not load job applications: ${error.message}.`;
+      }
+      toast({ title: "Load Error", description, variant: "destructive" });
       setIsLoaded(true);
     });
 
     return () => unsubscribe();
   }, [currentUser, toast]);
 
-
-  const form = useForm<JobDescriptionFormData>({
-    resolver: zodResolver(jobDescriptionFormSchema),
-    defaultValues: { title: "", company: "", description: "" },
-  });
 
   const handleAddOrEditJd = async (data: JobDescriptionFormData) => {
     if (!currentUser) {
@@ -97,26 +98,25 @@ export default function JobDescriptionsPage() {
 
     const jdDataToSave = {
         ...data,
-        // Ensure createdAt is handled correctly for new vs edit
         createdAt: editingJd?.createdAt ? (typeof editingJd.createdAt === 'string' ? Timestamp.fromDate(new Date(editingJd.createdAt)) : editingJd.createdAt) : Timestamp.now(),
         userId: currentUser.uid,
-        ...(editingJd && { // Preserve match scores if editing
+        ...(editingJd && { 
             matchPercentage: editingJd.matchPercentage,
             matchSummary: editingJd.matchSummary,
             matchCategory: editingJd.matchCategory,
         })
     };
 
-
     try {
+      await enableNetwork(db);
       if (editingJd && editingJd.id) {
         const jdDocRef = doc(db, "users", currentUser.uid, "jobDescriptions", editingJd.id);
         await setDoc(jdDocRef, jdDataToSave, { merge: true });
         toast({ title: "Job Application Updated!" });
       } else {
-        const newJdId = `jd-${Date.now()}`; // Or use Firestore's auto-ID if preferred by removing this
+        const newJdId = `jd-${Date.now()}`; 
         const jdDocRef = doc(db, "users", currentUser.uid, "jobDescriptions", newJdId);
-        await setDoc(jdDocRef, { ...jdDataToSave, id: newJdId }); // Add id to the document data if using custom ID
+        await setDoc(jdDocRef, { ...jdDataToSave, id: newJdId }); 
         toast({ title: "Job Application Saved!" });
       }
       setIsModalOpen(false);
@@ -125,7 +125,13 @@ export default function JobDescriptionsPage() {
       form.reset();
     } catch (error) {
       console.error("Error saving JD to Firestore:", error);
-      toast({ title: "Save Error", description: "Could not save job application.", variant: "destructive" });
+      let description = "Could not save job application.";
+      if (error instanceof Error && error.message.toLowerCase().includes("offline")) {
+        description = "Failed to save job application: You appear to be offline. Changes might be saved locally and will sync when online.";
+      } else if (error instanceof Error) {
+        description = `Could not save job application: ${error.message}.`;
+      }
+      toast({ title: "Save Error", description, variant: "destructive" });
     }
   };
 
@@ -149,12 +155,19 @@ export default function JobDescriptionsPage() {
       return;
     }
     try {
+      await enableNetwork(db);
       const jdDocRef = doc(db, "users", currentUser.uid, "jobDescriptions", id);
       await deleteDoc(jdDocRef);
       toast({ title: "Job Application Deleted", variant: "destructive" });
     } catch (error) {
       console.error("Error deleting JD from Firestore:", error);
-      toast({ title: "Delete Error", description: "Could not delete job application.", variant: "destructive" });
+      let description = "Could not delete job application.";
+      if (error instanceof Error && error.message.toLowerCase().includes("offline")) {
+        description = "Failed to delete job application: You appear to be offline. Please check your connection.";
+      } else if (error instanceof Error) {
+        description = `Could not delete job application: ${error.message}.`;
+      }
+      toast({ title: "Delete Error", description, variant: "destructive" });
     }
   };
 
@@ -212,6 +225,7 @@ export default function JobDescriptionsPage() {
   const handleTailorResumeWithProfile = async (jd: JobDescriptionItem) => {
     if (!currentUser) { toast({ title: "Not Authenticated", variant: "destructive" }); return; }
     try {
+      await enableNetwork(db);
       const userDocRef = doc(db, "users", currentUser.uid);
       const userDocSnap = await getDoc(userDocRef);
       if (!userDocSnap.exists()) {
@@ -229,7 +243,13 @@ export default function JobDescriptionsPage() {
       router.push('/tailor-resume');
     } catch (error) {
       console.error("Error preparing for resume tailoring:", error);
-      toast({ title: "Error", description: "Could not prepare data for resume tailoring.", variant: "destructive" });
+      let description = "Could not prepare data for resume tailoring.";
+      if (error instanceof Error && error.message.toLowerCase().includes("offline")) {
+        description = "Failed to prepare for tailoring: You appear to be offline. Please check your internet connection.";
+      } else if (error instanceof Error) {
+        description = `Could not prepare data: ${error.message}.`;
+      }
+      toast({ title: "Error", description, variant: "destructive" });
     }
   };
 
@@ -237,6 +257,7 @@ export default function JobDescriptionsPage() {
     if (!currentUser) { toast({ title: "Not Authenticated", variant: "destructive" }); return; }
     setCalculatingMatchId(jdId);
     try {
+      await enableNetwork(db);
       const userDocRef = doc(db, "users", currentUser.uid);
       const userDocSnap = await getDoc(userDocRef);
       if (!userDocSnap.exists()) {
@@ -260,24 +281,27 @@ export default function JobDescriptionsPage() {
           matchSummary: matchResult.matchSummary,
           matchCategory: matchResult.matchCategory,
       }, { merge: true });
-      // State will update via onSnapshot listener
       toast({ title: "Match Score Calculated!", description: `Score for "${currentJd.title}" is ${matchResult.matchPercentage}%.` });
     } catch (error) {
       console.error("Error calculating match score:", error);
-      toast({ title: "Match Score Error", description: `Calculation failed: ${error instanceof Error ? error.message : 'Unknown error'}`, variant: "destructive" });
+      let description = `Calculation failed: ${error instanceof Error ? error.message : 'Unknown error'}`;
+      if (error instanceof Error && error.message.toLowerCase().includes("offline")) {
+        description = "Failed to calculate match score: You appear to be offline. Please check your internet connection.";
+      }
+      toast({ title: "Match Score Error", description, variant: "destructive" });
     } finally {
       setCalculatingMatchId(null);
     }
   };
 
-  if (!isLoaded && !currentUser) { // Show prompt to sign in if not loaded and no user
+  if (!isLoaded && !currentUser) { 
     return (
       <div className="container mx-auto py-8 text-center">
         <p className="mt-4 text-muted-foreground">Please sign in to manage your job applications.</p>
       </div>
     );
   }
-  if (!isLoaded && currentUser) { // Show loader if user is present but data isn't loaded
+  if (!isLoaded && currentUser) { 
      return (
       <div className="container mx-auto py-8 text-center">
         <Loader2 className="mx-auto h-12 w-12 animate-spin text-primary" />
@@ -285,7 +309,6 @@ export default function JobDescriptionsPage() {
       </div>
     );
   }
-
 
   const getMatchBadgeVariant = (category?: JobDescriptionItem['matchCategory']): "default" | "secondary" | "destructive" | "outline" => {
     if (!category) return "outline";

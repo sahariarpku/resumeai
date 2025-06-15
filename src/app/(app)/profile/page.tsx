@@ -34,7 +34,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogClose,
-} from "@/components/ui/dialog"; // DialogTrigger removed as it's not used directly here
+} from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { PlusCircle, Edit3, Trash2, Save, Loader2, Sparkles, UploadCloud, DownloadCloud, Printer, FileText, ListRestart } from "lucide-react";
 import type { UserProfile, WorkExperience, Project, Education, Skill, Certification, HonorAward, Publication, Reference, CustomSection, ProfileSectionKey } from "@/lib/types";
@@ -68,7 +68,7 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { Label } from '@/components/ui/label';
 import { useAuth } from '@/contexts/auth-context';
 import { db } from '@/lib/firebase';
-import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
+import { doc, getDoc, setDoc, serverTimestamp, enableNetwork, disableNetwork } from "firebase/firestore";
 import { CvCustomizationModal } from '@/components/cv-customization-modal';
 
 
@@ -141,7 +141,7 @@ export default function ProfilePage() {
 
   const generalInfoForm = useForm<UserProfileFormData>({
     resolver: zodResolver(userProfileSchema),
-    defaultValues: fallbackInitialProfileData, 
+    defaultValues: { ...fallbackInitialProfileData }, 
   });
 
   const workExperienceForm = useForm<WorkExperienceFormData>({ resolver: zodResolver(workExperienceSchema), defaultValues: { company: '', role: '', startDate: '', endDate: '', description: '', achievements: ''} });
@@ -159,6 +159,7 @@ export default function ProfilePage() {
     const loadProfile = async () => {
       if (currentUser) {
         try {
+          await enableNetwork(db); // Attempt to ensure network is enabled for the fetch
           const userDocRef = doc(db, "users", currentUser.uid);
           const userDocSnap = await getDoc(userDocRef);
           let loadedProfile: UserProfile;
@@ -189,9 +190,8 @@ export default function ProfilePage() {
               email: currentUser.email || "",
               fullName: currentUser.displayName || "",
               sectionOrder: [...DEFAULT_SECTION_ORDER],
-              createdAt: serverTimestamp(), // Prepare for Firestore
+              createdAt: serverTimestamp(), 
             };
-            // Document will be created on first save
           }
           setProfileData(loadedProfile);
           generalInfoForm.reset({
@@ -206,6 +206,13 @@ export default function ProfilePage() {
           });
         } catch (error) {
           console.error("Failed to load profile from Firestore:", error);
+          let description = "Could not load your profile. Starting fresh.";
+          if (error instanceof Error && error.message.toLowerCase().includes("offline")) {
+            description = "Failed to load profile: You appear to be offline. Please check your internet connection.";
+          } else if (error instanceof Error) {
+            description = `Could not load your profile: ${error.message}. Starting fresh.`;
+          }
+          toast({ title: "Profile Load Error", description, variant: "destructive" });
           const freshProfile = {
             ...fallbackInitialProfileData,
             id: currentUser.uid,
@@ -215,7 +222,6 @@ export default function ProfilePage() {
           };
           setProfileData(freshProfile);
           generalInfoForm.reset({ email: currentUser.email || "", fullName: currentUser.displayName || "" });
-          toast({ title: "Profile Load Error", description: "Could not load your profile. Starting fresh.", variant: "destructive" });
         }
       } else {
         setProfileData(fallbackInitialProfileData);
@@ -236,24 +242,29 @@ export default function ProfilePage() {
     setIsSaving(true);
     const profileToSave: UserProfile = {
       ...updatedProfile,
-      id: currentUser.uid, // Ensure this is always set
+      id: currentUser.uid, 
       email: currentUser.email || updatedProfile.email,
-      updatedAt: serverTimestamp(), // Add/update timestamp
+      updatedAt: serverTimestamp(), 
     };
-    if (!profileToSave.createdAt) { // Set createdAt only if it's a new profile
+    if (!profileToSave.createdAt) { 
         profileToSave.createdAt = serverTimestamp();
     }
 
-
     try {
+      await enableNetwork(db); // Attempt to ensure network is enabled for the save
       const userDocRef = doc(db, "users", currentUser.uid);
-      await setDoc(userDocRef, profileToSave, { merge: true }); // Use merge to prevent overwriting fields not in profileToSave
-      setProfileData(profileToSave); // Update local state with what was intended to be saved
-                                    // Firestore timestamps will resolve on server, local state might differ slightly until next load
+      await setDoc(userDocRef, profileToSave, { merge: true }); 
+      setProfileData(profileToSave); 
       toast({ title: "Profile Saved!", description: "Your profile has been saved to the cloud." });
     } catch (error) {
       console.error("Failed to save profile to Firestore:", error);
-      toast({ title: "Save Error", description: "Could not save profile.", variant: "destructive" });
+      let description = "Could not save profile.";
+      if (error instanceof Error && error.message.toLowerCase().includes("offline")) {
+        description = "Failed to save profile: You appear to be offline. Changes might be saved locally if offline persistence is enabled and will sync when online.";
+      } else if (error instanceof Error) {
+        description = `Could not save profile: ${error.message}.`;
+      }
+      toast({ title: "Save Error", description, variant: "destructive" });
     } finally {
       setIsSaving(false);
     }
@@ -283,7 +294,6 @@ export default function ProfilePage() {
     }
   };
 
-  // --- Section Handlers (CRUD for sub-arrays) ---
   const handleAddOrUpdateSectionItem = (sectionKey: ProfileSectionKey, itemData: any, isEditing: boolean, itemId?: string) => {
     let updatedItems;
     const currentItems = (profileData[sectionKey] as any[] || []);
@@ -293,7 +303,7 @@ export default function ProfilePage() {
       updatedItems = [...currentItems, { ...itemData, id: `${sectionKey.slice(0,2)}-${Date.now()}` }];
     }
     const updatedProfile = { ...profileData, [sectionKey]: updatedItems };
-    saveProfile(updatedProfile); // This now saves the whole profile to Firestore
+    saveProfile(updatedProfile);
   };
 
   const handleDeleteSectionItem = (sectionKey: ProfileSectionKey, itemId: string) => {
@@ -303,30 +313,27 @@ export default function ProfilePage() {
     saveProfile(updatedProfile);
   };
 
-  // --- Work Experience ---
   const handleAddWorkExperience = () => { setEditingWorkExperience(null); workExperienceForm.reset({ company: '', role: '', startDate: '', endDate: '', description: '', achievements: '' }); setIsWorkExperienceModalOpen(true); };
-  const handleEditWorkExperience = (experience: WorkExperience) => { setEditingWorkExperience(experience); workExperienceForm.reset({ ...experience, company: experience.company || '', role: experience.role || '', startDate: experience.startDate || '', endDate: experience.endDate || '', description: experience.description || '', achievements: experience.achievements?.join('\n') || '' }); setIsWorkExperienceModalOpen(true); };
+  const handleEditWorkExperience = (experience: WorkExperience) => { setEditingWorkExperience(experience); workExperienceForm.reset({ ...experience, company: experience.company || '', role: experience.role || '', startDate: experience.startDate || '', endDate: experience.endDate || '', description: experience.description || '', achievements: experience.achievements?.join('\\n') || '' }); setIsWorkExperienceModalOpen(true); };
   const handleDeleteWorkExperience = (id: string) => { handleDeleteSectionItem('workExperiences', id); toast({ title: "Work Experience Removed", variant: "destructive" }); };
   const onWorkExperienceSubmit = (data: WorkExperienceFormData) => {
-    const achievementsArray = data.achievements?.split('\n').map(s => s.trim()).filter(Boolean);
+    const achievementsArray = data.achievements?.split('\\n').map(s => s.trim()).filter(Boolean);
     handleAddOrUpdateSectionItem('workExperiences', { ...data, achievements: achievementsArray }, !!editingWorkExperience, editingWorkExperience?.id);
     toast({ title: editingWorkExperience ? "Work Experience Updated" : "Work Experience Added" });
     setIsWorkExperienceModalOpen(false); setEditingWorkExperience(null);
   };
 
-  // --- Projects ---
   const handleAddProject = () => { setEditingProject(null); projectForm.reset({ name: '', description: '', technologies: '', achievements: '', link: '' }); setIsProjectModalOpen(true); };
-  const handleEditProject = (project: Project) => { setEditingProject(project); projectForm.reset({ ...project, name: project.name || '', description: project.description || '', technologies: project.technologies?.join(', ') || '', achievements: project.achievements?.join('\n') || '', link: project.link || '' }); setIsProjectModalOpen(true); };
+  const handleEditProject = (project: Project) => { setEditingProject(project); projectForm.reset({ ...project, name: project.name || '', description: project.description || '', technologies: project.technologies?.join(', ') || '', achievements: project.achievements?.join('\\n') || '', link: project.link || '' }); setIsProjectModalOpen(true); };
   const handleDeleteProject = (id: string) => { handleDeleteSectionItem('projects', id); toast({ title: "Project Removed", variant: "destructive" }); };
   const onProjectSubmit = (data: ProjectFormData) => {
     const techArray = data.technologies?.split(',').map(s => s.trim()).filter(Boolean);
-    const achievementsArray = data.achievements?.split('\n').map(s => s.trim()).filter(Boolean);
+    const achievementsArray = data.achievements?.split('\\n').map(s => s.trim()).filter(Boolean);
     handleAddOrUpdateSectionItem('projects', { ...data, technologies: techArray, achievements: achievementsArray }, !!editingProject, editingProject?.id);
     toast({ title: editingProject ? "Project Updated" : "Project Added" });
     setIsProjectModalOpen(false); setEditingProject(null);
   };
   
-  // --- Education ---
   const handleAddEducation = () => { setEditingEducation(null); educationForm.reset({ institution: '', degree: '', fieldOfStudy: '', startDate: '', endDate: '', gpa: '', thesisTitle: '', relevantCourses: '', description: '' }); setIsEducationModalOpen(true); };
   const handleEditEducation = (edu: Education) => { setEditingEducation(edu); educationForm.reset({...edu, institution: edu.institution || '', degree: edu.degree || '', fieldOfStudy: edu.fieldOfStudy || '', startDate: edu.startDate || '', endDate: edu.endDate || '', gpa: edu.gpa || '', thesisTitle: edu.thesisTitle || '', relevantCourses: edu.relevantCourses?.join(', ') || '', description: edu.description || '' }); setIsEducationModalOpen(true); };
   const handleDeleteEducation = (id: string) => { handleDeleteSectionItem('education', id); toast({ title: "Education Entry Removed", variant: "destructive" }); };
@@ -337,7 +344,6 @@ export default function ProfilePage() {
     setIsEducationModalOpen(false); setEditingEducation(null);
   };
 
-  // --- Skills ---
   const handleAddSkill = () => { setEditingSkill(null); skillForm.reset({ name: '', category: '', proficiency: undefined }); setIsSkillModalOpen(true); };
   const handleEditSkill = (skill: Skill) => { setEditingSkill(skill); skillForm.reset({ ...skill, name: skill.name || '', category: skill.category || '', proficiency: skill.proficiency || undefined }); setIsSkillModalOpen(true); };
   const handleDeleteSkill = (id: string) => { handleDeleteSectionItem('skills', id); toast({ title: "Skill Removed", variant: "destructive" }); };
@@ -347,7 +353,6 @@ export default function ProfilePage() {
     setIsSkillModalOpen(false); setEditingSkill(null);
   };
 
-  // --- Certifications ---
   const handleAddCertification = () => { setEditingCertification(null); certificationForm.reset({ name: '', issuingOrganization: '', issueDate: '', credentialId: '', credentialUrl: '' }); setIsCertificationModalOpen(true); };
   const handleEditCertification = (cert: Certification) => { setEditingCertification(cert); certificationForm.reset({ ...cert, name: cert.name || '', issuingOrganization: cert.issuingOrganization || '', issueDate: cert.issueDate || '', credentialId: cert.credentialId || '', credentialUrl: cert.credentialUrl || ''}); setIsCertificationModalOpen(true); };
   const handleDeleteCertification = (id: string) => { handleDeleteSectionItem('certifications', id); toast({ title: "Certification Removed", variant: "destructive" }); };
@@ -357,7 +362,6 @@ export default function ProfilePage() {
     setIsCertificationModalOpen(false); setEditingCertification(null);
   };
   
-  // --- Honors & Awards ---
   const handleAddHonorAward = () => { setEditingHonorAward(null); honorAwardForm.reset({ name: '', organization: '', date: '', description: '' }); setIsHonorAwardModalOpen(true); };
   const handleEditHonorAward = (item: HonorAward) => { setEditingHonorAward(item); honorAwardForm.reset({ ...item, name: item.name || '', organization: item.organization || '', date: item.date || '', description: item.description || '' }); setIsHonorAwardModalOpen(true); };
   const handleDeleteHonorAward = (id: string) => { handleDeleteSectionItem('honorsAndAwards', id); toast({ title: "Honor/Award Removed", variant: "destructive" }); };
@@ -367,7 +371,6 @@ export default function ProfilePage() {
     setIsHonorAwardModalOpen(false); setEditingHonorAward(null);
   };
 
-  // --- Publications ---
   const handleAddPublication = () => { setEditingPublication(null); publicationForm.reset({ title: '', authors: '', journalOrConference: '', publicationDate: '', link: '', doi: '', description: '' }); setIsPublicationModalOpen(true); };
   const handleEditPublication = (item: Publication) => { setEditingPublication(item); publicationForm.reset({ ...item, title: item.title || '', authors: item.authors?.join(', ') || '', journalOrConference: item.journalOrConference || '', publicationDate: item.publicationDate || '', link: item.link || '', doi: item.doi || '', description: item.description || '' }); setIsPublicationModalOpen(true); };
   const handleDeletePublication = (id: string) => { handleDeleteSectionItem('publications', id); toast({ title: "Publication Removed", variant: "destructive" }); };
@@ -378,7 +381,6 @@ export default function ProfilePage() {
     setIsPublicationModalOpen(false); setEditingPublication(null);
   };
 
-  // --- References ---
   const handleAddReference = () => { setEditingReference(null); referenceForm.reset({ name: '', titleAndCompany: '', contactDetailsOrNote: '' }); setIsReferenceModalOpen(true); };
   const handleEditReference = (item: Reference) => { setEditingReference(item); referenceForm.reset({ ...item, name: item.name || '', titleAndCompany: item.titleAndCompany || '', contactDetailsOrNote: item.contactDetailsOrNote || '' }); setIsReferenceModalOpen(true); };
   const handleDeleteReference = (id: string) => { handleDeleteSectionItem('references', id); toast({ title: "Reference Removed", variant: "destructive" }); };
@@ -388,7 +390,6 @@ export default function ProfilePage() {
     setIsReferenceModalOpen(false); setEditingReference(null);
   };
 
-  // --- Custom Sections ---
   const handleAddCustomSection = () => { setEditingCustomSection(null); customSectionForm.reset({ heading: '', content: '' }); setIsCustomSectionModalOpen(true); };
   const handleEditCustomSection = (item: CustomSection) => { setEditingCustomSection(item); customSectionForm.reset({ ...item, heading: item.heading || '', content: item.content || ''}); setIsCustomSectionModalOpen(true); };
   const handleDeleteCustomSection = (id: string) => { handleDeleteSectionItem('customSections', id); toast({ title: "Custom Section Removed", variant: "destructive" }); };
@@ -518,7 +519,6 @@ export default function ProfilePage() {
   const applyExtractedDataToProfile = (data: ExtractProfileFromCvOutput) => {
     if (!currentUser) return; 
 
-    // Create a mutable copy of the current profileData
     let updatedProfile = { ...profileData };
 
     updatedProfile.id = currentUser.uid;
@@ -600,12 +600,11 @@ export default function ProfilePage() {
       }));
     }
     setProfileData(updatedProfile); 
-    // User needs to explicitly save the "General Info" form or other sections to persist to Firestore
   };
 
   const handleSectionOrderUpdate = (newOrder: ProfileSectionKey[]) => {
     const updatedProfile = { ...profileData, sectionOrder: newOrder };
-    saveProfile(updatedProfile); // Save immediately after reorder
+    saveProfile(updatedProfile); 
   };
 
 
@@ -870,7 +869,6 @@ export default function ProfilePage() {
         onOrderUpdate={handleSectionOrderUpdate}
       />
 
-      {/* Section Item Modals ... */}
       <Dialog open={isWorkExperienceModalOpen} onOpenChange={setIsWorkExperienceModalOpen}><DialogContent className="sm:max-w-2xl"><DialogHeader><DialogTitle className="font-headline">{editingWorkExperience ? 'Edit Work Experience' : 'Add New Work Experience'}</DialogTitle><DialogDescription>Provide details about your professional role.</DialogDescription></DialogHeader><Form {...workExperienceForm}><form onSubmit={workExperienceForm.handleSubmit(onWorkExperienceSubmit)} className="space-y-6 py-4"><WorkExperienceFormFields control={workExperienceForm.control} onPolishRequest={(fieldName) => handleAIPolish(fieldName, workExperienceForm)} polishingField={polishingField as keyof WorkExperienceFormData | null} isSubmitting={workExperienceForm.formState.isSubmitting || isSaving} /><DialogFooter><DialogClose asChild><Button type="button" variant="outline">Cancel</Button></DialogClose><Button type="submit" disabled={workExperienceForm.formState.isSubmitting || isSaving}><Save className="mr-2 h-4 w-4"/>{isSaving ? <Loader2 className="animate-spin"/> : (editingWorkExperience ? 'Save Changes' : 'Add Experience')}</Button></DialogFooter></form></Form></DialogContent></Dialog>
       <Dialog open={isProjectModalOpen} onOpenChange={setIsProjectModalOpen}><DialogContent className="sm:max-w-2xl"><DialogHeader><DialogTitle className="font-headline">{editingProject ? 'Edit Project' : 'Add New Project'}</DialogTitle><DialogDescription>Detail your project.</DialogDescription></DialogHeader><Form {...projectForm}><form onSubmit={projectForm.handleSubmit(onProjectSubmit)} className="space-y-6 py-4"><ProjectFormFields control={projectForm.control} onPolishRequest={(fieldName) => handleAIPolish(fieldName, projectForm)} polishingField={polishingField as keyof ProjectFormData | null} isSubmitting={projectForm.formState.isSubmitting || isSaving} /><DialogFooter><DialogClose asChild><Button type="button" variant="outline">Cancel</Button></DialogClose><Button type="submit" disabled={projectForm.formState.isSubmitting || isSaving}><Save className="mr-2 h-4 w-4"/>{isSaving ? <Loader2 className="animate-spin"/> : (editingProject ? 'Save Changes' : 'Add Project')}</Button></DialogFooter></form></Form></DialogContent></Dialog>
       <Dialog open={isEducationModalOpen} onOpenChange={setIsEducationModalOpen}><DialogContent className="sm:max-w-2xl max-h-[85vh] flex flex-col"><DialogHeader><DialogTitle className="font-headline">{editingEducation ? 'Edit Education' : 'Add New Education'}</DialogTitle><DialogDescription>Provide your educational qualifications and details.</DialogDescription></DialogHeader><div className="flex-grow overflow-y-auto pr-3"><Form {...educationForm}><form id="educationFormModal" onSubmit={educationForm.handleSubmit(onEducationSubmit)} className="space-y-6 py-4"><EducationFormFields control={educationForm.control} onPolishRequest={(fieldName) => handleAIPolish(fieldName, educationForm)} polishingField={polishingField as keyof EducationFormData | null} isSubmitting={educationForm.formState.isSubmitting || isSaving} /></form></Form></div><DialogFooter className="pt-4 mt-auto border-t"><DialogClose asChild><Button type="button" variant="outline">Cancel</Button></DialogClose><Button type="submit" form="educationFormModal" disabled={educationForm.formState.isSubmitting || isSaving}><Save className="mr-2 h-4 w-4"/>{isSaving ? <Loader2 className="animate-spin"/> : (editingEducation ? 'Save Changes' : 'Add Education')}</Button></DialogFooter></DialogContent></Dialog>

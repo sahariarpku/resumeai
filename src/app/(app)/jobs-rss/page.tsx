@@ -39,10 +39,8 @@ import {
 } from '@/lib/job-rss-feeds';
 import { useAuth } from '@/contexts/auth-context';
 import { db } from '@/lib/firebase';
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, enableNetwork } from "firebase/firestore";
 
-
-// const USER_PROFILE_STORAGE_KEY = "userProfile"; // No longer using this for primary profile data
 const LAST_SELECTED_SUBJECT_URL_KEY = "lastSelectedSubjectUrl_v2";
 const LAST_SELECTED_LOCATION_URL_KEY = "lastSelectedLocationUrl_v2";
 const LAST_KEYWORDS_KEY = "lastKeywords_v2";
@@ -57,7 +55,6 @@ const RssFiltersSchema = z.object({
 });
 type RssFiltersData = z.infer<typeof RssFiltersSchema>;
 
-// Basic client-side RSS item parser
 function parseBasicRssItem(itemXml: string, id: string): JobPostingRssItem {
   const getTagValue = (tagName: string, xml: string): string => {
     const match = xml.match(new RegExp(`<${tagName}[^>]*>\\s*<!\\[CDATA\\[(.*?)\\]\\]>\\s*<\\/${tagName}>|<${tagName}[^>]*>(.*?)<\\/${tagName}>`, "is"));
@@ -65,8 +62,7 @@ function parseBasicRssItem(itemXml: string, id: string): JobPostingRssItem {
   };
 
   let description = getTagValue('description', itemXml);
-  // Basic HTML stripping for the snippet
-  description = description.replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+  description = description.replace(/<br\s*\/?>/gi, '\\n').replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
   
   return {
     id: id,
@@ -85,8 +81,7 @@ export default function JobsRssPage() {
   const { currentUser } = useAuth();
   const [jobPostings, setJobPostings] = useState<JobPostingRssItem[]>([]);
   const [isLoadingFeed, setIsLoadingFeed] = useState(false);
-  // const [userProfile, setUserProfile] = useState<UserProfile | null>(null); // Profile fetched on-demand
-  const [initialSettingsLoaded, setInitialSettingsLoaded] = useState(false); // For localStorage filters
+  const [initialSettingsLoaded, setInitialSettingsLoaded] = useState(false); 
   
   const [areFiltersLoaded, setAreFiltersLoaded] = useState(false);
   const [initialFetchDone, setInitialFetchDone] = useState(false);
@@ -109,7 +104,6 @@ export default function JobsRssPage() {
   const subjectAreaFeeds = useMemo(() => getFeedCategoriesByType('subjectArea'), []);
   const locationFeeds = useMemo(() => getFeedCategoriesByType('location'), []);
 
-  // Load filters from localStorage and initialize form
   useEffect(() => {
     try {
       const lastSubject = localStorage.getItem(LAST_SELECTED_SUBJECT_URL_KEY);
@@ -126,10 +120,9 @@ export default function JobsRssPage() {
       console.error("Failed to load last filters from localStorage:", error);
     }
     setAreFiltersLoaded(true);
-    setInitialSettingsLoaded(true); // Indicate all initial settings (filters) are loaded
+    setInitialSettingsLoaded(true); 
   }, [filtersForm]);
 
-  // Save filters to localStorage when they change
   const watchedSubjectUrl = filtersForm.watch("selectedSubjectUrl");
   const watchedLocationUrl = filtersForm.watch("selectedLocationUrl");
   const watchedKeywords = filtersForm.watch("keywords");
@@ -202,7 +195,7 @@ export default function JobsRssPage() {
       
       rawRssContentString = responseData.rawRssContent;
       
-      const itemRegex = /<item>([\s\S]*?)<\/item>/g;
+      const itemRegex = /<item>([\\s\\S]*?)<\\/item>/g;
       let match;
       const parsedItems: JobPostingRssItem[] = [];
       let itemIndex = 0;
@@ -218,7 +211,7 @@ export default function JobsRssPage() {
       let finalJobs = parsedItems;
       const keywordsToFilter = data.keywords?.trim().toLowerCase();
       if (keywordsToFilter) {
-        const keywordArray = keywordsToFilter.split(/\s*,\s*|\s+/).filter(Boolean); 
+        const keywordArray = keywordsToFilter.split(/\\s*,\\s*|\\s+/).filter(Boolean); 
         if (keywordArray.length > 0) {
             finalJobs = parsedItems.filter(job => {
             const searchableText = [
@@ -247,7 +240,6 @@ export default function JobsRssPage() {
     }
   }, [toast]); 
   
-  // Auto-fetch on load based on saved filters
   useEffect(() => {
     if (areFiltersLoaded && !initialFetchDone) {
       console.log("Attempting auto-fetch with current form values:", filtersForm.getValues());
@@ -271,6 +263,7 @@ export default function JobsRssPage() {
       return null;
     }
     try {
+      await enableNetwork(db);
       const userDocRef = doc(db, "users", currentUser.uid);
       const userDocSnap = await getDoc(userDocRef);
       if (userDocSnap.exists()) {
@@ -282,7 +275,13 @@ export default function JobsRssPage() {
       }
     } catch (error) {
       console.error("Error fetching user profile:", error);
-      toast({ title: "Profile Load Error", description: "Could not load your profile.", variant: "destructive" });
+      let description = "Could not load your profile.";
+      if (error instanceof Error && error.message.toLowerCase().includes("offline")) {
+        description = "Failed to load profile: You appear to be offline. Please check your internet connection.";
+      } else if (error instanceof Error) {
+        description = `Could not load profile: ${error.message}.`;
+      }
+      toast({ title: "Profile Load Error", description, variant: "destructive" });
       return null;
     }
   };
@@ -347,8 +346,12 @@ export default function JobsRssPage() {
           setJobPostings(prev => prev.map(j => j.id === jobId ? { ...j, ...matchResult, isCalculatingMatch: false } : j));
         } catch (matchError) {
            console.error(`Error calculating match for job ${jobId}:`, matchError);
+           let description = `Could not calculate match for ${jobData.title}.`;
+           if (matchError instanceof Error && matchError.message.toLowerCase().includes("offline")) {
+             description = `Could not calculate match for ${jobData.title}: You appear to be offline.`;
+           }
            setJobPostings(prev => prev.map(j => j.id === jobId ? { ...j, isCalculatingMatch: false, matchSummary: "Error calculating match." } : j));
-           toast({ title: "Match Error", description: `Could not calculate match for ${jobData.title}.`, variant: "destructive" });
+           toast({ title: "Match Error", description, variant: "destructive" });
         }
       } else if (jobData) { 
         setJobPostings(prev => prev.map(j => j.id === jobId ? { ...j, matchSummary: "Requirements summary missing or too short for matching.", matchCategory: "Poor Match", matchPercentage: 0, isCalculatingMatch: false } : j));
@@ -483,8 +486,12 @@ export default function JobsRssPage() {
             toast({ title: "Match Calculated!", description: `Score for "${jobData.title}" is ${matchResult.matchPercentage}%.` });
           } catch (matchError) {
              console.error(`Error calculating match for job ${jobId}:`, matchError);
+             let description = `Could not calculate match for ${jobData.title}.`;
+             if (matchError instanceof Error && matchError.message.toLowerCase().includes("offline")) {
+               description = `Could not calculate match for ${jobData.title}: You appear to be offline.`;
+             }
              setJobPostings(prev => prev.map(j => j.id === jobId ? { ...j, isCalculatingMatch: false, matchSummary: "Error calculating match." } : j));
-             toast({ title: "Match Error", description: `Could not calculate match for ${jobData.title}.`, variant: "destructive" });
+             toast({ title: "Match Error", description, variant: "destructive" });
           }
       } else if (jobData) {
           setJobPostings(prev => prev.map(j => j.id === jobId ? { ...j, matchSummary: "Requirements summary missing or too short for matching.", matchCategory: "Poor Match", matchPercentage: 0, isCalculatingMatch: false } : j));
@@ -713,12 +720,12 @@ export default function JobsRssPage() {
                          <Tooltip>
                             <TooltipTrigger asChild>
                                 <p className="text-xs whitespace-pre-wrap">
-                                  {job.requirementsSummary?.replace(/&lt;br\s*\/?&gt;|<br\s*\/?>/gi, '\n') || <span className="text-muted-foreground/70">N/A (Process to load)</span>}
+                                  {job.requirementsSummary?.replace(/&lt;br\\s*\\/?&gt;|<br\\s*\\/?>/gi, '\\n') || <span className="text-muted-foreground/70">N/A (Process to load)</span>}
                                 </p>
                             </TooltipTrigger>
                             <TooltipContent side="bottom" className="max-w-md p-2 bg-popover text-popover-foreground">
                                 <p className="text-sm font-medium">RSS Description Snippet/AI Summary:</p>
-                                <p className="text-xs whitespace-pre-wrap">{job.requirementsSummary?.replace(/&lt;br\s*\/?&gt;|<br\s*\/?>/gi, '\n') || "Not available."}</p>
+                                <p className="text-xs whitespace-pre-wrap">{job.requirementsSummary?.replace(/&lt;br\\s*\\/?&gt;|<br\\s*\\/?>/gi, '\\n') || "Not available."}</p>
                                 {(!job.company && !job.isProcessingDetails && !job.isCalculatingMatch && !job.requirementsSummary?.endsWith('...')) && <p className="text-xs mt-1 italic">This is a snippet. Select and process, or click 'Tailor CV' for full summary & details from source.</p>}
                             </TooltipContent>
                         </Tooltip>
@@ -805,7 +812,7 @@ export default function JobsRssPage() {
                 <p className="text-muted-foreground">
                     Choose a subject area and/or location, optionally add keywords, then click "Fetch RSS Feed", or wait for auto-fetch.
                 </p>
-                 {initialSettingsLoaded && !currentUser && ( // Show after initial settings load to avoid flicker
+                 {initialSettingsLoaded && !currentUser && ( 
                     <p className="text-sm text-amber-600 mt-4 flex items-center justify-center">
                         <AlertTriangle className="mr-2 h-4 w-4" />
                         Please sign in to use CV matching and tailoring features.
@@ -819,6 +826,3 @@ export default function JobsRssPage() {
     </TooltipProvider>
   );
 }
-
-
-    

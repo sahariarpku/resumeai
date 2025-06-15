@@ -24,13 +24,13 @@ import { Loader2, Download, FileText, Settings2, ListRestart, Printer } from 'lu
 import { Separator } from '@/components/ui/separator';
 import { useAuth } from '@/contexts/auth-context';
 import { db } from '@/lib/firebase';
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, serverTimestamp, enableNetwork } from 'firebase/firestore';
 
 interface CvCustomizationModalProps {
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
-  currentProfile: UserProfile | null; // Pass current profile
-  onOrderUpdate: (newOrder: ProfileSectionKey[]) => void; // Callback to update profile page
+  currentProfile: UserProfile | null; 
+  onOrderUpdate: (newOrder: ProfileSectionKey[]) => void; 
 }
 
 export function CvCustomizationModal({ isOpen, onOpenChange, currentProfile, onOrderUpdate }: CvCustomizationModalProps) {
@@ -45,7 +45,6 @@ export function CvCustomizationModal({ isOpen, onOpenChange, currentProfile, onO
 
   useEffect(() => {
     if (isOpen && currentProfile) {
-      // Use the profile passed from the ProfilePage
       setProfileForModal({
         ...currentProfile,
         sectionOrder: currentProfile.sectionOrder && currentProfile.sectionOrder.length > 0 
@@ -56,10 +55,10 @@ export function CvCustomizationModal({ isOpen, onOpenChange, currentProfile, onO
       setGeneratedLatex(null);
       setUserPreference("");
     } else if (isOpen && !currentProfile && currentUser) {
-        // Fallback: if currentProfile not passed, try to load (e.g. if opened from a context without profile preloaded)
         const loadProfileForModal = async () => {
             setIsLoading(true);
             try {
+                await enableNetwork(db);
                 const userDocRef = doc(db, "users", currentUser.uid);
                 const userDocSnap = await getDoc(userDocRef);
                 if (userDocSnap.exists()) {
@@ -75,7 +74,13 @@ export function CvCustomizationModal({ isOpen, onOpenChange, currentProfile, onO
                 }
             } catch (error) {
                 console.error("Error loading profile for modal:", error);
-                toast({ title: "Error", description: "Could not load your profile.", variant: "destructive" });
+                let description = "Could not load your profile for customization.";
+                if (error instanceof Error && error.message.toLowerCase().includes("offline")) {
+                    description = "Failed to load profile for customization: You appear to be offline. Please check your internet connection.";
+                } else if (error instanceof Error) {
+                    description = `Could not load your profile: ${error.message}.`;
+                }
+                toast({ title: "Error", description, variant: "destructive" });
                 onOpenChange(false);
             } finally {
                 setIsLoading(false);
@@ -111,9 +116,8 @@ export function CvCustomizationModal({ isOpen, onOpenChange, currentProfile, onO
 
       const updatedProfileForModal = { ...profileForModal, sectionOrder: result.newSectionOrder, updatedAt: serverTimestamp() };
       
-      // Call the callback to update ProfilePage's state and trigger Firestore save there
       onOrderUpdate(result.newSectionOrder);
-      setProfileForModal(updatedProfileForModal); // Update modal's local copy
+      setProfileForModal(updatedProfileForModal); 
 
       toast({
         title: "CV Preference Applied!",
