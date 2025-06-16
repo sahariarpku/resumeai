@@ -29,9 +29,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setCurrentUser(user);
       setLoading(false);
+    }, (error) => {
+      // This error callback for onAuthStateChanged is important too
+      console.error("onAuthStateChanged error:", error);
+      setLoading(false); // Ensure loading is set to false even on error
+      if (error.code === 'auth/network-request-failed') {
+        toast({
+          title: "Network Error",
+          description: "Failed to connect to Firebase Authentication. Please check your internet connection and Firebase configuration (Authorized Domains).",
+          variant: "destructive",
+          duration: 10000, // Longer duration for important errors
+        });
+      }
     });
     return () => unsubscribe();
-  }, []);
+  }, [toast]);
 
   const handleSocialSignInSuccess = (user: User) => {
     setCurrentUser(user);
@@ -44,14 +56,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     let errorMessage = `Failed to sign in with ${providerName}. Please try again.`;
     if (error instanceof Error) {
         const authError = error as AuthError;
-        if (authError.code === 'auth/account-exists-with-different-credential') {
+        if (authError.code === 'auth/network-request-failed') {
+            errorMessage = `Network request failed during ${providerName} sign-in. Please check your internet connection, ensure domains are authorized in Firebase, and that Firebase project config is correct.`;
+        } else if (authError.code === 'auth/account-exists-with-different-credential') {
             errorMessage = `An account already exists with this email using a different sign-in method. Try signing in with that method.`;
         } else if (authError.code === 'auth/popup-closed-by-user') {
             errorMessage = `Sign-in popup was closed. Please try again.`;
         } else if (authError.code === 'auth/cancelled-popup-request') {
             errorMessage = `Sign-in was cancelled. Please try again.`;
         } else if (authError.code === 'auth/unauthorized-domain') {
-            errorMessage = `This domain is not authorized for ${providerName} sign-in. Please contact support or check Firebase console configuration.`;
+            errorMessage = `This domain is not authorized for ${providerName} sign-in. Please contact support or check Firebase console configuration (Authentication > Sign-in method > Authorized domains).`;
         } else if (authError.code === 'auth/operation-not-allowed') {
             errorMessage = `${providerName} sign-in is not enabled. Please contact support or check Firebase console configuration.`;
         }
@@ -60,6 +74,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       title: `${providerName} Sign In Failed`,
       description: errorMessage,
       variant: "destructive",
+      duration: 10000,
     });
   };
 
@@ -95,11 +110,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     try {
       await firebaseSignOut(auth);
       setCurrentUser(null);
-      toast({ title: "Logged Out", description: "You have been successfully logged out." });
+      // No toast on logout, or a very subtle one if desired by UserNav
       router.push('/'); 
     } catch (error) {
       console.error("Error signing out: ", error);
-      toast({ title: "Logout Error", description: "Failed to log out. Please try again.", variant: "destructive" });
+      let description = "Failed to log out. Please try again.";
+       if (error instanceof Error && (error as AuthError).code === 'auth/network-request-failed') {
+        description = "Network error during logout. Please check your connection.";
+      }
+      toast({ title: "Logout Error", description, variant: "destructive" });
     } finally {
       setLoading(false);
     }
