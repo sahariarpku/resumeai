@@ -7,14 +7,13 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
-// import { Label } from "@/components/ui/label"; // Unused
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel } from "@/components/ui/select";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { useToast } from "@/hooks/use-toast";
-import { Rss, Search, Loader2, Briefcase, Building, FileText as FileTextIcon, CalendarDays, Percent, Sparkles as SparklesIcon, AlertTriangle, Link as LinkIcon, MapPin, ExternalLink, Filter, Tag, XCircle, CheckSquare, Square, Info, ArrowRight } from "lucide-react";
+import { Rss, Search, Loader2, Briefcase, Building, FileText as FileTextIcon, CalendarDays, Percent, Sparkles as SparklesIcon, AlertTriangle, Link as LinkIcon, MapPin, ExternalLink, ArrowRight } from "lucide-react"; // Removed Info icon as it was unused
 import { useRouter } from 'next/navigation';
 import type { JobPostingRssItem, UserProfile, JobDescriptionItem } from "@/lib/types";
 import { z } from "zod";
@@ -158,7 +157,7 @@ export default function JobsRssPage() {
         const feedDetails = PREDEFINED_RSS_FEEDS.find(f => f.url === data.selectedLocationUrl);
         feedDescription = `location: ${feedDetails?.categoryDetail || 'Selected Location'}`;
     } else {
-        targetRssUrl = ALL_LOCATIONS_URL; // Fallback to general if both are "Any" or undefined
+        targetRssUrl = ALL_LOCATIONS_URL;
         feedDescription = "general feed (all jobs)";
     }
     
@@ -239,21 +238,19 @@ export default function JobsRssPage() {
     } finally {
       setIsLoadingFeed(false);
     }
-  }, [toast]);
+  }, [toast, setIsLoadingFeed, setJobPostings, setSelectedJobIds, setProcessingProgress, setTotalToProcess]);
 
   useEffect(() => {
     if (areFiltersLoaded && !initialFetchDone) {
       const currentFilters: RssFiltersData = {
-        selectedSubjectUrl: watchedSubjectUrl,
-        selectedLocationUrl: watchedLocationUrl,
-        keywords: watchedKeywords,
+        selectedSubjectUrl: watchedSubjectUrl || ALL_SUBJECT_AREAS_URL,
+        selectedLocationUrl: watchedLocationUrl || ALL_LOCATIONS_URL,
+        keywords: watchedKeywords || "",
       };
-      if (currentFilters.selectedSubjectUrl || currentFilters.selectedLocationUrl || currentFilters.keywords) {
-         handleFetchRssFeed(currentFilters);
-      }
+      handleFetchRssFeed(currentFilters);
       setInitialFetchDone(true);
     }
-  }, [areFiltersLoaded, initialFetchDone, handleFetchRssFeed, watchedSubjectUrl, watchedLocationUrl, watchedKeywords]);
+  }, [areFiltersLoaded, initialFetchDone, handleFetchRssFeed, watchedSubjectUrl, watchedLocationUrl, watchedKeywords, setInitialFetchDone]);
 
 
   const fetchUserProfile = useCallback(async (): Promise<UserProfile | null> => {
@@ -292,7 +289,6 @@ export default function JobsRssPage() {
     let updatedJob: JobPostingRssItem | null = null;
     setJobPostings(prev => prev.map(j => j.id === jobId ? { ...j, isProcessingDetails: true } : j));
     
-    // Find job from current state to ensure we have its XML
     const jobToProcess = jobPostings.find(j => j.id === jobId);
 
     if (!jobToProcess || !jobToProcess.rssItemXml) {
@@ -304,7 +300,7 @@ export default function JobsRssPage() {
     try {
       const extractedDetails: ExtractRssItemOutput = await extractJobDetailsFromRssItem({ rssItemXml: jobToProcess.rssItemXml });
       updatedJob = { ...jobToProcess, ...extractedDetails, isProcessingDetails: false };
-      setJobPostings(prev => prev.map(j => j.id === jobId ? updatedJob! : j)); // updatedJob should be non-null here
+      setJobPostings(prev => prev.map(j => j.id === jobId ? updatedJob! : j)); 
       return updatedJob;
     } catch (error) {
       console.error(`Error fetching details for job ${jobId}:`, error);
@@ -312,7 +308,7 @@ export default function JobsRssPage() {
       setJobPostings(prev => prev.map(j => j.id === jobId ? { ...j, isProcessingDetails: false, matchSummary: "Error fetching details." } : j));
       return null;
     }
-  }, [jobPostings, toast]); // Added jobPostings to dependency array for access to jobToProcess
+  }, [jobPostings, toast, setJobPostings]);
 
   const handleProcessSelectedJobs = useCallback(async () => {
     if (selectedJobIds.size === 0) {
@@ -336,7 +332,7 @@ export default function JobsRssPage() {
     let processedCount = 0;
 
     for (const jobId of selectedJobIds) {
-      let jobData = jobPostings.find(j => j.id === jobId); // Get the current jobData from state
+      let jobData = jobPostings.find(j => j.id === jobId); 
       if (!jobData) continue;
 
       if (!jobData.company && jobData.rssItemXml) { 
@@ -369,7 +365,7 @@ export default function JobsRssPage() {
     }
     toast({ title: "Processing Complete!", description: "Selected jobs have been processed." });
     setTotalToProcess(0);
-  }, [selectedJobIds, fetchUserProfile, jobPostings, fetchAndSetJobDetailsFromRssXml, router, toast]); // Dependencies updated
+  }, [selectedJobIds, fetchUserProfile, jobPostings, fetchAndSetJobDetailsFromRssXml, router, toast, setJobPostings, setTotalToProcess, setProcessingProgress]); 
 
   const handleSelectJob = (jobId: string, checked: boolean) => {
     setSelectedJobIds(prev => {
@@ -401,7 +397,7 @@ export default function JobsRssPage() {
 
   const handleTailorCvForJob = useCallback(async (jobId: string) => {
     setTailoringJobId(jobId);
-    let job = jobPostings.find(j => j.id === jobId); // Get current job from state
+    let job = jobPostings.find(j => j.id === jobId); 
     if (!job || !job.link || job.link === '#') {
       toast({ title: "Error", description: "Valid job link not found for this item.", variant: "destructive" });
       setTailoringJobId(null);
@@ -472,7 +468,7 @@ export default function JobsRssPage() {
     } finally {
       setTailoringJobId(null);
     }
-  }, [jobPostings, fetchUserProfile, router, toast]); // Dependencies updated
+  }, [jobPostings, fetchUserProfile, router, toast, setTailoringJobId, setJobPostings]); 
 
   const handleProcessSingleJobMatch = useCallback(async (jobId: string) => {
       const userProfileData = await fetchUserProfile();
@@ -485,7 +481,7 @@ export default function JobsRssPage() {
           return;
       }
 
-      let jobData = jobPostings.find(j => j.id === jobId); // Get current job from state
+      let jobData = jobPostings.find(j => j.id === jobId); 
       if (!jobData) return;
 
       if (!jobData.company && jobData.rssItemXml) { 
@@ -515,7 +511,7 @@ export default function JobsRssPage() {
           setJobPostings(prev => prev.map(j => j.id === jobId ? { ...j, matchSummary: "Requirements summary missing or too short for matching.", matchCategory: "Poor Match" as JobDescriptionItem['matchCategory'], matchPercentage: 0, isCalculatingMatch: false } : j));
           toast({ title: "Cannot Calculate Match", description: "Full job summary is missing or too short. Try processing selected or tailoring.", variant: "default"});
       }
-  }, [fetchUserProfile, jobPostings, fetchAndSetJobDetailsFromRssXml, router, toast]); // Dependencies updated
+  }, [fetchUserProfile, jobPostings, fetchAndSetJobDetailsFromRssXml, router, toast, setJobPostings]); 
 
 
   if (!initialSettingsLoaded) {
@@ -545,7 +541,7 @@ export default function JobsRssPage() {
         <AccordionItem value="item-1">
           <AccordionTrigger>
              <div className="flex items-center text-lg font-medium">
-                <Filter className="mr-2 h-5 w-5" />Configure & Fetch Feed
+                <Search className="mr-2 h-5 w-5" />Configure & Fetch Feed
             </div>
           </AccordionTrigger>
           <AccordionContent>
@@ -844,4 +840,3 @@ export default function JobsRssPage() {
     </TooltipProvider>
   );
 }
-
