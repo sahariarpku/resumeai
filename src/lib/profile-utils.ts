@@ -2,6 +2,9 @@
 import type { UserProfile, ProfileSectionKey, CustomSection } from './types';
 import { DEFAULT_SECTION_ORDER } from './types';
 
+export const TAILOR_RESUME_PREFILL_JD_KEY = "tailorResumePrefillJD";
+export const TAILOR_RESUME_PREFILL_RESUME_KEY = "tailorResumePrefillResume";
+
 function formatSectionTitle(title: string): string {
   return title
     .replace(/([A-Z])/g, ' $1')
@@ -585,3 +588,4 @@ export function textToProfessionalHtml(text: string, documentTitle: string): str
     </html>
   `;
 }
+

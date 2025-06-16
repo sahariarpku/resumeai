@@ -11,7 +11,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
-import { Loader2, Search, ExternalLink, Briefcase, Sparkles, Info } from "lucide-react";
+import { Loader2, Search, ExternalLink, Briefcase, Sparkles } from "lucide-react";
 import { searchJobsWithFirecrawl, type FirecrawlSearchInput, type FirecrawlSearchOutput } from "@/ai/flows/firecrawl-job-search-flow";
 import { firecrawlSearchFormSchema, type FirecrawlSearchFormData } from "@/lib/schemas";
 import { useAuth } from '@/contexts/auth-context';
@@ -23,7 +23,7 @@ import { doc, getDoc, enableNetwork } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
 
 
-// SimpleMarkdownToHtmlDisplay component (copied from tailor-resume/page.tsx for now)
+// SimpleMarkdownToHtmlDisplay component
 const SimpleMarkdownToHtmlDisplay = ({ text }: { text: string | null }) => {
   if (!text) return null;
 
@@ -39,14 +39,14 @@ const SimpleMarkdownToHtmlDisplay = ({ text }: { text: string | null }) => {
   html = html.replace(/\*(.*?)\*/g, '<em>$1</em>').replace(/_(.*?)_/g, '<em>$1</em>');
 
   // Lists (ul and ol)
-  const lines = html.split('\\n'); 
+  const lines = html.split('\n'); 
   let newHtmlLines = [];
   let inList = false;
   let listType = ''; 
 
   for (const line of lines) {
-    const olMatch = line.match(/^(\\d+)\\.\\s+(.*)/);
-    const ulMatch = line.match(/^(\\*|-)\\s+(.*)/);
+    const olMatch = line.match(/^(\d+)\.\s+(.*)/); 
+    const ulMatch = line.match(/^(\*|-)\s+(.*)/);  
 
     if (olMatch) {
       const content = olMatch[2];
@@ -79,23 +79,23 @@ const SimpleMarkdownToHtmlDisplay = ({ text }: { text: string | null }) => {
   if (inList) {
     newHtmlLines.push(`</${listType}>`);
   }
-  html = newHtmlLines.join('\\n');
+  html = newHtmlLines.join('\n'); 
 
   // Paragraphs - split by double newlines, then replace single newlines with <br>
-  html = html.split(/\\n\\s*\\n/) 
+  html = html.split(/\n\s*\n/) 
     .map(paragraph => {
       paragraph = paragraph.trim();
       if (paragraph === '') return '';
       // Avoid wrapping existing block elements like lists in <p>
-      if (paragraph.match(/^\\s*<(ul|ol|li|h[1-6]|div|section|article|aside|header|footer|nav|figure|table|blockquote|hr|pre|form)/i)) {
+      if (paragraph.match(/^\s*<(ul|ol|li|h[1-6]|div|section|article|aside|header|footer|nav|figure|table|blockquote|hr|pre|form)/i)) { 
         return paragraph; 
       }
-      return `<p>${paragraph.replace(/\\n/g, '<br />')}</p>`;
+      return `<p>${paragraph.replace(/\n/g, '<br />')}</p>`; 
     }).join('');
   
   // Clean up cases where a list might have been wrapped in a <p> tag
-  html = html.replace(/<p>\\s*(<(ul|ol)>.*?<\\/(ul|ol)>)\\s*<\\/p>/gs, '$1'); 
-  html = html.replace(/<p>\\s*<\\/p>/g, ''); // Remove empty paragraphs
+  html = html.replace(/<p>\s*(<(ul|ol)>.*?<\/(ul|ol)>)\s*<\/p>/gs, '$1'); 
+  html = html.replace(/<p>\s*<\/p>/g, ''); // Remove empty paragraphs
 
   return <div className="prose prose-sm dark:prose-invert max-w-none break-words" dangerouslySetInnerHTML={{ __html: html }} />;
 };
@@ -129,7 +129,6 @@ export default function AiJobSearchPage() {
             setUserProfile(userDocSnap.data() as UserProfile);
           }
         } catch (e) {
-          console.error("Error fetching user profile for AI Job Search page:", e);
           // Non-critical error, so just log it.
         }
       }
@@ -155,7 +154,6 @@ export default function AiJobSearchPage() {
         toast({ title: "Search Complete!", description: `Found ${result.jobs.length} job postings.` });
       }
     } catch (err) {
-      console.error("Firecrawl search error:", err);
       const errorMessage = err instanceof Error ? err.message : "An unknown error occurred during the search.";
       setError(errorMessage);
       toast({ title: "Search Failed", description: errorMessage, variant: "destructive" });
@@ -191,7 +189,7 @@ export default function AiJobSearchPage() {
       <div className="container mx-auto py-8 space-y-8">
         <div>
           <h1 className="font-headline text-3xl font-bold flex items-center">
-            <SearchCode className="mr-3 h-8 w-8 text-primary" /> AI Powered Job Search
+            <Search className="mr-3 h-8 w-8 text-primary" /> AI Powered Job Search
           </h1>
           <p className="text-muted-foreground">
             Use Firecrawl to search for jobs across the web. Enter keywords and location to begin.
@@ -284,8 +282,6 @@ export default function AiJobSearchPage() {
                     <CardTitle className="font-headline text-lg line-clamp-2" title={job.title || 'Job Posting'}>
                       {job.title || 'Job Posting'}
                     </CardTitle>
-                    {/* Firecrawl might not provide company directly in search results, it would be in markdown */}
-                    {/* <CardDescription>{job.company || 'Company not specified'}</CardDescription> */}
                   </CardHeader>
                   <CardContent className="flex-grow space-y-2">
                      <div className="text-xs text-muted-foreground max-h-40 overflow-y-auto border p-2 rounded-md bg-muted/30">
@@ -324,3 +320,4 @@ export default function AiJobSearchPage() {
     </TooltipProvider>
   );
 }
+
