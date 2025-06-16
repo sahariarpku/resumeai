@@ -238,7 +238,7 @@ export default function JobsRssPage() {
     } finally {
       setIsLoadingFeed(false);
     }
-  }, [toast, setIsLoadingFeed, setJobPostings, setSelectedJobIds, setProcessingProgress, setTotalToProcess]);
+  }, [toast]); 
 
   useEffect(() => {
     if (areFiltersLoaded && !initialFetchDone) {
@@ -253,7 +253,7 @@ export default function JobsRssPage() {
       };
       fetchData();
     }
-  }, [areFiltersLoaded, initialFetchDone, watchedSubjectUrl, watchedLocationUrl, watchedKeywords, handleFetchRssFeed, setInitialFetchDone]);
+  }, [areFiltersLoaded, initialFetchDone, watchedSubjectUrl, watchedLocationUrl, watchedKeywords, handleFetchRssFeed]);
 
 
   const fetchUserProfile = useCallback(async (): Promise<UserProfile | null> => {
@@ -311,7 +311,7 @@ export default function JobsRssPage() {
       setJobPostings(prev => prev.map(j => j.id === jobId ? { ...j, isProcessingDetails: false, matchSummary: "Error fetching details." } : j));
       return null;
     }
-  }, [jobPostings, toast, setJobPostings]);
+  }, [jobPostings, toast]); 
 
   const handleProcessSelectedJobs = useCallback(async () => {
     if (selectedJobIds.size === 0) {
@@ -368,7 +368,7 @@ export default function JobsRssPage() {
     }
     toast({ title: "Processing Complete!", description: "Selected jobs have been processed." });
     setTotalToProcess(0);
-  }, [selectedJobIds, fetchUserProfile, jobPostings, fetchAndSetJobDetailsFromRssXml, router, toast, setJobPostings, setTotalToProcess, setProcessingProgress]); 
+  }, [selectedJobIds, fetchUserProfile, jobPostings, fetchAndSetJobDetailsFromRssXml, router, toast]); 
 
   const handleSelectJob = (jobId: string, checked: boolean) => {
     setSelectedJobIds(prev => {
@@ -471,7 +471,7 @@ export default function JobsRssPage() {
     } finally {
       setTailoringJobId(null);
     }
-  }, [jobPostings, fetchUserProfile, router, toast, setJobPostings]); 
+  }, [jobPostings, fetchUserProfile, router, toast]); 
 
   const handleProcessSingleJobMatch = useCallback(async (jobId: string) => {
       const userProfileData = await fetchUserProfile();
@@ -514,7 +514,7 @@ export default function JobsRssPage() {
           setJobPostings(prev => prev.map(j => j.id === jobId ? { ...j, matchSummary: "Requirements summary missing or too short for matching.", matchCategory: "Poor Match" as JobDescriptionItem['matchCategory'], matchPercentage: 0, isCalculatingMatch: false } : j));
           toast({ title: "Cannot Calculate Match", description: "Full job summary is missing or too short. Try processing selected or tailoring.", variant: "default"});
       }
-  }, [fetchUserProfile, jobPostings, fetchAndSetJobDetailsFromRssXml, router, toast, setJobPostings]); 
+  }, [fetchUserProfile, jobPostings, fetchAndSetJobDetailsFromRssXml, router, toast]);
 
 
   if (!initialSettingsLoaded) {
@@ -843,3 +843,4 @@ export default function JobsRssPage() {
     </TooltipProvider>
   );
 }
+
