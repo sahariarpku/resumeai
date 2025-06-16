@@ -1,49 +1,57 @@
 
 'use server';
 /**
- * @fileOverview Genkit flow to search for jobs using Firecrawl.
+ * @fileOverview Genkit flow to search for jobs using Firecrawl's extract API.
  *
- * - searchJobsWithFirecrawl - A function that performs a job search.
+ * - searchJobsWithFirecrawl - A function that performs a job search via extraction.
  * - FirecrawlSearchInput - The input type for the function.
- * - FirecrawlSearchOutput - The return type for the function.
+ * - FirecrawlSearchOutput - The return type for the function (defined in lib/schemas).
  */
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import FireCrawlApp from '@mendable/firecrawl-js';
+import type { FirecrawlSearchInput, FirecrawlSearchOutput } from '@/lib/schemas'; // Import our application-specific output type
 
-const FIRECRAWL_API_KEY = process.env.FIRECRAWL_API_KEY; 
+const FIRECRAWL_API_KEY = process.env.FIRECRAWL_API_KEY;
 
-const FirecrawlSearchInputSchema = z.object({
-  keywords: z.string().describe("Keywords for the job search, e.g., 'qualitative research assistant', 'software engineer'."),
-  location: z.string().describe("Location for the job search, e.g., 'england', 'California', 'Remote'."),
+// Zod schema for Firecrawl's app.extract() method's `schema` parameter
+const FirecrawlExtractSchema = z.object({
+  jobs: z.array(z.object({
+    title: z.string().describe("The job title."),
+    company: z.string().optional().describe("The name of the company."),
+    location: z.string().optional().describe("The location of the job."),
+    description: z.string().optional().describe("A brief description of the job."),
+    apply_link: z.string().url().optional().describe("The direct application link for the job.")
+  }))
 });
-export type FirecrawlSearchInput = z.infer<typeof FirecrawlSearchInputSchema>;
+type FirecrawlExtractResultType = z.infer<typeof FirecrawlExtractSchema>;
 
-const FirecrawlJobResultSchema = z.object({
-  url: z.string().url().describe("Direct URL to the job posting."),
-  title: z.string().optional().describe("Title of the job posting, if available from search metadata."),
-  markdownContent: z.string().describe("The scraped content of the job posting in Markdown format."),
-});
-
-const FirecrawlSearchOutputSchema = z.object({
-  jobs: z.array(FirecrawlJobResultSchema).describe("List of job postings found and scraped by Firecrawl."),
-});
-export type FirecrawlSearchOutput = z.infer<typeof FirecrawlSearchOutputSchema>;
 
 export async function searchJobsWithFirecrawl(
   input: FirecrawlSearchInput
-): Promise<FirecrawlSearchOutput> {
-  return firecrawlJobSearchFlow(input);
+): Promise<FirecrawlSearchOutput> { // Returns our application-specific output type
+  return firecrawlJobExtractFlow(input);
 }
 
-const firecrawlJobSearchFlow = ai.defineFlow(
+const firecrawlJobExtractFlow = ai.defineFlow(
   {
-    name: 'firecrawlJobSearchFlow',
-    inputSchema: FirecrawlSearchInputSchema,
-    outputSchema: FirecrawlSearchOutputSchema,
+    name: 'firecrawlJobExtractFlow', // Renamed flow to reflect new method
+    inputSchema: z.object({ // Matches FirecrawlSearchInput from lib/schemas.ts
+        keywords: z.string().describe("Keywords for the job search, e.g., 'qualitative research assistant', 'software engineer'."),
+        location: z.string().describe("Location for the job search, e.g., 'england', 'California', 'Remote'."),
+    }),
+    outputSchema: z.object({ // Matches FirecrawlSearchOutput from lib/schemas.ts
+        jobs: z.array(z.object({
+            url: z.string().url().optional(),
+            title: z.string(),
+            markdownContent: z.string().optional(),
+            company: z.string().optional(),
+            location: z.string().optional(),
+        })),
+    }),
   },
-  async (input) => {
+  async (input): Promise<FirecrawlSearchOutput> => {
     if (!FIRECRAWL_API_KEY) {
       console.error("Firecrawl API key is not configured in environment variables (FIRECRAWL_API_KEY).");
       throw new Error("Firecrawl API key is missing. Cannot perform search.");
@@ -51,69 +59,95 @@ const firecrawlJobSearchFlow = ai.defineFlow(
 
     const firecrawlApp = new FireCrawlApp({ apiKey: FIRECRAWL_API_KEY });
     
-    // Construct the query string similar to the Python example
-    // Using double quotes around keywords and location within the query string
-    const searchQuery = `find me jobs on "${input.keywords}" in "${input.location}"`;
-    
-    // Options for the search, mirroring Python example's parameters for SDK
-    const searchOptions = {
-      limit: 7, // Or another reasonable limit, Python example used 5
-      scrapeOptions: { // camelCase for JavaScript/TypeScript SDK
-        // Explicitly type the array elements to satisfy the SDK's expected enum if necessary
-        formats: ["markdown"] as ("markdown" | "html" | "rawHtml" | "links" | "screenshot" | "screenshot@fullPage" | "json")[], 
-      },
-      // Note: No explicit 'location' parameter here, as it's embedded in the query string.
-      // timeout: 30000 // Optional: set a timeout in ms
-    };
+    const dynamicPrompt = `Search for job listings related to "${input.keywords}" in "${input.location}". For each job found, extract the job title, company name, location, a brief description, and the application link if available. Focus on distinct job opportunities.`;
 
-    console.log("Attempting Firecrawl search with the following parameters:");
-    console.log("Search Query:", searchQuery);
-    console.log("Search Options:", JSON.stringify(searchOptions, null, 2));
+    console.log("Attempting Firecrawl extract with prompt:", dynamicPrompt);
+    console.log("Targeting URL pattern: https://google.com/*");
 
     try {
-      // Call the search method with the query and options
-      const searchResults = await firecrawlApp.search(searchQuery, searchOptions);
-      
-      const mappedJobs = searchResults.map((result: any) => {
-        // The SDK might return 'title' and 'markdown' directly at the top level of each result item
-        // or within a 'metadata' object if scrape was successful but content is under metadata.
-        // The Python example implies direct access, so we try that first.
-        let title = result.title;
-        let markdown = result.markdown;
-
-        // Fallback to metadata if top-level fields are not present or empty,
-        // and metadata exists
-        if ((!title || !markdown) && result.metadata) {
-            title = title || result.metadata.title;
-            // Markdown might not be in metadata typically, but other fields like description might be
+      // Firecrawl's extract method returns any[] according to some typings, 
+      // or could return the schema type directly if only one URL and successful.
+      // We expect it to return an array of results, where each result conforms to the schema if a URL pattern is used.
+      const extractCallResult: any = await firecrawlApp.extract(
+        ["https://google.com/*"], 
+        {
+          prompt: dynamicPrompt,
+          schema: FirecrawlExtractSchema, // Pass the Zod schema to Firecrawl
+          mode: 'llm-extraction', // Recommended mode for schema-based extraction
+          extractionOptions: { // Consistent with Python ScrapeOptions(formats)
+            formats: ["markdown"] // Request markdown to populate description if it's richer
+          },
+          pageOptions: { // Options for the initial search/crawl phase
+             maxPagesToCrawl: 3, // Limit pages from google.com/* to speed up and focus
+             maxDepth: 1, // Only scrape initial search results
+          }
         }
+      );
+      
+      let extractedJobsData: z.infer<typeof FirecrawlExtractSchema.shape.jobs> = [];
+
+      // Process the result from firecrawlApp.extract()
+      // It's an array, results are per URL. Since we use one pattern, expect one main result object.
+      if (extractCallResult && Array.isArray(extractCallResult) && extractCallResult.length > 0) {
+        const firstResult = extractCallResult[0]; // This object should match our FirecrawlExtractSchema
+        if (firstResult && typeof firstResult === 'object' && 'jobs' in firstResult && Array.isArray(firstResult.jobs)) {
+          extractedJobsData = firstResult.jobs;
+        } else {
+          // If the structure is { data: { jobs: [...] } } (like scrape responses)
+          if (firstResult && typeof firstResult === 'object' && 'data' in firstResult && 
+              firstResult.data && typeof firstResult.data === 'object' && 'jobs' in firstResult.data && Array.isArray(firstResult.data.jobs)) {
+            extractedJobsData = firstResult.data.jobs;
+          } else {
+            console.warn("Firecrawl extract result structure unexpected. Expected an object with a 'jobs' array in the first result element, or in its 'data' property.", JSON.stringify(extractCallResult, null, 2));
+          }
+        }
+      } else if (extractCallResult && typeof extractCallResult === 'object' && 'jobs' in extractCallResult && Array.isArray(extractCallResult.jobs)) {
+        // Fallback if extractCallResult is the direct object {jobs: [...]}
+         extractedJobsData = extractCallResult.jobs;
+      } else {
+        console.warn("Firecrawl extract returned no data or unexpected format.", JSON.stringify(extractCallResult, null, 2));
+      }
+
+
+      const mappedJobs = extractedJobsData.map(job => {
+        const jobTitle = job.title || "Untitled Job";
+        const companyName = job.company;
+        const jobLocation = job.location;
         
+        let displayTitle = jobTitle;
+        if (companyName) displayTitle += ` at ${companyName}`;
+        if (jobLocation) displayTitle += ` in ${jobLocation}`;
+
         return {
-          url: result.url || '',
-          title: title || (markdown ? markdown.substring(0,100).split('\n')[0] : 'Untitled Job'),
-          markdownContent: markdown || 'No content scraped.',
+          title: displayTitle,
+          url: job.apply_link, 
+          markdownContent: job.description, // Use description as markdown content
+          company: companyName,
+          location: jobLocation,
         };
-      }).filter(job => job.url); 
+      });
 
       return { jobs: mappedJobs };
 
     } catch (error) {
-      console.error("Error during Firecrawl search. Input provided:", JSON.stringify(input, null, 2));
+      console.error("Error during Firecrawl extract. Input provided:", JSON.stringify(input, null, 2));
       console.error("Full error object from Firecrawl SDK:", error);
 
-      let message = 'Failed to search for jobs using Firecrawl.';
+      let message = 'Failed to extract job data using Firecrawl.';
       if (error instanceof Error) {
-        message = `Firecrawl search failed: ${error.message}`; 
+        message = `Firecrawl extract failed: ${error.message}`; 
       }
       
-      if (error && typeof (error as any).response === 'object' && (error as any).response && typeof (error as any).response.data === 'object' && (error as any).response.data && typeof (error as any).response.data.error === 'string') {
+      // Check for more specific error details if available from Firecrawl response
+      if (error && typeof (error as any).response === 'object' && (error as any).response && 
+          typeof (error as any).response.data === 'object' && (error as any).response.data && 
+          typeof (error as any).response.data.error === 'string') {
         message = `Firecrawl API error: ${(error as any).response.data.error}`;
       } else if (error instanceof Error && !message.toLowerCase().includes("request failed with status code 500")) { 
-         message = `Firecrawl search failed: ${error.message}`;
+         message = `Firecrawl extract failed: ${error.message}`;
       }
 
       throw new Error(message);
     }
   }
 );
-

@@ -197,3 +197,19 @@ export const firecrawlSearchFormSchema = z.object({
   location: z.string().min(2, "Location must be at least 2 characters long."),
 });
 export type FirecrawlSearchFormData = z.infer<typeof firecrawlSearchFormSchema>;
+
+
+// Schema for Firecrawl Flow Output (aligns with UI needs)
+export const FirecrawlJobResultSchema = z.object({
+  url: z.string().url().optional().describe("Direct URL or apply link to the job posting."),
+  title: z.string().describe("Title of the job posting, potentially enhanced with company/location."),
+  markdownContent: z.string().optional().describe("Description or content of the job posting."),
+  company: z.string().optional().describe("Company name, if extracted."),
+  location: z.string().optional().describe("Job location, if extracted."),
+});
+
+export const FirecrawlSearchOutputSchema = z.object({
+  jobs: z.array(FirecrawlJobResultSchema).describe("List of job postings found and extracted by Firecrawl."),
+});
+export type FirecrawlSearchOutput = z.infer<typeof FirecrawlSearchOutputSchema>;
+export type FirecrawlJobResult = z.infer<typeof FirecrawlJobResultSchema>;
