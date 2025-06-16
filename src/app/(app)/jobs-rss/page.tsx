@@ -56,7 +56,7 @@ type RssFiltersData = z.infer<typeof RssFiltersSchema>;
 
 function parseBasicRssItem(itemXml: string, id: string): JobPostingRssItem {
   const getTagValue = (tagName: string, xml: string): string => {
-    const match = xml.match(new RegExp(`<${tagName}[^>]*>\\s*<!\\[CDATA\\[(.*?)\\]\\]>\\s*<\\/${tagName}>|<${tagName}[^>]*>(.*?)<\\/${tagName}>`, "is"));
+    const match = xml.match(new RegExp(`<${tagName}[^>]*>\\s*<!\\[CDATA\\[(.*?)\\]\\]>\\s*<\/${tagName}>|<${tagName}[^>]*>(.*?)<\/${tagName}>`, "is"));
     return match ? (match[1] || match[2] || '').trim() : '';
   };
 
@@ -160,7 +160,7 @@ export default function JobsRssPage() {
         targetRssUrl = ALL_LOCATIONS_URL;
         feedDescription = "general feed (all jobs)";
     }
-    
+
     toast({ title: "Fetching RSS Feed...", description: `Using ${feedDescription}` });
 
     let rawRssContentString = '';
@@ -190,7 +190,7 @@ export default function JobsRssPage() {
       if (!responseData.rawRssContent) { setIsLoadingFeed(false); throw new Error("API returned success but no rawRssContent found.");}
 
       rawRssContentString = responseData.rawRssContent;
-      
+
       const itemRegex = /<item>([\s\S]*?)<\/item>/g;
       let match;
       const parsedItems: JobPostingRssItem[] = [];
@@ -238,7 +238,7 @@ export default function JobsRssPage() {
     } finally {
       setIsLoadingFeed(false);
     }
-  }, [toast]); 
+  }, [toast, setIsLoadingFeed, setJobPostings, setSelectedJobIds, setProcessingProgress, setTotalToProcess]);
 
   useEffect(() => {
     if (areFiltersLoaded && !initialFetchDone) {
@@ -253,7 +253,7 @@ export default function JobsRssPage() {
       };
       fetchData();
     }
-  }, [areFiltersLoaded, initialFetchDone, watchedSubjectUrl, watchedLocationUrl, watchedKeywords, handleFetchRssFeed]);
+  }, [areFiltersLoaded, initialFetchDone, watchedSubjectUrl, watchedLocationUrl, watchedKeywords, handleFetchRssFeed, setInitialFetchDone]);
 
 
   const fetchUserProfile = useCallback(async (): Promise<UserProfile | null> => {
@@ -290,28 +290,29 @@ export default function JobsRssPage() {
 
   const fetchAndSetJobDetailsFromRssXml = useCallback(async (jobId: string): Promise<JobPostingRssItem | null> => {
     let updatedJob: JobPostingRssItem | null = null;
-    setJobPostings(prev => prev.map(j => j.id === jobId ? { ...j, isProcessingDetails: true } : j));
-    
+
+    setJobPostings(prevJobs => prevJobs.map(j => j.id === jobId ? { ...j, isProcessingDetails: true } : j));
+
     const jobToProcess = jobPostings.find(j => j.id === jobId);
 
     if (!jobToProcess || !jobToProcess.rssItemXml) {
       toast({ title: "Error", description: `Missing data for job ${jobToProcess?.title || jobId}`, variant: "destructive" });
-      setJobPostings(prev => prev.map(j => j.id === jobId ? { ...j, isProcessingDetails: false, matchSummary: "Missing data for processing." } : j));
+      setJobPostings(prevJobs => prevJobs.map(j => j.id === jobId ? { ...j, isProcessingDetails: false, matchSummary: "Missing data for processing." } : j));
       return null;
     }
 
     try {
       const extractedDetails: ExtractRssItemOutput = await extractJobDetailsFromRssItem({ rssItemXml: jobToProcess.rssItemXml });
       updatedJob = { ...jobToProcess, ...extractedDetails, isProcessingDetails: false };
-      setJobPostings(prev => prev.map(j => j.id === jobId ? updatedJob! : j)); 
+      setJobPostings(prevJobs => prevJobs.map(j => j.id === jobId ? updatedJob! : j));
       return updatedJob;
     } catch (error) {
       console.error(`Error fetching details for job ${jobId}:`, error);
       toast({ title: "Detail Fetch Error", description: `Could not fetch details for ${jobToProcess.title}.`, variant: "destructive" });
-      setJobPostings(prev => prev.map(j => j.id === jobId ? { ...j, isProcessingDetails: false, matchSummary: "Error fetching details." } : j));
+      setJobPostings(prevJobs => prevJobs.map(j => j.id === jobId ? { ...j, isProcessingDetails: false, matchSummary: "Error fetching details." } : j));
       return null;
     }
-  }, [jobPostings, toast]); 
+  }, [jobPostings, toast, setJobPostings]);
 
   const handleProcessSelectedJobs = useCallback(async () => {
     if (selectedJobIds.size === 0) {
@@ -335,14 +336,14 @@ export default function JobsRssPage() {
     let processedCount = 0;
 
     for (const jobId of selectedJobIds) {
-      let jobData = jobPostings.find(j => j.id === jobId); 
+      let jobData = jobPostings.find(j => j.id === jobId);
       if (!jobData) continue;
 
-      if (!jobData.company && jobData.rssItemXml) { 
+      if (!jobData.company && jobData.rssItemXml) {
         jobData = await fetchAndSetJobDetailsFromRssXml(jobId);
       }
 
-      if (jobData && jobData.requirementsSummary && jobData.requirementsSummary.trim().length > 10) { 
+      if (jobData && jobData.requirementsSummary && jobData.requirementsSummary.trim().length > 10) {
         setJobPostings(prev => prev.map(j => j.id === jobId ? { ...j, isCalculatingMatch: true } : j));
         try {
           const matchResult = await calculateProfileJdMatch({ profileText, jobDescriptionText: jobData.requirementsSummary });
@@ -368,7 +369,7 @@ export default function JobsRssPage() {
     }
     toast({ title: "Processing Complete!", description: "Selected jobs have been processed." });
     setTotalToProcess(0);
-  }, [selectedJobIds, fetchUserProfile, jobPostings, fetchAndSetJobDetailsFromRssXml, router, toast]); 
+  }, [selectedJobIds, fetchUserProfile, jobPostings, fetchAndSetJobDetailsFromRssXml, router, toast, setJobPostings, setTotalToProcess, setProcessingProgress]);
 
   const handleSelectJob = (jobId: string, checked: boolean) => {
     setSelectedJobIds(prev => {
@@ -400,7 +401,7 @@ export default function JobsRssPage() {
 
   const handleTailorCvForJob = useCallback(async (jobId: string) => {
     setTailoringJobId(jobId);
-    let job = jobPostings.find(j => j.id === jobId); 
+    let job = jobPostings.find(j => j.id === jobId);
     if (!job || !job.link || job.link === '#') {
       toast({ title: "Error", description: "Valid job link not found for this item.", variant: "destructive" });
       setTailoringJobId(null);
@@ -435,11 +436,11 @@ export default function JobsRssPage() {
 
       const detailsExtractionResult = await extractJobDetails({ jobDescriptionText: detailedJobDescription });
 
-      setJobPostings(prev => prev.map(j => j.id === jobId ? {
+      setJobPostings(prevJobs => prevJobs.map(j => j.id === jobId ? {
         ...j,
-        requirementsSummary: detailedJobDescription, 
-        role: detailsExtractionResult.jobTitle || j.role, 
-        company: detailsExtractionResult.companyName || j.company, 
+        requirementsSummary: detailedJobDescription,
+        role: detailsExtractionResult.jobTitle || j.role,
+        company: detailsExtractionResult.companyName || j.company,
       } : j));
 
       const userProfileData = await fetchUserProfile();
@@ -454,7 +455,7 @@ export default function JobsRssPage() {
       }
 
       localStorage.setItem(TAILOR_RESUME_PREFILL_RESUME_KEY, baseResumeText);
-      localStorage.setItem(TAILOR_RESUME_PREFILL_JD_KEY, detailedJobDescription); 
+      localStorage.setItem(TAILOR_RESUME_PREFILL_JD_KEY, detailedJobDescription);
 
       toast({ title: "Ready to Tailor!", description: "Full job description loaded. Redirecting...", variant: "default" });
       router.push('/tailor-resume');
@@ -471,7 +472,7 @@ export default function JobsRssPage() {
     } finally {
       setTailoringJobId(null);
     }
-  }, [jobPostings, fetchUserProfile, router, toast]); 
+  }, [jobPostings, fetchUserProfile, router, toast, setJobPostings]);
 
   const handleProcessSingleJobMatch = useCallback(async (jobId: string) => {
       const userProfileData = await fetchUserProfile();
@@ -484,10 +485,10 @@ export default function JobsRssPage() {
           return;
       }
 
-      let jobData = jobPostings.find(j => j.id === jobId); 
+      let jobData = jobPostings.find(j => j.id === jobId);
       if (!jobData) return;
 
-      if (!jobData.company && jobData.rssItemXml) { 
+      if (!jobData.company && jobData.rssItemXml) {
           jobData = await fetchAndSetJobDetailsFromRssXml(jobId);
       }
 
@@ -514,7 +515,7 @@ export default function JobsRssPage() {
           setJobPostings(prev => prev.map(j => j.id === jobId ? { ...j, matchSummary: "Requirements summary missing or too short for matching.", matchCategory: "Poor Match" as JobDescriptionItem['matchCategory'], matchPercentage: 0, isCalculatingMatch: false } : j));
           toast({ title: "Cannot Calculate Match", description: "Full job summary is missing or too short. Try processing selected or tailoring.", variant: "default"});
       }
-  }, [fetchUserProfile, jobPostings, fetchAndSetJobDetailsFromRssXml, router, toast]);
+  }, [fetchUserProfile, jobPostings, fetchAndSetJobDetailsFromRssXml, router, toast, setJobPostings]);
 
 
   if (!initialSettingsLoaded) {
@@ -844,3 +845,4 @@ export default function JobsRssPage() {
   );
 }
 
+    
