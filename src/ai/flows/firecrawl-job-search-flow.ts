@@ -12,9 +12,7 @@ import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import FireCrawlApp from '@mendable/firecrawl-js';
 
-// TODO: Move API Key to an environment variable for security and configuration flexibility.
-// For example, process.env.FIRECRAWL_API_KEY
-const FIRECRAWL_API_KEY = 'fc-05948e6ee9d1492d8baa23c55717652b'; 
+const FIRECRAWL_API_KEY = process.env.FIRECRAWL_API_KEY; 
 
 const FirecrawlSearchInputSchema = z.object({
   keywords: z.string().describe("Keywords for the job search, e.g., 'qualitative research assistant', 'software engineer'."),
@@ -49,15 +47,15 @@ const firecrawlJobSearchFlow = ai.defineFlow(
   },
   async (input) => {
     if (!FIRECRAWL_API_KEY) {
-      console.error("Firecrawl API key is not configured.");
+      console.error("Firecrawl API key is not configured in environment variables (FIRECRAWL_API_KEY).");
       throw new Error("Firecrawl API key is missing. Cannot perform search.");
     }
 
     const firecrawlApp = new FireCrawlApp({ apiKey: FIRECRAWL_API_KEY });
     
-    // Construct the query string focusing on keywords and desired details.
+    // Construct the query string focusing on keywords.
     // Location will be passed as a separate parameter.
-    const searchQuery = `search ${input.keywords} jobs. Include details like salary and application deadline if available.`;
+    const searchQuery = `search ${input.keywords} jobs, include details like salary and application deadline if available`;
     
     console.log("Sending search to Firecrawl. Query:", searchQuery, "Location:", input.location, "Input:", input);
 
@@ -89,18 +87,14 @@ const firecrawlJobSearchFlow = ai.defineFlow(
       if (error instanceof Error) {
         message = `Firecrawl search failed: ${error.message}`;
       }
-      // Do not throw generic "Failed to search for jobs" if Firecrawl itself returns an error message
-      // The library might throw an error object that contains details from Firecrawl's response.
-      // If error.message already contains "Request failed with status code 500", no need to prepend.
+      
       if (error && typeof (error as any).response === 'object' && (error as any).response && typeof (error as any).response.data === 'object' && (error as any).response.data && typeof (error as any).response.data.error === 'string') {
         message = `Firecrawl API error: ${(error as any).response.data.error}`;
-      } else if (error instanceof Error && !error.message.startsWith('Firecrawl search failed:')) {
+      } else if (error instanceof Error && !message.startsWith('Firecrawl search failed:')) {
          message = `Firecrawl search failed: ${error.message}`;
       }
-
 
       throw new Error(message);
     }
   }
 );
-
