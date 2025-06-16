@@ -54,26 +54,19 @@ const firecrawlJobSearchFlow = ai.defineFlow(
     }
 
     const firecrawlApp = new FireCrawlApp({ apiKey: FIRECRAWL_API_KEY });
-    const searchPrompt = `search ${input.keywords} jobs in ${input.location}, give me the link and details, salary, deadline`;
+    // Simplified search prompt
+    const searchPrompt = `search ${input.keywords} jobs in ${input.location}`;
+    
+    console.log("Sending search to Firecrawl with prompt:", searchPrompt, "and input:", input);
 
     try {
       const searchResults = await firecrawlApp.search(searchPrompt, {
         limit: 7, // Limit to 7 results for now
-        // If Firecrawl has a specific location parameter, use it. 
-        // The example shows passing location in the query string, which is what we're doing.
-        // location: input.location, // This might be a specific parameter for Firecrawl if available
         scrapeOptions: {
           formats: ["markdown"], // Request content in Markdown format
-          // Add other scrape options if needed, e.g., for including specific elements or handling JS rendering
         },
-        // pageOptions: { // If we need to control how Firecrawl crawls, e.g., only specific domains (unlikely for general search)
-        //   onlyMainContent: true // Tries to extract only the main content of the page
-        // }
       });
       
-      // The `searchResults` from firecrawlApp.search is an array of objects.
-      // Each object typically has `markdown`, `url`, and potentially `title`, `description`, etc.
-      // We need to map this to our FirecrawlJobResultSchema.
       const mappedJobs = searchResults.map((result: any) => {
         return {
           url: result.url || '',
@@ -85,15 +78,13 @@ const firecrawlJobSearchFlow = ai.defineFlow(
       return { jobs: mappedJobs };
 
     } catch (error) {
-      console.error("Error during Firecrawl search:", error);
-      // It's important to return a valid structure even on error, or throw a specific error.
-      // For now, let's return an empty list, but in production, more robust error handling is needed.
+      console.error("Error during Firecrawl search with input:", input, "Error:", error);
       let message = 'Failed to search for jobs using Firecrawl.';
       if (error instanceof Error) {
         message = `Firecrawl search failed: ${error.message}`;
       }
-      // Propagate the error so the client can handle it.
       throw new Error(message);
     }
   }
 );
+
