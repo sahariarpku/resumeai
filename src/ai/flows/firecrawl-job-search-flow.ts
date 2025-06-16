@@ -24,8 +24,6 @@ const FirecrawlJobResultSchema = z.object({
   url: z.string().url().describe("Direct URL to the job posting."),
   title: z.string().optional().describe("Title of the job posting, if available from search metadata."),
   markdownContent: z.string().describe("The scraped content of the job posting in Markdown format."),
-  // Other potential fields from Firecrawl's result object if useful, e.g., source, description
-  // For now, focusing on the core scraped content and URL.
 });
 
 const FirecrawlSearchOutputSchema = z.object({
@@ -53,44 +51,49 @@ const firecrawlJobSearchFlow = ai.defineFlow(
 
     const firecrawlApp = new FireCrawlApp({ apiKey: FIRECRAWL_API_KEY });
     
-    // Construct the query string focusing on keywords.
-    // Location will be passed as a separate parameter.
-    const searchQuery = `search ${input.keywords} jobs, include details like salary and application deadline if available`;
+    // Simplify the search query to just keywords. Location is handled by the `location` option.
+    const searchQuery = input.keywords;
     
-    console.log("Sending search to Firecrawl. Query:", searchQuery, "Location:", input.location, "Input:", input);
+    const searchOptions = {
+      limit: 7, 
+      location: input.location,
+      scrapeOptions: {
+        formats: ["markdown"], 
+      },
+      // timeout: 30000 // Optional: set a timeout in ms if default is too long/short
+    };
+
+    console.log("Attempting Firecrawl search with the following parameters:");
+    console.log("Search Query:", searchQuery);
+    console.log("Search Options:", JSON.stringify(searchOptions, null, 2));
 
     try {
-      // Pass location as a separate parameter in the options object
-      const searchResults = await firecrawlApp.search(searchQuery, {
-        limit: 7, 
-        location: input.location, // Explicitly pass location here
-        scrapeOptions: {
-          formats: ["markdown"], 
-        },
-      });
+      const searchResults = await firecrawlApp.search(searchQuery, searchOptions);
       
       const mappedJobs = searchResults.map((result: any) => {
-        // The Firecrawl SDK search result type might be `any` or a specific type from the lib.
-        // Assuming result has `url`, `title`, and `markdown` based on previous code and typical API responses.
         return {
           url: result.url || '',
-          title: result.title || (result.markdown ? result.markdown.substring(0,100).split('\n')[0] : 'Untitled Job'), // Fallback title from markdown
+          title: result.title || (result.markdown ? result.markdown.substring(0,100).split('\n')[0] : 'Untitled Job'),
           markdownContent: result.markdown || 'No content scraped.',
         };
-      }).filter(job => job.url); // Ensure there's a URL
+      }).filter(job => job.url); 
 
       return { jobs: mappedJobs };
 
     } catch (error) {
-      console.error("Error during Firecrawl search with input:", input, "Error:", error);
+      console.error("Error during Firecrawl search. Input provided:", JSON.stringify(input, null, 2));
+      console.error("Full error object from Firecrawl SDK:", error);
+
       let message = 'Failed to search for jobs using Firecrawl.';
       if (error instanceof Error) {
-        message = `Firecrawl search failed: ${error.message}`;
+        message = `Firecrawl search failed: ${error.message}`; // This usually includes "Request failed with status code 500"
       }
       
+      // Attempt to extract more specific error from Firecrawl if their SDK structures it
       if (error && typeof (error as any).response === 'object' && (error as any).response && typeof (error as any).response.data === 'object' && (error as any).response.data && typeof (error as any).response.data.error === 'string') {
         message = `Firecrawl API error: ${(error as any).response.data.error}`;
-      } else if (error instanceof Error && !message.startsWith('Firecrawl search failed:')) {
+      } else if (error instanceof Error && !message.includes("Request failed with status code 500")) { 
+         // If we have an error.message but it's not the generic HTTP status, prefer it.
          message = `Firecrawl search failed: ${error.message}`;
       }
 
@@ -98,3 +101,4 @@ const firecrawlJobSearchFlow = ai.defineFlow(
     }
   }
 );
+
