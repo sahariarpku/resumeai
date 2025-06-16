@@ -7,7 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Label } from "@/components/ui/label";
+// import { Label } from "@/components/ui/label"; // Unused
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -16,8 +16,8 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { useToast } from "@/hooks/use-toast";
 import { Rss, Search, Loader2, Briefcase, Building, FileText as FileTextIcon, CalendarDays, Percent, Sparkles as SparklesIcon, AlertTriangle, Link as LinkIcon, MapPin, ExternalLink, Filter, Tag, XCircle, CheckSquare, Square, Info, ArrowRight } from "lucide-react";
 import { useRouter } from 'next/navigation';
-import type { JobPostingRssItem, UserProfile } from "@/lib/types";
-import { z } from "zod"; 
+import type { JobPostingRssItem, UserProfile, JobDescriptionItem } from "@/lib/types";
+import { z } from "zod";
 import { extractJobDetailsFromRssItem, type ExtractRssItemOutput } from "@/ai/flows/extract-rss-item-flow";
 import { extractTextFromHtml } from "@/ai/flows/extract-text-from-html-flow";
 import { extractJobDetails } from "@/ai/flows/extract-job-details-flow";
@@ -30,8 +30,8 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { 
-    PREDEFINED_RSS_FEEDS, 
+import {
+    PREDEFINED_RSS_FEEDS,
     getFeedCategoriesByType,
     getFeedDetailsByCategoryAndType,
     ALL_SUBJECT_AREAS_URL,
@@ -48,7 +48,7 @@ const TAILOR_RESUME_PREFILL_JD_KEY = "tailorResumePrefillJD";
 const TAILOR_RESUME_PREFILL_RESUME_KEY = "tailorResumePrefillResume";
 
 
-const RssFiltersSchema = z.object({ 
+const RssFiltersSchema = z.object({
   selectedSubjectUrl: z.string().optional(),
   selectedLocationUrl: z.string().optional(),
   keywords: z.string().optional(),
@@ -62,15 +62,15 @@ function parseBasicRssItem(itemXml: string, id: string): JobPostingRssItem {
   };
 
   let description = getTagValue('description', itemXml);
-  description = description.replace(/<br\s*\/?>/gi, '\\n').replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
-  
+  description = description.replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+
   return {
     id: id,
     title: getTagValue('title', itemXml) || 'N/A',
     link: getTagValue('link', itemXml) || '#',
     pubDate: getTagValue('pubDate', itemXml),
-    rssItemXml: itemXml, 
-    requirementsSummary: description.substring(0, 250) + (description.length > 250 ? '...' : ''), 
+    rssItemXml: itemXml,
+    requirementsSummary: description.substring(0, 250) + (description.length > 250 ? '...' : ''),
   };
 }
 
@@ -81,8 +81,8 @@ export default function JobsRssPage() {
   const { currentUser } = useAuth();
   const [jobPostings, setJobPostings] = useState<JobPostingRssItem[]>([]);
   const [isLoadingFeed, setIsLoadingFeed] = useState(false);
-  const [initialSettingsLoaded, setInitialSettingsLoaded] = useState(false); 
-  
+  const [initialSettingsLoaded, setInitialSettingsLoaded] = useState(false);
+
   const [areFiltersLoaded, setAreFiltersLoaded] = useState(false);
   const [initialFetchDone, setInitialFetchDone] = useState(false);
 
@@ -110,17 +110,16 @@ export default function JobsRssPage() {
       const lastLocation = localStorage.getItem(LAST_SELECTED_LOCATION_URL_KEY);
       const lastKeywords = localStorage.getItem(LAST_KEYWORDS_KEY);
 
-      filtersForm.reset({ 
+      filtersForm.reset({
         selectedSubjectUrl: lastSubject || ALL_SUBJECT_AREAS_URL,
         selectedLocationUrl: lastLocation || ALL_LOCATIONS_URL,
         keywords: lastKeywords || "",
       });
-      console.log("Filters loaded from localStorage:", { lastSubject, lastLocation, lastKeywords });
     } catch (error) {
       console.error("Failed to load last filters from localStorage:", error);
     }
     setAreFiltersLoaded(true);
-    setInitialSettingsLoaded(true); 
+    setInitialSettingsLoaded(true);
   }, [filtersForm]);
 
   const watchedSubjectUrl = filtersForm.watch("selectedSubjectUrl");
@@ -128,12 +127,11 @@ export default function JobsRssPage() {
   const watchedKeywords = filtersForm.watch("keywords");
 
   useEffect(() => {
-    if (areFiltersLoaded) { 
+    if (areFiltersLoaded) {
       try {
         localStorage.setItem(LAST_SELECTED_SUBJECT_URL_KEY, watchedSubjectUrl || ALL_SUBJECT_AREAS_URL);
         localStorage.setItem(LAST_SELECTED_LOCATION_URL_KEY, watchedLocationUrl || ALL_LOCATIONS_URL);
         localStorage.setItem(LAST_KEYWORDS_KEY, watchedKeywords || "");
-        console.log("Filters saved to localStorage:", { watchedSubjectUrl, watchedLocationUrl, watchedKeywords });
       } catch (error) {
         console.warn("Could not save filters to localStorage", error);
       }
@@ -159,21 +157,20 @@ export default function JobsRssPage() {
         targetRssUrl = data.selectedLocationUrl;
         const feedDetails = PREDEFINED_RSS_FEEDS.find(f => f.url === data.selectedLocationUrl);
         feedDescription = `location: ${feedDetails?.categoryDetail || 'Selected Location'}`;
-    } else { 
-        targetRssUrl = ALL_LOCATIONS_URL; 
+    } else {
+        targetRssUrl = ALL_LOCATIONS_URL; // Fallback to general if both are "Any" or undefined
         feedDescription = "general feed (all jobs)";
     }
     
-    console.log("Fetching RSS with data:", data, "Target URL:", targetRssUrl);
     toast({ title: "Fetching RSS Feed...", description: `Using ${feedDescription}` });
 
     let rawRssContentString = '';
     try {
       const fetchResponse = await fetch(`/api/fetch-rss?url=${encodeURIComponent(targetRssUrl)}`);
-      let responseBodyAsText = ''; 
+      let responseBodyAsText = '';
 
       try {
-        responseBodyAsText = await fetchResponse.text(); 
+        responseBodyAsText = await fetchResponse.text();
       } catch (textError) {
         setIsLoadingFeed(false);
         throw new Error(`Failed to read response from API: ${textError instanceof Error ? textError.message : String(textError)}`);
@@ -182,20 +179,20 @@ export default function JobsRssPage() {
       if (!fetchResponse.ok) {
         setIsLoadingFeed(false);
         try {
-          const errorData = JSON.parse(responseBodyAsText); 
+          const errorData = JSON.parse(responseBodyAsText);
           throw new Error(errorData.error || `API Error (${fetchResponse.status}): ${fetchResponse.statusText}`);
-        } catch (e) { 
+        } catch (e) {
           throw new Error(`API Error (${fetchResponse.status}): ${fetchResponse.statusText}. Response: ${responseBodyAsText.substring(0, 300)}...`);
         }
       }
-      
+
       const responseData = JSON.parse(responseBodyAsText);
       if (responseData.error) { setIsLoadingFeed(false); throw new Error(responseData.error); }
       if (!responseData.rawRssContent) { setIsLoadingFeed(false); throw new Error("API returned success but no rawRssContent found.");}
-      
+
       rawRssContentString = responseData.rawRssContent;
       
-      const itemRegex = /<item>([\\s\\S]*?)<\\/item>/g;
+      const itemRegex = /<item>([\s\S]*?)<\/item>/g;
       let match;
       const parsedItems: JobPostingRssItem[] = [];
       let itemIndex = 0;
@@ -207,56 +204,59 @@ export default function JobsRssPage() {
         toast({ title: "No Job Items Found", description: "The RSS feed does not seem to contain any job items.", variant: "default" });
         setJobPostings([]); setIsLoadingFeed(false); return;
       }
-      
+
       let finalJobs = parsedItems;
       const keywordsToFilter = data.keywords?.trim().toLowerCase();
       if (keywordsToFilter) {
-        const keywordArray = keywordsToFilter.split(/\\s*,\\s*|\\s+/).filter(Boolean); 
+        const keywordArray = keywordsToFilter.split(/\s*,\s*|\s+/).filter(Boolean);
         if (keywordArray.length > 0) {
             finalJobs = parsedItems.filter(job => {
             const searchableText = [
               job.title?.toLowerCase() || "",
-              job.company?.toLowerCase() || "", 
-              job.requirementsSummary?.toLowerCase() || "", 
-              job.location?.toLowerCase() || "", 
+              job.company?.toLowerCase() || "",
+              job.requirementsSummary?.toLowerCase() || "",
+              job.location?.toLowerCase() || "",
             ].join(" ");
             return keywordArray.every(kw => searchableText.includes(kw));
           });
           toast({ title: "Keywords Applied", description: `Filtered ${parsedItems.length} jobs down to ${finalJobs.length}.` });
         }
       }
-      
+
       setJobPostings(finalJobs);
       toast({ title: "RSS Feed Loaded!", description: `${finalJobs.length} jobs displayed. Select jobs and click 'Process Selected' for more details & CV match, or 'Tailor CV' directly.` });
 
     } catch (err) {
       console.error("Error in handleFetchRssFeed:", err);
       let errorMessage = "Could not process the RSS feed.";
-      if (err instanceof Error) errorMessage = err.message;
+      if (err instanceof Error && err.message.toLowerCase().includes("offline")) {
+        errorMessage = "Failed to process RSS feed: You appear to be offline. Please check your internet connection.";
+      } else if (err instanceof Error) {
+        errorMessage = err.message;
+      }
       toast({ title: "RSS Processing Error", description: errorMessage, variant: "destructive" });
       setJobPostings([]);
     } finally {
       setIsLoadingFeed(false);
     }
-  }, [toast]); 
-  
+  }, [toast]);
+
   useEffect(() => {
     if (areFiltersLoaded && !initialFetchDone) {
-      console.log("Attempting auto-fetch with current form values:", filtersForm.getValues());
-      filtersForm.handleSubmit(handleFetchRssFeed)(); 
+      const currentFilters: RssFiltersData = {
+        selectedSubjectUrl: watchedSubjectUrl,
+        selectedLocationUrl: watchedLocationUrl,
+        keywords: watchedKeywords,
+      };
+      if (currentFilters.selectedSubjectUrl || currentFilters.selectedLocationUrl || currentFilters.keywords) {
+         handleFetchRssFeed(currentFilters);
+      }
       setInitialFetchDone(true);
     }
-  }, [
-    areFiltersLoaded, 
-    initialFetchDone, 
-    filtersForm, 
-    handleFetchRssFeed,
-    watchedSubjectUrl, 
-    watchedLocationUrl, 
-    watchedKeywords     
-  ]);
+  }, [areFiltersLoaded, initialFetchDone, handleFetchRssFeed, watchedSubjectUrl, watchedLocationUrl, watchedKeywords]);
 
-  const fetchUserProfile = async (): Promise<UserProfile | null> => {
+
+  const fetchUserProfile = useCallback(async (): Promise<UserProfile | null> => {
     if (!currentUser) {
       toast({ title: "Not Authenticated", description: "Please sign in to use this feature.", variant: "destructive" });
       router.push('/auth/signin');
@@ -278,17 +278,21 @@ export default function JobsRssPage() {
       let description = "Could not load your profile.";
       if (error instanceof Error && error.message.toLowerCase().includes("offline")) {
         description = "Failed to load profile: You appear to be offline. Please check your internet connection.";
+      } else if (error instanceof Error && error.message.includes("FIRESTORE_UNAVAILABLE")) {
+        description = "Firestore is currently unavailable. Profile cannot be loaded. Please check your Firebase setup and internet connection.";
       } else if (error instanceof Error) {
         description = `Could not load profile: ${error.message}.`;
       }
       toast({ title: "Profile Load Error", description, variant: "destructive" });
       return null;
     }
-  };
+  }, [currentUser, router, toast]);
 
-  const fetchAndSetJobDetailsFromRssXml = async (jobId: string): Promise<JobPostingRssItem | null> => {
-    let updatedJob = null;
+  const fetchAndSetJobDetailsFromRssXml = useCallback(async (jobId: string): Promise<JobPostingRssItem | null> => {
+    let updatedJob: JobPostingRssItem | null = null;
     setJobPostings(prev => prev.map(j => j.id === jobId ? { ...j, isProcessingDetails: true } : j));
+    
+    // Find job from current state to ensure we have its XML
     const jobToProcess = jobPostings.find(j => j.id === jobId);
 
     if (!jobToProcess || !jobToProcess.rssItemXml) {
@@ -300,7 +304,7 @@ export default function JobsRssPage() {
     try {
       const extractedDetails: ExtractRssItemOutput = await extractJobDetailsFromRssItem({ rssItemXml: jobToProcess.rssItemXml });
       updatedJob = { ...jobToProcess, ...extractedDetails, isProcessingDetails: false };
-      setJobPostings(prev => prev.map(j => j.id === jobId ? updatedJob! : j));
+      setJobPostings(prev => prev.map(j => j.id === jobId ? updatedJob! : j)); // updatedJob should be non-null here
       return updatedJob;
     } catch (error) {
       console.error(`Error fetching details for job ${jobId}:`, error);
@@ -308,14 +312,14 @@ export default function JobsRssPage() {
       setJobPostings(prev => prev.map(j => j.id === jobId ? { ...j, isProcessingDetails: false, matchSummary: "Error fetching details." } : j));
       return null;
     }
-  };
+  }, [jobPostings, toast]); // Added jobPostings to dependency array for access to jobToProcess
 
-  const handleProcessSelectedJobs = async () => {
+  const handleProcessSelectedJobs = useCallback(async () => {
     if (selectedJobIds.size === 0) {
       toast({ title: "No Jobs Selected", description: "Please select at least one job to process.", variant: "default" });
       return;
     }
-    
+
     const userProfileData = await fetchUserProfile();
     if (!userProfileData) return;
 
@@ -332,14 +336,14 @@ export default function JobsRssPage() {
     let processedCount = 0;
 
     for (const jobId of selectedJobIds) {
-      let jobData = jobPostings.find(j => j.id === jobId);
+      let jobData = jobPostings.find(j => j.id === jobId); // Get the current jobData from state
       if (!jobData) continue;
 
       if (!jobData.company && jobData.rssItemXml) { 
         jobData = await fetchAndSetJobDetailsFromRssXml(jobId);
       }
-      
-      if (jobData && jobData.requirementsSummary && jobData.requirementsSummary.trim().length > 10) {
+
+      if (jobData && jobData.requirementsSummary && jobData.requirementsSummary.trim().length > 10) { 
         setJobPostings(prev => prev.map(j => j.id === jobId ? { ...j, isCalculatingMatch: true } : j));
         try {
           const matchResult = await calculateProfileJdMatch({ profileText, jobDescriptionText: jobData.requirementsSummary });
@@ -349,20 +353,24 @@ export default function JobsRssPage() {
            let description = `Could not calculate match for ${jobData.title}.`;
            if (matchError instanceof Error && matchError.message.toLowerCase().includes("offline")) {
              description = `Could not calculate match for ${jobData.title}: You appear to be offline.`;
+           } else if (matchError instanceof Error && matchError.message.includes("FIRESTORE_UNAVAILABLE")) {
+             description = `Firestore is currently unavailable. Match calculation failed for ${jobData.title}. Please check your Firebase setup and internet connection.`;
+           } else if (matchError instanceof Error) {
+            description = `Could not calculate match for ${jobData.title}: ${matchError.message}`;
            }
            setJobPostings(prev => prev.map(j => j.id === jobId ? { ...j, isCalculatingMatch: false, matchSummary: "Error calculating match." } : j));
            toast({ title: "Match Error", description, variant: "destructive" });
         }
-      } else if (jobData) { 
-        setJobPostings(prev => prev.map(j => j.id === jobId ? { ...j, matchSummary: "Requirements summary missing or too short for matching.", matchCategory: "Poor Match", matchPercentage: 0, isCalculatingMatch: false } : j));
+      } else if (jobData) {
+        setJobPostings(prev => prev.map(j => j.id === jobId ? { ...j, matchSummary: "Requirements summary missing or too short for matching.", matchCategory: "Poor Match" as JobDescriptionItem['matchCategory'], matchPercentage: 0, isCalculatingMatch: false } : j));
       }
       processedCount++;
       setProcessingProgress(processedCount);
     }
     toast({ title: "Processing Complete!", description: "Selected jobs have been processed." });
-    setTotalToProcess(0); 
-  };
-  
+    setTotalToProcess(0);
+  }, [selectedJobIds, fetchUserProfile, jobPostings, fetchAndSetJobDetailsFromRssXml, router, toast]); // Dependencies updated
+
   const handleSelectJob = (jobId: string, checked: boolean) => {
     setSelectedJobIds(prev => {
       const newSet = new Set(prev);
@@ -391,9 +399,9 @@ export default function JobsRssPage() {
     }
   };
 
-  const handleTailorCvForJob = async (jobId: string) => {
+  const handleTailorCvForJob = useCallback(async (jobId: string) => {
     setTailoringJobId(jobId);
-    let job = jobPostings.find(j => j.id === jobId);
+    let job = jobPostings.find(j => j.id === jobId); // Get current job from state
     if (!job || !job.link || job.link === '#') {
       toast({ title: "Error", description: "Valid job link not found for this item.", variant: "destructive" });
       setTailoringJobId(null);
@@ -415,10 +423,10 @@ export default function JobsRssPage() {
         setTailoringJobId(null);
         return;
       }
-      
+
       toast({ title: "Extracting Text...", description: `AI is processing the job page content.`, variant: "default" });
       const textExtractionResult = await extractTextFromHtml({ htmlContent });
-      
+
       if (!textExtractionResult.extractedText || textExtractionResult.extractedText.trim().length === 0) {
         toast({ title: "No Text Extracted", description: "AI could not extract meaningful job description text from the URL.", variant: "default" });
         setTailoringJobId(null);
@@ -427,9 +435,9 @@ export default function JobsRssPage() {
       const detailedJobDescription = textExtractionResult.extractedText;
 
       const detailsExtractionResult = await extractJobDetails({ jobDescriptionText: detailedJobDescription });
-      
-      setJobPostings(prev => prev.map(j => j.id === jobId ? { 
-        ...j, 
+
+      setJobPostings(prev => prev.map(j => j.id === jobId ? {
+        ...j,
         requirementsSummary: detailedJobDescription, 
         role: detailsExtractionResult.jobTitle || j.role, 
         company: detailsExtractionResult.companyName || j.company, 
@@ -440,38 +448,44 @@ export default function JobsRssPage() {
 
       const baseResumeText = profileToResumeText(userProfileData);
       if (!baseResumeText.trim()) {
-         toast({ title: "Profile Incomplete", description: "Your profile seems empty.", variant: "default" });
+         toast({ title: "Profile Incomplete", description: "Your profile seems empty. Please complete it before tailoring.", variant: "default" });
         router.push('/profile');
         setTailoringJobId(null);
         return;
       }
-      
+
       localStorage.setItem(TAILOR_RESUME_PREFILL_RESUME_KEY, baseResumeText);
       localStorage.setItem(TAILOR_RESUME_PREFILL_JD_KEY, detailedJobDescription); 
 
-      toast({ title: "Ready to Tailor!", description: "Full job description loaded.", variant: "default" });
+      toast({ title: "Ready to Tailor!", description: "Full job description loaded. Redirecting...", variant: "default" });
       router.push('/tailor-resume');
 
     } catch (error) {
       console.error("Error preparing for resume tailoring by fetching URL:", error);
-      toast({ title: "Tailoring Prep Error", description: `Could not process job URL for tailoring: ${error instanceof Error ? error.message : 'Unknown error'}.`, variant: "destructive" });
+      let description = `Could not process job URL for tailoring: ${error instanceof Error ? error.message : 'Unknown error'}.`;
+      if (error instanceof Error && error.message.toLowerCase().includes("offline")) {
+        description = "Failed to process job URL: You appear to be offline. Please check your internet connection.";
+      } else if (error instanceof Error) {
+        description = `Could not process job URL: ${error.message}.`;
+      }
+      toast({ title: "Tailoring Prep Error", description, variant: "destructive" });
     } finally {
       setTailoringJobId(null);
     }
-  };
-  
-  const handleProcessSingleJobMatch = async (jobId: string) => {
+  }, [jobPostings, fetchUserProfile, router, toast]); // Dependencies updated
+
+  const handleProcessSingleJobMatch = useCallback(async (jobId: string) => {
       const userProfileData = await fetchUserProfile();
       if (!userProfileData) return;
-      
+
       const profileText = profileToResumeText(userProfileData);
       if (!profileText.trim()) {
-          toast({ title: "Profile Empty", description: "Your profile is empty.", variant: "default" });
+          toast({ title: "Profile Empty", description: "Your profile is empty. Please add details to calculate matches.", variant: "default" });
           router.push('/profile');
           return;
       }
 
-      let jobData = jobPostings.find(j => j.id === jobId);
+      let jobData = jobPostings.find(j => j.id === jobId); // Get current job from state
       if (!jobData) return;
 
       if (!jobData.company && jobData.rssItemXml) { 
@@ -489,18 +503,22 @@ export default function JobsRssPage() {
              let description = `Could not calculate match for ${jobData.title}.`;
              if (matchError instanceof Error && matchError.message.toLowerCase().includes("offline")) {
                description = `Could not calculate match for ${jobData.title}: You appear to be offline.`;
+             } else if (matchError instanceof Error && matchError.message.includes("FIRESTORE_UNAVAILABLE")) {
+               description = `Firestore is currently unavailable. Match calculation failed for ${jobData.title}. Please check your Firebase setup and internet connection.`;
+             } else if (matchError instanceof Error) {
+               description = `Could not calculate match for ${jobData.title}: ${matchError.message}.`;
              }
              setJobPostings(prev => prev.map(j => j.id === jobId ? { ...j, isCalculatingMatch: false, matchSummary: "Error calculating match." } : j));
              toast({ title: "Match Error", description, variant: "destructive" });
           }
       } else if (jobData) {
-          setJobPostings(prev => prev.map(j => j.id === jobId ? { ...j, matchSummary: "Requirements summary missing or too short for matching.", matchCategory: "Poor Match", matchPercentage: 0, isCalculatingMatch: false } : j));
-          toast({ title: "Cannot Calculate Match", description: "Full job summary is missing or too short.", variant: "default"});
+          setJobPostings(prev => prev.map(j => j.id === jobId ? { ...j, matchSummary: "Requirements summary missing or too short for matching.", matchCategory: "Poor Match" as JobDescriptionItem['matchCategory'], matchPercentage: 0, isCalculatingMatch: false } : j));
+          toast({ title: "Cannot Calculate Match", description: "Full job summary is missing or too short. Try processing selected or tailoring.", variant: "default"});
       }
-  };
+  }, [fetchUserProfile, jobPostings, fetchAndSetJobDetailsFromRssXml, router, toast]); // Dependencies updated
 
 
-  if (!initialSettingsLoaded) { 
+  if (!initialSettingsLoaded) {
      return (
       <div className="container mx-auto py-8 text-center">
         <Loader2 className="mx-auto h-12 w-12 animate-spin text-primary" />
@@ -508,7 +526,7 @@ export default function JobsRssPage() {
       </div>
     );
   }
-  
+
   const isAllSelected = jobPostings.length > 0 && selectedJobIds.size === jobPostings.length;
 
   return (
@@ -523,7 +541,7 @@ export default function JobsRssPage() {
         </p>
       </div>
 
-      <Accordion type="single" collapsible className="w-full">
+      <Accordion type="single" collapsible className="w-full" defaultValue="item-1">
         <AccordionItem value="item-1">
           <AccordionTrigger>
              <div className="flex items-center text-lg font-medium">
@@ -542,9 +560,9 @@ export default function JobsRssPage() {
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>Filter by Subject Area</FormLabel>
-                            <Select 
-                              onValueChange={field.onChange} 
-                              value={field.value || ALL_SUBJECT_AREAS_URL} 
+                            <Select
+                              onValueChange={field.onChange}
+                              value={field.value || ALL_SUBJECT_AREAS_URL}
                             >
                               <FormControl>
                                 <SelectTrigger>
@@ -575,9 +593,9 @@ export default function JobsRssPage() {
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>Filter by Location</FormLabel>
-                            <Select 
-                              onValueChange={field.onChange} 
-                              value={field.value || ALL_LOCATIONS_URL} 
+                            <Select
+                              onValueChange={field.onChange}
+                              value={field.value || ALL_LOCATIONS_URL}
                             >
                               <FormControl>
                                 <SelectTrigger>
@@ -646,8 +664,8 @@ export default function JobsRssPage() {
                     Select jobs to batch process for CV matching, or tailor a CV for a specific role directly.
                 </CardDescription>
               </div>
-              <Button 
-                onClick={handleProcessSelectedJobs} 
+              <Button
+                onClick={handleProcessSelectedJobs}
                 disabled={selectedJobIds.size === 0 || jobPostings.some(job => job.isProcessingDetails || job.isCalculatingMatch) || totalToProcess > 0 || !currentUser}
                 size="lg"
               >
@@ -700,10 +718,10 @@ export default function JobsRssPage() {
                         <div className="flex items-center mb-1">
                             <span id={`job-title-${job.id}`} className="font-semibold">{job.role || job.title || <span className="text-muted-foreground/70 text-xs">N/A</span>}</span>
                             {job.link && job.link !== '#' && (
-                            <a 
-                                href={job.link} 
-                                target="_blank" 
-                                rel="noopener noreferrer" 
+                            <a
+                                href={job.link}
+                                target="_blank"
+                                rel="noopener noreferrer"
                                 className="hover:underline text-primary/80 flex items-center group text-xs ml-2"
                                 title={`View original posting for: ${job.role || job.title}`}
                             >
@@ -720,12 +738,12 @@ export default function JobsRssPage() {
                          <Tooltip>
                             <TooltipTrigger asChild>
                                 <p className="text-xs whitespace-pre-wrap">
-                                  {job.requirementsSummary?.replace(/&lt;br\\s*\\/?&gt;|<br\\s*\\/?>/gi, '\\n') || <span className="text-muted-foreground/70">N/A (Process to load)</span>}
+                                  {job.requirementsSummary?.replace(/&lt;br\\s*\\/?&gt;|<br\\s*\\/?>/gi, '\n') || <span className="text-muted-foreground/70">N/A (Process to load)</span>}
                                 </p>
                             </TooltipTrigger>
                             <TooltipContent side="bottom" className="max-w-md p-2 bg-popover text-popover-foreground">
                                 <p className="text-sm font-medium">RSS Description Snippet/AI Summary:</p>
-                                <p className="text-xs whitespace-pre-wrap">{job.requirementsSummary?.replace(/&lt;br\\s*\\/?&gt;|<br\\s*\\/?>/gi, '\\n') || "Not available."}</p>
+                                <p className="text-xs whitespace-pre-wrap">{job.requirementsSummary?.replace(/&lt;br\\s*\\/?&gt;|<br\\s*\\/?>/gi, '\n') || "Not available."}</p>
                                 {(!job.company && !job.isProcessingDetails && !job.isCalculatingMatch && !job.requirementsSummary?.endsWith('...')) && <p className="text-xs mt-1 italic">This is a snippet. Select and process, or click 'Tailor CV' for full summary & details from source.</p>}
                             </TooltipContent>
                         </Tooltip>
@@ -748,10 +766,10 @@ export default function JobsRssPage() {
                         ) : (
                           <Tooltip>
                             <TooltipTrigger asChild>
-                              <Button 
-                                variant="ghost" 
-                                size="icon" 
-                                className="h-7 w-7" 
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7"
                                 onClick={() => handleProcessSingleJobMatch(job.id)}
                                 disabled={!job.rssItemXml || tailoringJobId === job.id || !currentUser}
                               >
@@ -812,7 +830,7 @@ export default function JobsRssPage() {
                 <p className="text-muted-foreground">
                     Choose a subject area and/or location, optionally add keywords, then click "Fetch RSS Feed", or wait for auto-fetch.
                 </p>
-                 {initialSettingsLoaded && !currentUser && ( 
+                 {initialSettingsLoaded && !currentUser && (
                     <p className="text-sm text-amber-600 mt-4 flex items-center justify-center">
                         <AlertTriangle className="mr-2 h-4 w-4" />
                         Please sign in to use CV matching and tailoring features.
@@ -826,3 +844,4 @@ export default function JobsRssPage() {
     </TooltipProvider>
   );
 }
+
