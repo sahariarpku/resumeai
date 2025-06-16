@@ -13,7 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel } from "@/components/ui/select";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { useToast } from "@/hooks/use-toast";
-import { Rss, Search, Loader2, Briefcase, Building, FileText as FileTextIcon, CalendarDays, Percent, Sparkles as SparklesIcon, AlertTriangle, Link as LinkIcon, MapPin, ExternalLink, ArrowRight } from "lucide-react"; // Removed Info icon as it was unused
+import { Rss, Search, Loader2, Briefcase, Building, FileText as FileTextIcon, CalendarDays, Percent, Sparkles as SparklesIcon, AlertTriangle, ExternalLink, MapPin, ArrowRight } from "lucide-react";
 import { useRouter } from 'next/navigation';
 import type { JobPostingRssItem, UserProfile, JobDescriptionItem } from "@/lib/types";
 import { z } from "zod";
@@ -247,10 +247,13 @@ export default function JobsRssPage() {
         selectedLocationUrl: watchedLocationUrl || ALL_LOCATIONS_URL,
         keywords: watchedKeywords || "",
       };
-      handleFetchRssFeed(currentFilters);
-      setInitialFetchDone(true);
+      const fetchData = async () => {
+        await handleFetchRssFeed(currentFilters);
+        setInitialFetchDone(true);
+      };
+      fetchData();
     }
-  }, [areFiltersLoaded, initialFetchDone, handleFetchRssFeed, watchedSubjectUrl, watchedLocationUrl, watchedKeywords, setInitialFetchDone]);
+  }, [areFiltersLoaded, initialFetchDone, watchedSubjectUrl, watchedLocationUrl, watchedKeywords, handleFetchRssFeed, setInitialFetchDone]);
 
 
   const fetchUserProfile = useCallback(async (): Promise<UserProfile | null> => {
@@ -468,7 +471,7 @@ export default function JobsRssPage() {
     } finally {
       setTailoringJobId(null);
     }
-  }, [jobPostings, fetchUserProfile, router, toast, setTailoringJobId, setJobPostings]); 
+  }, [jobPostings, fetchUserProfile, router, toast, setJobPostings]); 
 
   const handleProcessSingleJobMatch = useCallback(async (jobId: string) => {
       const userProfileData = await fetchUserProfile();
