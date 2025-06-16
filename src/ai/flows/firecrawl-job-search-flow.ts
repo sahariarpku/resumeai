@@ -54,20 +54,26 @@ const firecrawlJobSearchFlow = ai.defineFlow(
     }
 
     const firecrawlApp = new FireCrawlApp({ apiKey: FIRECRAWL_API_KEY });
-    // Simplified search prompt
-    const searchPrompt = `search ${input.keywords} jobs in ${input.location}`;
     
-    console.log("Sending search to Firecrawl with prompt:", searchPrompt, "and input:", input);
+    // Construct the query string focusing on keywords and desired details.
+    // Location will be passed as a separate parameter.
+    const searchQuery = `search ${input.keywords} jobs. Include details like salary and application deadline if available.`;
+    
+    console.log("Sending search to Firecrawl. Query:", searchQuery, "Location:", input.location, "Input:", input);
 
     try {
-      const searchResults = await firecrawlApp.search(searchPrompt, {
-        limit: 7, // Limit to 7 results for now
+      // Pass location as a separate parameter in the options object
+      const searchResults = await firecrawlApp.search(searchQuery, {
+        limit: 7, 
+        location: input.location, // Explicitly pass location here
         scrapeOptions: {
-          formats: ["markdown"], // Request content in Markdown format
+          formats: ["markdown"], 
         },
       });
       
       const mappedJobs = searchResults.map((result: any) => {
+        // The Firecrawl SDK search result type might be `any` or a specific type from the lib.
+        // Assuming result has `url`, `title`, and `markdown` based on previous code and typical API responses.
         return {
           url: result.url || '',
           title: result.title || (result.markdown ? result.markdown.substring(0,100).split('\n')[0] : 'Untitled Job'), // Fallback title from markdown
@@ -83,6 +89,16 @@ const firecrawlJobSearchFlow = ai.defineFlow(
       if (error instanceof Error) {
         message = `Firecrawl search failed: ${error.message}`;
       }
+      // Do not throw generic "Failed to search for jobs" if Firecrawl itself returns an error message
+      // The library might throw an error object that contains details from Firecrawl's response.
+      // If error.message already contains "Request failed with status code 500", no need to prepend.
+      if (error && typeof (error as any).response === 'object' && (error as any).response && typeof (error as any).response.data === 'object' && (error as any).response.data && typeof (error as any).response.data.error === 'string') {
+        message = `Firecrawl API error: ${(error as any).response.data.error}`;
+      } else if (error instanceof Error && !error.message.startsWith('Firecrawl search failed:')) {
+         message = `Firecrawl search failed: ${error.message}`;
+      }
+
+
       throw new Error(message);
     }
   }
