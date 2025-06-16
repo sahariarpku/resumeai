@@ -51,16 +51,19 @@ const firecrawlJobSearchFlow = ai.defineFlow(
 
     const firecrawlApp = new FireCrawlApp({ apiKey: FIRECRAWL_API_KEY });
     
-    // Simplify the search query to just keywords. Location is handled by the `location` option.
-    const searchQuery = input.keywords;
+    // Construct the query string similar to the Python example
+    // Using double quotes around keywords and location within the query string
+    const searchQuery = `find me jobs on "${input.keywords}" in "${input.location}"`;
     
+    // Options for the search, mirroring Python example's parameters for SDK
     const searchOptions = {
-      limit: 7, 
-      location: input.location,
-      scrapeOptions: {
-        formats: ["markdown"], 
+      limit: 7, // Or another reasonable limit, Python example used 5
+      scrapeOptions: { // camelCase for JavaScript/TypeScript SDK
+        // Explicitly type the array elements to satisfy the SDK's expected enum if necessary
+        formats: ["markdown"] as ("markdown" | "html" | "rawHtml" | "links" | "screenshot" | "screenshot@fullPage" | "json")[], 
       },
-      // timeout: 30000 // Optional: set a timeout in ms if default is too long/short
+      // Note: No explicit 'location' parameter here, as it's embedded in the query string.
+      // timeout: 30000 // Optional: set a timeout in ms
     };
 
     console.log("Attempting Firecrawl search with the following parameters:");
@@ -68,13 +71,27 @@ const firecrawlJobSearchFlow = ai.defineFlow(
     console.log("Search Options:", JSON.stringify(searchOptions, null, 2));
 
     try {
+      // Call the search method with the query and options
       const searchResults = await firecrawlApp.search(searchQuery, searchOptions);
       
       const mappedJobs = searchResults.map((result: any) => {
+        // The SDK might return 'title' and 'markdown' directly at the top level of each result item
+        // or within a 'metadata' object if scrape was successful but content is under metadata.
+        // The Python example implies direct access, so we try that first.
+        let title = result.title;
+        let markdown = result.markdown;
+
+        // Fallback to metadata if top-level fields are not present or empty,
+        // and metadata exists
+        if ((!title || !markdown) && result.metadata) {
+            title = title || result.metadata.title;
+            // Markdown might not be in metadata typically, but other fields like description might be
+        }
+        
         return {
           url: result.url || '',
-          title: result.title || (result.markdown ? result.markdown.substring(0,100).split('\n')[0] : 'Untitled Job'),
-          markdownContent: result.markdown || 'No content scraped.',
+          title: title || (markdown ? markdown.substring(0,100).split('\n')[0] : 'Untitled Job'),
+          markdownContent: markdown || 'No content scraped.',
         };
       }).filter(job => job.url); 
 
@@ -86,14 +103,12 @@ const firecrawlJobSearchFlow = ai.defineFlow(
 
       let message = 'Failed to search for jobs using Firecrawl.';
       if (error instanceof Error) {
-        message = `Firecrawl search failed: ${error.message}`; // This usually includes "Request failed with status code 500"
+        message = `Firecrawl search failed: ${error.message}`; 
       }
       
-      // Attempt to extract more specific error from Firecrawl if their SDK structures it
       if (error && typeof (error as any).response === 'object' && (error as any).response && typeof (error as any).response.data === 'object' && (error as any).response.data && typeof (error as any).response.data.error === 'string') {
         message = `Firecrawl API error: ${(error as any).response.data.error}`;
-      } else if (error instanceof Error && !message.includes("Request failed with status code 500")) { 
-         // If we have an error.message but it's not the generic HTTP status, prefer it.
+      } else if (error instanceof Error && !message.toLowerCase().includes("request failed with status code 500")) { 
          message = `Firecrawl search failed: ${error.message}`;
       }
 
