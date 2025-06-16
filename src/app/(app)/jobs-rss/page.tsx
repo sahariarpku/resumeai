@@ -54,22 +54,39 @@ const RssFiltersSchema = z.object({
 });
 type RssFiltersData = z.infer<typeof RssFiltersSchema>;
 
-function parseBasicRssItem(itemXml: string, id: string): JobPostingRssItem {
-  const getTagValue = (tagName: string, xml: string): string => {
-    const match = xml.match(new RegExp(`<${tagName}[^>]*>\\s*<!\\[CDATA\\[(.*?)\\]\\]>\\s*<\/${tagName}>|<${tagName}[^>]*>(.*?)<\/${tagName}>`, "is"));
-    return match ? (match[1] || match[2] || '').trim() : '';
+// Function to parse basic details from an RSS item XML string
+function parseBasicRssItem(itemXml: string, clientGeneratedId: string): JobPostingRssItem {
+  const extractText = (xml: string, tag: string): string | null => {
+    // More robust regex to handle CDATA and various tag attributes
+    const match = xml.match(new RegExp(`<${tag}(?:\\s+[^>]*?)?>(?:<!\\[CDATA\\[)?([\\s\\S]*?)(?:\\]\\]>)?<\\/${tag}>`, 's'));
+    return match && match[1] ? match[1].trim() : null;
   };
 
-  let description = getTagValue('description', itemXml);
-  description = description.replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+  let parsedTitle = extractText(itemXml, 'title') || `Job Item ${clientGeneratedId}`;
+  let parsedLink = extractText(itemXml, 'link') || '#';
+  let parsedPubDate = extractText(itemXml, 'pubDate');
+  // Try to get a unique identifier from <guid>, fallback to client-generated if not found or not suitable
+  let parsedGuid = extractText(itemXml, 'guid') || clientGeneratedId;
+  
+  // Sometimes guid might be the same as the link, if so, ensure clientGeneratedId is part of the unique ID
+  if (parsedGuid === parsedLink && !parsedGuid.startsWith('rssjob-')) {
+      parsedGuid = `${clientGeneratedId}-${parsedGuid}`;
+  }
+
 
   return {
-    id: id,
-    title: getTagValue('title', itemXml) || 'N/A',
-    link: getTagValue('link', itemXml) || '#',
-    pubDate: getTagValue('pubDate', itemXml),
-    rssItemXml: itemXml,
-    requirementsSummary: description.substring(0, 250) + (description.length > 250 ? '...' : ''),
+    id: parsedGuid, // Use extracted GUID or the client-generated one.
+    title: parsedTitle,
+    link: parsedLink,
+    pubDate: parsedPubDate ? new Date(parsedPubDate).toISOString() : new Date().toISOString(),
+    rssItemXml: itemXml, // Store the raw XML for later detailed AI processing
+    // Placeholders: These will be populated by AI flows or further processing
+    requirementsSummary: 'Select and process for full details.', 
+    role: parsedTitle, // Initial role can be from title
+    company: undefined, // To be filled by AI
+    deadlineText: undefined, // To be filled by AI
+    location: undefined, // To be filled by AI
+    jobUrl: parsedLink, // Initial jobUrl from link
   };
 }
 
@@ -157,7 +174,7 @@ export default function JobsRssPage() {
         const feedDetails = PREDEFINED_RSS_FEEDS.find(f => f.url === data.selectedLocationUrl);
         feedDescription = `location: ${feedDetails?.categoryDetail || 'Selected Location'}`;
     } else {
-        targetRssUrl = ALL_LOCATIONS_URL;
+        targetRssUrl = ALL_LOCATIONS_URL; 
         feedDescription = "general feed (all jobs)";
     }
 
@@ -438,24 +455,24 @@ export default function JobsRssPage() {
 
       setJobPostings(prevJobs => prevJobs.map(j => j.id === jobId ? {
         ...j,
-        requirementsSummary: detailedJobDescription,
-        role: detailsExtractionResult.jobTitle || j.role,
-        company: detailsExtractionResult.companyName || j.company,
+        requirementsSummary: detailedJobDescription, 
+        role: detailsExtractionResult.jobTitle || j.role, 
+        company: detailsExtractionResult.companyName || j.company, 
       } : j));
 
       const userProfileData = await fetchUserProfile();
-      if (!userProfileData) { setTailoringJobId(null); return; }
+      if (!userProfileData) { setTailoringJobId(null); return; } 
 
       const baseResumeText = profileToResumeText(userProfileData);
       if (!baseResumeText.trim()) {
          toast({ title: "Profile Incomplete", description: "Your profile seems empty. Please complete it before tailoring.", variant: "default" });
-        router.push('/profile');
+        router.push('/profile'); 
         setTailoringJobId(null);
         return;
       }
 
       localStorage.setItem(TAILOR_RESUME_PREFILL_RESUME_KEY, baseResumeText);
-      localStorage.setItem(TAILOR_RESUME_PREFILL_JD_KEY, detailedJobDescription);
+      localStorage.setItem(TAILOR_RESUME_PREFILL_JD_KEY, detailedJobDescription); 
 
       toast({ title: "Ready to Tailor!", description: "Full job description loaded. Redirecting...", variant: "default" });
       router.push('/tailor-resume');
@@ -488,7 +505,7 @@ export default function JobsRssPage() {
       let jobData = jobPostings.find(j => j.id === jobId);
       if (!jobData) return;
 
-      if (!jobData.company && jobData.rssItemXml) {
+      if (!jobData.company && jobData.rssItemXml) { 
           jobData = await fetchAndSetJobDetailsFromRssXml(jobId);
       }
 
@@ -511,14 +528,14 @@ export default function JobsRssPage() {
              setJobPostings(prev => prev.map(j => j.id === jobId ? { ...j, isCalculatingMatch: false, matchSummary: "Error calculating match." } : j));
              toast({ title: "Match Error", description, variant: "destructive" });
           }
-      } else if (jobData) {
+      } else if (jobData) { 
           setJobPostings(prev => prev.map(j => j.id === jobId ? { ...j, matchSummary: "Requirements summary missing or too short for matching.", matchCategory: "Poor Match" as JobDescriptionItem['matchCategory'], matchPercentage: 0, isCalculatingMatch: false } : j));
           toast({ title: "Cannot Calculate Match", description: "Full job summary is missing or too short. Try processing selected or tailoring.", variant: "default"});
       }
   }, [fetchUserProfile, jobPostings, fetchAndSetJobDetailsFromRssXml, router, toast, setJobPostings]);
 
 
-  if (!initialSettingsLoaded) {
+  if (!initialSettingsLoaded) { 
      return (
       <div className="container mx-auto py-8 text-center">
         <Loader2 className="mx-auto h-12 w-12 animate-spin text-primary" />
@@ -528,7 +545,7 @@ export default function JobsRssPage() {
   }
 
   const isAllSelected = jobPostings.length > 0 && selectedJobIds.size === jobPostings.length;
-
+  
   return (
     <TooltipProvider>
     <div className="container mx-auto py-8 space-y-8">
@@ -562,7 +579,7 @@ export default function JobsRssPage() {
                             <FormLabel>Filter by Subject Area</FormLabel>
                             <Select
                               onValueChange={field.onChange}
-                              value={field.value || ALL_SUBJECT_AREAS_URL}
+                              value={field.value || ALL_SUBJECT_AREAS_URL} 
                             >
                               <FormControl>
                                 <SelectTrigger>
@@ -595,7 +612,7 @@ export default function JobsRssPage() {
                             <FormLabel>Filter by Location</FormLabel>
                             <Select
                               onValueChange={field.onChange}
-                              value={field.value || ALL_LOCATIONS_URL}
+                              value={field.value || ALL_LOCATIONS_URL} 
                             >
                               <FormControl>
                                 <SelectTrigger>
@@ -738,12 +755,12 @@ export default function JobsRssPage() {
                          <Tooltip>
                             <TooltipTrigger asChild>
                                 <p className="text-xs whitespace-pre-wrap">
-                                  {job.requirementsSummary?.replace(/&lt;br\\s*\\/?&gt;|<br\\s*\\/?>/gi, '\n') || <span className="text-muted-foreground/70">N/A (Process to load)</span>}
+                                  {job.requirementsSummary?.replace(/&lt;br\\s*\\/?&gt;|<br\\s*\\/?>/gi, '\\n') || <span className="text-muted-foreground/70">N/A (Process to load)</span>}
                                 </p>
                             </TooltipTrigger>
                             <TooltipContent side="bottom" className="max-w-md p-2 bg-popover text-popover-foreground">
                                 <p className="text-sm font-medium">RSS Description Snippet/AI Summary:</p>
-                                <p className="text-xs whitespace-pre-wrap">{job.requirementsSummary?.replace(/&lt;br\\s*\\/?&gt;|<br\\s*\\/?>/gi, '\n') || "Not available."}</p>
+                                <p className="text-xs whitespace-pre-wrap">{job.requirementsSummary?.replace(/&lt;br\\s*\\/?&gt;|<br\\s*\\/?>/gi, '\\n') || "Not available."}</p>
                                 {(!job.company && !job.isProcessingDetails && !job.isCalculatingMatch && !job.requirementsSummary?.endsWith('...')) && <p className="text-xs mt-1 italic">This is a snippet. Select and process, or click 'Tailor CV' for full summary & details from source.</p>}
                             </TooltipContent>
                         </Tooltip>
@@ -800,14 +817,14 @@ export default function JobsRssPage() {
         </Card>
       )}
 
-       {isLoadingFeed && (
+       {isLoadingFeed && ( 
          <div className="text-center py-12">
             <Loader2 className="mx-auto h-12 w-12 animate-spin text-primary mb-4" />
             <p className="text-muted-foreground">Fetching RSS feed...</p>
         </div>
       )}
 
-      {!isLoadingFeed && jobPostings.length === 0 && filtersForm.formState.isSubmitted && (
+      {!isLoadingFeed && jobPostings.length === 0 && filtersForm.formState.isSubmitted && ( 
          <Card className="text-center py-12">
             <CardHeader>
                 <Rss className="mx-auto h-16 w-16 text-muted-foreground mb-4" />
@@ -820,7 +837,7 @@ export default function JobsRssPage() {
             </CardContent>
         </Card>
       )}
-       {!isLoadingFeed && jobPostings.length === 0 && !filtersForm.formState.isSubmitted && !initialFetchDone && (
+       {!isLoadingFeed && jobPostings.length === 0 && !filtersForm.formState.isSubmitted && !initialFetchDone && ( 
          <Card className="text-center py-12">
             <CardHeader>
                 <Rss className="mx-auto h-16 w-16 text-muted-foreground mb-4" />
@@ -830,7 +847,7 @@ export default function JobsRssPage() {
                 <p className="text-muted-foreground">
                     Choose a subject area and/or location, optionally add keywords, then click "Fetch RSS Feed", or wait for auto-fetch.
                 </p>
-                 {initialSettingsLoaded && !currentUser && (
+                 {initialSettingsLoaded && !currentUser && ( 
                     <p className="text-sm text-amber-600 mt-4 flex items-center justify-center">
                         <AlertTriangle className="mr-2 h-4 w-4" />
                         Please sign in to use CV matching and tailoring features.
@@ -844,5 +861,3 @@ export default function JobsRssPage() {
     </TooltipProvider>
   );
 }
-
-    
