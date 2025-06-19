@@ -191,25 +191,25 @@ export const ExtractRssItemOutputSchema = z.object({
 });
 export type ExtractRssItemOutput = z.infer<typeof ExtractRssItemOutputSchema>;
 
-// Schema for Firecrawl Job Search Form
+// Schema for Firecrawl Job Search Form (UI and Flow Input)
 export const firecrawlSearchFormSchema = z.object({
   keywords: z.string().min(3, "Keywords must be at least 3 characters long."),
   location: z.string().min(2, "Location must be at least 2 characters long."),
 });
 export type FirecrawlSearchFormData = z.infer<typeof firecrawlSearchFormSchema>;
+export type FirecrawlSearchInput = FirecrawlSearchFormData; // Use the same type for flow input
 
-
-// Schema for Firecrawl Flow Output (aligns with UI needs)
+// Schema for Firecrawl Flow Output (aligns with UI needs and search results)
 export const FirecrawlJobResultSchema = z.object({
-  url: z.string().url().optional().describe("Direct URL or apply link to the job posting."),
-  title: z.string().describe("Title of the job posting, potentially enhanced with company/location."),
-  markdownContent: z.string().optional().describe("Description or content of the job posting."),
-  company: z.string().optional().describe("Company name, if extracted."),
-  location: z.string().optional().describe("Job location, if extracted."),
+  url: z.string().url().optional().describe("Direct URL to the job posting."),
+  title: z.string().describe("Title of the job posting."),
+  markdownContent: z.string().optional().describe("Scraped markdown content of the job posting. Falls back to search description if markdown not available."),
+  company: z.string().optional().describe("Company name, if identifiable from title or content."),
+  location: z.string().optional().describe("Job location, if identifiable from title or content."),
 });
+export type FirecrawlJobResult = z.infer<typeof FirecrawlJobResultSchema>;
 
 export const FirecrawlSearchOutputSchema = z.object({
   jobs: z.array(FirecrawlJobResultSchema).describe("List of job postings found and extracted by Firecrawl."),
 });
 export type FirecrawlSearchOutput = z.infer<typeof FirecrawlSearchOutputSchema>;
-export type FirecrawlJobResult = z.infer<typeof FirecrawlJobResultSchema>;
