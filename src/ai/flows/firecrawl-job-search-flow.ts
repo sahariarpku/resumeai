@@ -1,7 +1,7 @@
 
 'use server';
 /**
- * @fileOverview AI flow to perform a job search using Firecrawl.
+ * @fileOverview AI flow to perform a job search using Firecrawl's search API.
  *
  * - firecrawlJobSearch - A function that performs the job search.
  * - FirecrawlSearchInput - The input type for the function.
@@ -11,15 +11,14 @@
 import {ai} from '@/ai/genkit';
 import {
   firecrawlSearchFormSchema,
-  FirecrawlSearchOutput,
+  FirecrawlSearchOutputSchema,
   FirecrawlJobResultSchema,
 } from '@/lib/schemas';
-import type {FirecrawlJobResult} from '@/lib/schemas';
+import type {FirecrawlJobResult, FirecrawlSearchOutput} from '@/lib/schemas';
 import FireCrawlApp from '@mendable/firecrawl-js';
 import {z} from 'zod';
 
 export type FirecrawlSearchInput = z.infer<typeof firecrawlSearchFormSchema>;
-export type FirecrawlSearchOutput = FirecrawlSearchOutput;
 
 export async function firecrawlJobSearch(
   input: FirecrawlSearchInput
@@ -27,16 +26,19 @@ export async function firecrawlJobSearch(
   if (!process.env.FIRECRAWL_API_KEY) {
     throw new Error('Firecrawl API key not found in environment variables.');
   }
+
   const firecrawlApp = new FireCrawlApp({
     apiKey: process.env.FIRECRAWL_API_KEY,
   });
 
-  const searchQuery = input.keywords;
+  // Construct the query and options to match the working curl command structure.
+  // The query string is for the main search text.
+  // The location is passed as a separate parameter in the options object.
+  const searchQuery = `${input.keywords} jobs`;
 
-  // Location and other parameters go into the options object.
   const searchOptions = {
     limit: 7,
-    location: input.location,
+    location: input.location, // Pass location as a separate, structured parameter.
     scrapeOptions: {
       formats: ['markdown' as const],
     },
@@ -51,14 +53,13 @@ export async function firecrawlJobSearch(
     
     console.log('Firecrawl raw result:', JSON.stringify(searchResult, null, 2));
 
+    // The API returns the job list inside a 'data' property.
     let rawJobs: any[] = [];
     if (searchResult && Array.isArray(searchResult.data)) {
         rawJobs = searchResult.data;
-    } else if (searchResult && Array.isArray(searchResult)) {
-        rawJobs = searchResult;
     } else {
       console.error('Firecrawl search returned an unexpected format:', searchResult);
-      throw new Error('Invalid response format from Firecrawl search API.');
+      throw new Error('Invalid response format from Firecrawl search API. Expected a "data" array.');
     }
     
     console.log(`Firecrawl returned ${rawJobs.length} potential job results.`);
@@ -66,11 +67,13 @@ export async function firecrawlJobSearch(
     const jobPostings: FirecrawlJobResult[] = rawJobs.map((job: any) => ({
       title: job.metadata?.title || job.title || 'Untitled Job Posting',
       url: job.url || '',
+      // The scraped content comes from the 'markdown' property
       markdownContent: job.markdown || job.description || 'No content scraped.',
       company: job.metadata?.company || undefined,
       location: job.metadata?.location || undefined,
     }));
     
+    // Validate each job posting against our schema to filter out malformed results.
     const validatedJobPostings = jobPostings.filter(job => {
       try {
         FirecrawlJobResultSchema.parse(job);
