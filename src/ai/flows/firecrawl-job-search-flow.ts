@@ -24,11 +24,15 @@ export type FirecrawlSearchOutput = FirecrawlSearchOutput;
 export async function firecrawlJobSearch(
   input: FirecrawlSearchInput
 ): Promise<FirecrawlSearchOutput> {
+  if (!process.env.FIRECRAWL_API_KEY) {
+    throw new Error('Firecrawl API key not found in environment variables.');
+  }
   const firecrawlApp = new FireCrawlApp({
     apiKey: process.env.FIRECRAWL_API_KEY,
   });
 
-  const searchQuery = `"${input.keywords}" jobs in "${input.location}"`;
+  // Simplified search query to be more direct, which can prevent parsing issues on the API server.
+  const searchQuery = `${input.keywords} jobs in ${input.location}`;
   
   const searchOptions = {
     limit: 7,
@@ -42,8 +46,10 @@ export async function firecrawlJobSearch(
   console.log('Search Options:', JSON.stringify(searchOptions, null, 2));
 
   try {
+    // The Firecrawl SDK's search method returns an array of results directly
     const searchResult: any[] = await firecrawlApp.search(searchQuery, searchOptions);
 
+    // It's possible the API returns a non-array on error, despite the 200 status.
     if (!searchResult || !Array.isArray(searchResult)) {
       console.error('Firecrawl search did not return an array:', searchResult);
       throw new Error('Invalid response format from Firecrawl search API.');
@@ -51,14 +57,18 @@ export async function firecrawlJobSearch(
     
     console.log(`Firecrawl returned ${searchResult.length} results.`);
 
+    // Map the results to our defined schema
     const jobPostings: FirecrawlJobResult[] = searchResult.map((job: any) => ({
+      // Prioritize metadata title, but fall back to the main title from the search result.
       title: job.metadata?.title || job.title || 'Untitled Job Posting',
       url: job.url || '',
+      // Use the scraped markdown content, fall back to the search description snippet if markdown is not available.
       markdownContent: job.markdown || job.description || 'No content scraped.',
       company: job.metadata?.company || undefined,
       location: job.metadata?.location || undefined,
     }));
     
+    // Validate each job posting against our schema to filter out malformed results
     const validatedJobPostings = jobPostings.filter(job => {
       try {
         FirecrawlJobResultSchema.parse(job);
@@ -72,6 +82,7 @@ export async function firecrawlJobSearch(
     return {jobPostings: validatedJobPostings};
   } catch (error) {
     console.error('Firecrawl search failed:', error);
+    // Make the error message more informative for the client-side toast.
     const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
     throw new Error(`Firecrawl search failed: ${errorMessage}`);
   }
