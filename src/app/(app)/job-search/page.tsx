@@ -20,7 +20,7 @@ import Link from 'next/link';
 import { TAILOR_RESUME_PREFILL_JD_KEY, TAILOR_RESUME_PREFILL_RESUME_KEY, profileToResumeText } from '@/lib/profile-utils';
 import type { UserProfile } from '@/lib/types';
 import { db } from '@/lib/firebase';
-import { doc, getDoc, enableNetwork } from 'firestore';
+import { doc, getDoc, enableNetwork } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
 
 // SimpleMarkdownToHtmlDisplay component
