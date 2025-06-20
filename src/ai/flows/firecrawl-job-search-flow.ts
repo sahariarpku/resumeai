@@ -30,18 +30,19 @@ export async function firecrawlJobSearch(
     apiKey: process.env.FIRECRAWL_API_KEY,
   });
 
-  // Construct the query and options to EXACTLY match the working curl command structure.
-  const searchQuery = `${input.keywords} jobs`;
+  // Corrected Approach: Keep query and location separate, as the SDK expects.
+  // This mirrors the structure of the working curl command's JSON body.
+  const searchQuery = input.keywords;
   const searchOptions = {
     limit: 7,
-    location: input.location, // Pass location as a separate, structured parameter.
+    location: input.location,
     scrapeOptions: {
       formats: ['markdown' as const],
     },
   };
 
   console.log('--- Firecrawl Search ---');
-  console.log('Sending request to Firecrawl API...');
+  console.log('Sending request to Firecrawl API with separated query and options...');
   console.log('Search Query:', searchQuery);
   console.log('Search Options:', JSON.stringify(searchOptions, null, 2));
 
