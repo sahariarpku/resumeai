@@ -212,16 +212,26 @@ export default function TailorResumePage() {
       return;
     }
     const newResumeId = `resume-${Date.now()}`;
-    const newResume: StoredResume = {
+    
+    // Start with the base object and conditionally add optional fields
+    const newResume: Partial<StoredResume> = {
       id: newResumeId,
       name: `${title} (Tailored ${new Date().toLocaleDateString()})`,
       tailoredContent: currentTailoredResume,
-      aiAnalysis: currentAnalysis || undefined,
-      aiSuggestions: currentSuggestions || undefined,
       createdAt: Timestamp.now(),
       userId: currentUser.uid,
-      jobDescriptionId: jobDescId || undefined,
     };
+
+    if (currentAnalysis) {
+        newResume.aiAnalysis = currentAnalysis;
+    }
+    if (currentSuggestions) {
+        newResume.aiSuggestions = currentSuggestions;
+    }
+    if (jobDescId) {
+        newResume.jobDescriptionId = jobDescId;
+    }
+
     try {
       await enableNetwork(db);
       const resumeDocRef = doc(db, "users", currentUser.uid, "resumes", newResumeId);
