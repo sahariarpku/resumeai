@@ -31,11 +31,15 @@ export async function firecrawlJobSearch(
     apiKey: process.env.FIRECRAWL_API_KEY,
   });
 
-  // Simplified search query to be more direct, which can prevent parsing issues on the API server.
-  const searchQuery = `${input.keywords} jobs in ${input.location}`;
-  
+  // Re-structured based on the new, successful example provided.
+  // The main search terms go into the query.
+  const searchQuery = `${input.keywords} jobs`;
+
+  // Location and other parameters go into the options object.
   const searchOptions = {
     limit: 7,
+    location: input.location, // Using the separate location parameter.
+    tbs: 'qdr:w', // Default to searching for jobs in the "past week"
     scrapeOptions: {
       formats: ['markdown' as const],
     },
@@ -46,19 +50,26 @@ export async function firecrawlJobSearch(
   console.log('Search Options:', JSON.stringify(searchOptions, null, 2));
 
   try {
-    // The Firecrawl SDK's search method returns an array of results directly
-    const searchResult: any[] = await firecrawlApp.search(searchQuery, searchOptions);
+    // The Firecrawl SDK's search method returns an array of results directly or an object with a data property
+    const searchResult: any = await firecrawlApp.search(searchQuery, searchOptions);
+    
+    console.log('Firecrawl raw result:', JSON.stringify(searchResult, null, 2));
 
-    // It's possible the API returns a non-array on error, despite the 200 status.
-    if (!searchResult || !Array.isArray(searchResult)) {
-      console.error('Firecrawl search did not return an array:', searchResult);
+    // Defensively handle the response structure. It could be an array or an object with a `data` property.
+    let rawJobs: any[] = [];
+    if (searchResult && Array.isArray(searchResult.data)) {
+        rawJobs = searchResult.data;
+    } else if (searchResult && Array.isArray(searchResult)) {
+        rawJobs = searchResult;
+    } else {
+      console.error('Firecrawl search returned an unexpected format:', searchResult);
       throw new Error('Invalid response format from Firecrawl search API.');
     }
     
-    console.log(`Firecrawl returned ${searchResult.length} results.`);
+    console.log(`Firecrawl returned ${rawJobs.length} potential job results.`);
 
     // Map the results to our defined schema
-    const jobPostings: FirecrawlJobResult[] = searchResult.map((job: any) => ({
+    const jobPostings: FirecrawlJobResult[] = rawJobs.map((job: any) => ({
       // Prioritize metadata title, but fall back to the main title from the search result.
       title: job.metadata?.title || job.title || 'Untitled Job Posting',
       url: job.url || '',
