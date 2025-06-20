@@ -1,4 +1,3 @@
-
 'use server';
 /**
  * @fileOverview AI flow to perform a job search using Firecrawl's search API.
@@ -8,34 +7,31 @@
  * - FirecrawlSearchOutput - The return type for the function.
  */
 
-import {ai} from '@/ai/genkit';
 import {
   firecrawlSearchFormSchema,
   FirecrawlSearchOutputSchema,
   FirecrawlJobResultSchema,
 } from '@/lib/schemas';
-import type {FirecrawlJobResult, FirecrawlSearchOutput} from '@/lib/schemas';
+import type { FirecrawlJobResult, FirecrawlSearchOutput } from '@/lib/schemas';
 import FireCrawlApp from '@mendable/firecrawl-js';
-import {z} from 'zod';
+import { z } from 'zod';
 
+// For clarity, let's alias the input type for the flow function
 export type FirecrawlSearchInput = z.infer<typeof firecrawlSearchFormSchema>;
 
 export async function firecrawlJobSearch(
   input: FirecrawlSearchInput
 ): Promise<FirecrawlSearchOutput> {
   if (!process.env.FIRECRAWL_API_KEY) {
-    throw new Error('Firecrawl API key not found in environment variables.');
+    throw new Error('Firecrawl API key not found in environment variables. Please check your .env file.');
   }
 
   const firecrawlApp = new FireCrawlApp({
     apiKey: process.env.FIRECRAWL_API_KEY,
   });
 
-  // Construct the query and options to match the working curl command structure.
-  // The query string is for the main search text.
-  // The location is passed as a separate parameter in the options object.
+  // Construct the query and options to EXACTLY match the working curl command structure.
   const searchQuery = `${input.keywords} jobs`;
-
   const searchOptions = {
     limit: 7,
     location: input.location, // Pass location as a separate, structured parameter.
@@ -45,12 +41,14 @@ export async function firecrawlJobSearch(
   };
 
   console.log('--- Firecrawl Search ---');
+  console.log('Sending request to Firecrawl API...');
   console.log('Search Query:', searchQuery);
   console.log('Search Options:', JSON.stringify(searchOptions, null, 2));
 
   try {
     const searchResult: any = await firecrawlApp.search(searchQuery, searchOptions);
     
+    console.log('Received raw response from Firecrawl API.');
     console.log('Firecrawl raw result:', JSON.stringify(searchResult, null, 2));
 
     // The API returns the job list inside a 'data' property.
@@ -58,13 +56,14 @@ export async function firecrawlJobSearch(
     if (searchResult && Array.isArray(searchResult.data)) {
         rawJobs = searchResult.data;
     } else {
-      console.error('Firecrawl search returned an unexpected format:', searchResult);
-      throw new Error('Invalid response format from Firecrawl search API. Expected a "data" array.');
+      console.error('Firecrawl search returned an unexpected format. Expected a "data" array:', searchResult);
+      throw new Error('Invalid response format from Firecrawl search API.');
     }
     
     console.log(`Firecrawl returned ${rawJobs.length} potential job results.`);
 
     const jobPostings: FirecrawlJobResult[] = rawJobs.map((job: any) => ({
+      // Prioritize metadata, but fallback to root properties if metadata is missing.
       title: job.metadata?.title || job.title || 'Untitled Job Posting',
       url: job.url || '',
       // The scraped content comes from the 'markdown' property
@@ -84,10 +83,26 @@ export async function firecrawlJobSearch(
       }
     });
 
-    return {jobPostings: validatedJobPostings};
+    return { jobPostings: validatedJobPostings };
+
   } catch (error) {
-    console.error('Firecrawl search failed:', error);
-    const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
+    console.error('--- Firecrawl Search Failed ---');
+    // Log the entire error object to get more details
+    console.error('Full error object:', JSON.stringify(error, null, 2));
+    
+    let errorMessage = 'An unknown error occurred during the job search.';
+    // Check if the error object has response data from the API
+    if (error && typeof error === 'object' && 'response' in error) {
+        const responseError = error.response as any;
+        if (responseError.data && responseError.data.error) {
+            errorMessage = `Firecrawl API Error: ${responseError.data.error}`;
+        } else {
+            errorMessage = `Request failed with status code ${responseError.status || 'unknown'}.`;
+        }
+    } else if (error instanceof Error) {
+        errorMessage = error.message;
+    }
+
     throw new Error(`Firecrawl search failed: ${errorMessage}`);
   }
 }
