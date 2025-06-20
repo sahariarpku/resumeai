@@ -192,22 +192,24 @@ export const ExtractRssItemOutputSchema = z.object({
 export type ExtractRssItemOutput = z.infer<typeof ExtractRssItemOutputSchema>;
 
 // Schemas for Firecrawl Job Search
-export const firecrawlSearchFormSchema = z.object({
+export const jobSearchFormSchema = z.object({
   keywords: z.string().min(3, "Keywords must be at least 3 characters long."),
   location: z.string().min(3, "Location must be at least 3 characters long."),
 });
-export type FirecrawlSearchInput = z.infer<typeof firecrawlSearchFormSchema>;
+export type JobSearchInput = z.infer<typeof jobSearchFormSchema>;
 
-export const FirecrawlJobResultSchema = z.object({
+export const JobSearchResultSchema = z.object({
     title: z.string(),
     url: z.string().url(),
     markdownContent: z.string(),
     company: z.string().optional(),
     location: z.string().optional(),
 });
-export type FirecrawlJobResult = z.infer<typeof FirecrawlJobResultSchema>;
+export type JobSearchResult = z.infer<typeof JobSearchResultSchema>;
 
-export const FirecrawlSearchOutputSchema = z.object({
-  jobPostings: z.array(FirecrawlJobResultSchema),
+export const JobSearchOutputSchema = z.object({
+  jobs: z.array(JobSearchResultSchema),
 });
-export type FirecrawlSearchOutput = z.infer<typeof FirecrawlSearchOutputSchema>;
+export type JobSearchOutput = z.infer<typeof JobSearchOutputSchema>;
+
+export const JobSearchInputSchema = jobSearchFormSchema;

@@ -12,15 +12,15 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { Loader2, Search, ExternalLink, Briefcase, Sparkles } from "lucide-react";
-import { firecrawlJobSearch, type FirecrawlSearchInput, type FirecrawlSearchOutput } from "@/ai/flows/firecrawl-job-search-flow";
-import { firecrawlSearchFormSchema } from "@/lib/schemas";
-import type { FirecrawlSearchInput as FirecrawlSearchFormData } from "@/lib/schemas";
+import { jobSearch } from "@/ai/flows/job-search-flow";
+import { jobSearchFormSchema } from "@/lib/schemas";
+import type { JobSearchInput, JobSearchResult } from "@/lib/schemas";
 import { useAuth } from '@/contexts/auth-context';
 import Link from 'next/link';
 import { TAILOR_RESUME_PREFILL_JD_KEY, TAILOR_RESUME_PREFILL_RESUME_KEY, profileToResumeText } from '@/lib/profile-utils';
 import type { UserProfile } from '@/lib/types';
 import { db } from '@/lib/firebase';
-import { doc, getDoc, enableNetwork } from 'firebase/firestore';
+import { doc, getDoc, enableNetwork } from 'firestore';
 import { useRouter } from 'next/navigation';
 
 // SimpleMarkdownToHtmlDisplay component
@@ -101,17 +101,17 @@ const SimpleMarkdownToHtmlDisplay = ({ text }: { text: string | null }) => {
 };
 
 
-export default function AiJobSearchPage() {
+export default function JobSearchPage() {
   const { toast } = useToast();
   const { currentUser } = useAuth();
   const router = useRouter();
-  const [searchResults, setSearchResults] = useState<FirecrawlSearchOutput['jobPostings']>([]);
+  const [searchResults, setSearchResults] = useState<JobSearchResult[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
 
-  const form = useForm<FirecrawlSearchFormData>({
-    resolver: zodResolver(firecrawlSearchFormSchema),
+  const form = useForm<JobSearchInput>({
+    resolver: zodResolver(jobSearchFormSchema),
     defaultValues: {
       keywords: "",
       location: "",
@@ -136,26 +136,26 @@ export default function AiJobSearchPage() {
     fetchProfile();
   }, [currentUser]);
 
-  const handleSearchSubmit = async (data: FirecrawlSearchFormData) => {
+  const handleSearchSubmit = async (data: JobSearchInput) => {
     setIsLoading(true);
     setError(null);
     setSearchResults([]);
-    toast({ title: "Searching for jobs...", description: "Firecrawl AI is searching for job postings based on your query." });
+    toast({ title: "Searching for jobs...", description: "AI is searching for job postings based on your query." });
 
     try {
-      const result = await firecrawlJobSearch({
+      const result = await jobSearch({
         keywords: data.keywords,
         location: data.location,
       });
-      if (result && result.jobPostings) {
-        setSearchResults(result.jobPostings);
-        if (result.jobPostings.length === 0) {
-          toast({ title: "No Results", description: "Firecrawl found no job postings for your criteria. Try broadening your search." });
+      if (result && result.jobs) {
+        setSearchResults(result.jobs);
+        if (result.jobs.length === 0) {
+          toast({ title: "No Results", description: "Found no job postings for your criteria. Try broadening your search." });
         } else {
-          toast({ title: "Search Complete!", description: `Found ${result.jobPostings.length} job postings.` });
+          toast({ title: "Search Complete!", description: `Found ${result.jobs.length} job postings.` });
         }
       } else {
-        throw new Error("Firecrawl did not return the expected job postings format.");
+        throw new Error("Job search did not return the expected jobs format.");
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "An unknown error occurred during the job search.";
@@ -193,7 +193,7 @@ export default function AiJobSearchPage() {
       <div className="container mx-auto py-8 space-y-8">
         <div>
           <h1 className="font-headline text-3xl font-bold flex items-center">
-            <Search className="mr-3 h-8 w-8 text-primary" /> AI Powered Job Search
+            <Search className="mr-3 h-8 w-8 text-primary" /> Job Search
           </h1>
           <p className="text-muted-foreground">
             Enter keywords and a location. The AI will search for relevant job postings across the web.
@@ -259,7 +259,7 @@ export default function AiJobSearchPage() {
         {isLoading && (
           <div className="text-center py-10">
             <Loader2 className="mx-auto h-12 w-12 animate-spin text-primary" />
-            <p className="mt-4 text-muted-foreground">Firecrawl is searching the web, please wait...</p>
+            <p className="mt-4 text-muted-foreground">Searching the web, please wait...</p>
           </div>
         )}
 
@@ -319,7 +319,7 @@ export default function AiJobSearchPage() {
              </CardHeader>
              <CardContent>
                <p className="text-muted-foreground">
-                 Firecrawl couldn&apos;t find any job postings for your criteria. Please try different keywords or a broader location.
+                 We couldn't find any job postings for your criteria. Please try different keywords or a broader location.
                </p>
              </CardContent>
            </Card>

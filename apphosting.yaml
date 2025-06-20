@@ -26,3 +26,4 @@ env:
     value: G-B63LL5XVX6
   - variable: FIRECRAWL_API_KEY
     value: "fc-bdd2f2d4d9a04f25ba796bc803be3867"
+
