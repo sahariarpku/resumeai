@@ -208,16 +208,24 @@ export default function JobSearchPage() {
       localStorage.setItem(TAILOR_RESUME_PREFILL_RESUME_KEY, baseResumeText);
       localStorage.setItem(TAILOR_RESUME_PREFILL_JD_KEY, job.requirementsSummary);
 
-      const jobDataToSave: Omit<JobDescriptionItem, 'id' | 'createdAt'> & { createdAt: Timestamp, userId: string } = {
+      const jobDataToSave: Partial<JobDescriptionItem> = {
         title: job.role || job.title,
-        company: job.company || 'Unknown',
+        company: job.company || "Unknown",
         description: job.requirementsSummary,
         createdAt: Timestamp.now(),
         userId: currentUser.uid,
-        matchPercentage: job.matchPercentage,
-        matchSummary: job.matchSummary,
-        matchCategory: job.matchCategory,
       };
+
+      // Conditionally add fields to avoid sending 'undefined' to Firestore
+      if (job.matchPercentage !== undefined) {
+        jobDataToSave.matchPercentage = job.matchPercentage;
+      }
+      if (job.matchSummary) {
+        jobDataToSave.matchSummary = job.matchSummary;
+      }
+      if (job.matchCategory) {
+        jobDataToSave.matchCategory = job.matchCategory;
+      }
 
       const newJdId = `jd-${Date.now()}`;
       const jdDocRef = doc(db, "users", currentUser.uid, "jobDescriptions", newJdId);
