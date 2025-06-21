@@ -189,25 +189,3 @@ export const ExtractRssItemOutputSchema = z.object({
   jobUrl: z.string().describe("The direct URL to the job posting from the <link> tag. Should be a valid URL string."),
 });
 export type ExtractRssItemOutput = z.infer<typeof ExtractRssItemOutputSchema>;
-
-// Schemas for AI Job Search (Firecrawl Search)
-export const jobSearchFormSchema = z.object({
-  prompt: z.string().min(10, "Your search query must be at least 10 characters long."),
-});
-export type JobSearchInput = z.infer<typeof jobSearchFormSchema>;
-
-export const JobExtractionResultSchema = z.object({
-    title: z.string().optional(),
-    url: z.string().url().optional(),
-    markdown: z.string().optional(),
-    company: z.string().optional(),
-    location: z.string().optional(),
-});
-export type JobExtractionResult = z.infer<typeof JobExtractionResultSchema>;
-
-export const JobSearchOutputSchema = z.object({
-  jobs: z.array(JobExtractionResultSchema),
-});
-export type JobSearchOutput = z.infer<typeof JobSearchOutputSchema>;
-
-export const JobSearchInputSchema = jobSearchFormSchema;

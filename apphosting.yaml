@@ -24,6 +24,3 @@ env:
     value: "1:487405937975:web:0dd9cf81d821d77fb0e6b2"
   - variable: NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
     value: G-B63LL5XVX6
-  - variable: FIRECRAWL_API_KEY
-    value: "fc-bdd2f2d4d9a04f25ba796bc803be3867"
-
