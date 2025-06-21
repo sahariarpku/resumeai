@@ -1,4 +1,3 @@
-
 import { z } from "zod";
 import type { ProfileSectionKey } from "./types"; // Ensure this is imported
 
@@ -191,24 +190,23 @@ export const ExtractRssItemOutputSchema = z.object({
 });
 export type ExtractRssItemOutput = z.infer<typeof ExtractRssItemOutputSchema>;
 
-// Schemas for Firecrawl Job Search
+// Schemas for AI Job Search (Firecrawl Extract)
 export const jobSearchFormSchema = z.object({
-  keywords: z.string().min(3, "Keywords must be at least 3 characters long."),
-  location: z.string().min(3, "Location must be at least 3 characters long."),
+  prompt: z.string().min(10, "Your search query must be at least 10 characters long."),
 });
 export type JobSearchInput = z.infer<typeof jobSearchFormSchema>;
 
-export const JobSearchResultSchema = z.object({
-    title: z.string(),
-    url: z.string().url(),
-    markdownContent: z.string(),
+export const JobExtractionResultSchema = z.object({
+    title: z.string().optional(),
+    url: z.string().url().optional(),
+    markdownContent: z.string().optional(),
     company: z.string().optional(),
     location: z.string().optional(),
 });
-export type JobSearchResult = z.infer<typeof JobSearchResultSchema>;
+export type JobExtractionResult = z.infer<typeof JobExtractionResultSchema>;
 
 export const JobSearchOutputSchema = z.object({
-  jobs: z.array(JobSearchResultSchema),
+  jobs: z.array(JobExtractionResultSchema),
 });
 export type JobSearchOutput = z.infer<typeof JobSearchOutputSchema>;
 

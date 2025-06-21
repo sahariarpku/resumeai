@@ -1,11 +1,10 @@
-
 "use client";
 
 import React, { useState, useEffect } from 'react';
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -14,7 +13,7 @@ import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from "@/comp
 import { Loader2, Search, ExternalLink, Briefcase, Sparkles } from "lucide-react";
 import { jobSearch } from "@/ai/flows/job-search-flow";
 import { jobSearchFormSchema } from "@/lib/schemas";
-import type { JobSearchInput, JobSearchResult } from "@/lib/schemas";
+import type { JobSearchInput, JobExtractionResult } from "@/lib/schemas";
 import { useAuth } from '@/contexts/auth-context';
 import Link from 'next/link';
 import { TAILOR_RESUME_PREFILL_JD_KEY, TAILOR_RESUME_PREFILL_RESUME_KEY, profileToResumeText } from '@/lib/profile-utils';
@@ -105,7 +104,7 @@ export default function JobSearchPage() {
   const { toast } = useToast();
   const { currentUser } = useAuth();
   const router = useRouter();
-  const [searchResults, setSearchResults] = useState<JobSearchResult[]>([]);
+  const [searchResults, setSearchResults] = useState<JobExtractionResult[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
@@ -113,8 +112,7 @@ export default function JobSearchPage() {
   const form = useForm<JobSearchInput>({
     resolver: zodResolver(jobSearchFormSchema),
     defaultValues: {
-      keywords: "",
-      location: "",
+      prompt: "",
     },
   });
 
@@ -140,19 +138,18 @@ export default function JobSearchPage() {
     setIsLoading(true);
     setError(null);
     setSearchResults([]);
-    toast({ title: "Searching for jobs...", description: "AI is searching for job postings based on your query." });
+    toast({ title: "Searching for jobs...", description: "AI is searching across job boards based on your query." });
 
     try {
       const result = await jobSearch({
-        keywords: data.keywords,
-        location: data.location,
+        prompt: data.prompt,
       });
       if (result && result.jobs) {
         setSearchResults(result.jobs);
         if (result.jobs.length === 0) {
-          toast({ title: "No Results", description: "Found no job postings for your criteria. Try broadening your search." });
+          toast({ title: "No Results", description: "Found no job postings for your criteria. Try rephrasing your search." });
         } else {
-          toast({ title: "Search Complete!", description: `Found ${result.jobs.length} job postings.` });
+          toast({ title: "Search Complete!", description: `Found ${result.jobs.length} potential job postings.` });
         }
       } else {
         throw new Error("Job search did not return the expected jobs format.");
@@ -166,7 +163,11 @@ export default function JobSearchPage() {
     }
   };
   
-  const handleTailorResumeForJob = (jobDescriptionText: string) => {
+  const handleTailorResumeForJob = (jobDescriptionText: string | undefined) => {
+    if (!jobDescriptionText) {
+        toast({ title: "Missing Description", description: "No job description was found for this post to tailor a resume.", variant: "destructive" });
+        return;
+    }
     if (!currentUser) {
       toast({ title: "Not Authenticated", description: "Please sign in to tailor resumes.", variant: "destructive" });
       return;
@@ -193,10 +194,10 @@ export default function JobSearchPage() {
       <div className="container mx-auto py-8 space-y-8">
         <div>
           <h1 className="font-headline text-3xl font-bold flex items-center">
-            <Search className="mr-3 h-8 w-8 text-primary" /> Job Search
+            <Search className="mr-3 h-8 w-8 text-primary" /> AI Job Search
           </h1>
           <p className="text-muted-foreground">
-            Enter keywords and a location. The AI will search for relevant job postings across the web.
+            Describe the job you're looking for. The AI will search across multiple job boards.
           </p>
         </div>
 
@@ -207,34 +208,19 @@ export default function JobSearchPage() {
           <CardContent>
             <Form {...form}>
               <form onSubmit={form.handleSubmit(handleSearchSubmit)} className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <FormField
+                 <FormField
                     control={form.control}
-                    name="keywords"
+                    name="prompt"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Keywords</FormLabel>
+                        <FormLabel>Your Search Query</FormLabel>
                         <FormControl>
-                          <Input placeholder="e.g., Software Engineer, React, Node.js" {...field} />
+                          <Textarea placeholder="e.g., Find me remote Senior JavaScript Developer roles posted in the last week." {...field} rows={3}/>
                         </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
-                  <FormField
-                    control={form.control}
-                    name="location"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Location</FormLabel>
-                        <FormControl>
-                          <Input placeholder="e.g., London, UK or Remote" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
                 <Button type="submit" className="w-full md:w-auto" disabled={isLoading || !currentUser}>
                   {isLoading ? (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -259,7 +245,7 @@ export default function JobSearchPage() {
         {isLoading && (
           <div className="text-center py-10">
             <Loader2 className="mx-auto h-12 w-12 animate-spin text-primary" />
-            <p className="mt-4 text-muted-foreground">Searching the web, please wait...</p>
+            <p className="mt-4 text-muted-foreground">Searching multiple job boards, please wait...</p>
           </div>
         )}
 
@@ -319,7 +305,7 @@ export default function JobSearchPage() {
              </CardHeader>
              <CardContent>
                <p className="text-muted-foreground">
-                 We couldn't find any job postings for your criteria. Please try different keywords or a broader location.
+                 We couldn't find any job postings for your criteria. Please try a different query.
                </p>
              </CardContent>
            </Card>
