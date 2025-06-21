@@ -21,37 +21,49 @@ export const jobSearch = ai.defineFlow(
     outputSchema: JobSearchOutputSchema,
   },
   async (input) => {
+    // Note: The API key is defined in the .env file and should not be hardcoded.
     const app = new FireCrawlApp({apiKey: process.env.FIRECRAWL_API_KEY});
 
     try {
-      const searchResult = await app.search(input.prompt, {
-        limit: 9, // Fetch a few results
-        scrapeOptions: {
-          // Ask for markdown as it's easier to process than raw HTML
-          formats: ["markdown"]
-        }
-      });
+      // Define the target sites for the job search.
+      const predefinedUrls = [
+        "https://jobs.ac.uk/*",  
+        "https://uk.indeed.com/*",
+        "https://glassdoor.co.uk/*"
+      ];
       
-      console.log('--- Firecrawl Search API Success ---');
-      // The search result is an array of objects
-      if (!searchResult || !Array.isArray(searchResult.data)) {
-        console.error('Firecrawl search returned an unexpected format.');
-        throw new Error('Invalid response format from Firecrawl search API.');
+      console.log(`--- Calling Firecrawl app.extract with prompt: "${input.prompt}" ---`);
+      
+      // Use the extract method with web search enabled, as per the user's working example.
+      const extractResult = await app.extract(predefinedUrls, {
+          prompt: input.prompt,
+          enableWebSearch: true,
+      });
+
+      console.log('--- Firecrawl Extract API Success ---');
+      if (!extractResult || !Array.isArray(extractResult)) {
+        console.error('Firecrawl extract returned an unexpected format.');
+        throw new Error('Invalid response format from Firecrawl extract API.');
       }
       
       // Map the raw result to our defined JobExtractionResult schema
-      const jobs: JobExtractionResult[] = searchResult.data.map((item: any) => ({
-        title: item.title || 'Untitled Job Posting',
-        url: item.url || undefined,
-        markdown: item.markdown || 'No description extracted.',
-        company: item.company || undefined, // These fields may or may not exist
-        location: item.location || undefined,
-      }));
+      const jobs: JobExtractionResult[] = extractResult.map((item: any) => {
+        // Log each raw item to help with debugging if the structure is unexpected
+        console.log("Raw Firecrawl item:", item);
+        return {
+          title: item.title || 'Untitled Job Posting',
+          url: item.url || undefined,
+          // Use item.markdown or fallback to item.content for the description
+          markdown: item.markdown || item.content || 'No description extracted.',
+          company: item.company || undefined, 
+          location: item.location || undefined,
+        }
+      }).filter(job => job.title && job.url); // Filter out any potentially empty or invalid results
 
       return { jobs };
 
     } catch (error) {
-      console.error('--- Firecrawl Search Request Failed ---');
+      console.error('--- Firecrawl Extract Request Failed ---');
       console.error('Full error object:', error);
       
       let errorMessage = 'An unknown error occurred during the job search.';
