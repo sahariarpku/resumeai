@@ -190,7 +190,7 @@ export const ExtractRssItemOutputSchema = z.object({
 });
 export type ExtractRssItemOutput = z.infer<typeof ExtractRssItemOutputSchema>;
 
-// Schemas for AI Job Search Link Generation
+// Schemas for AI Job Search Link Generation (DEPRECATED but kept for reference if needed)
 export const JobSearchInputSchema = z.object({
   prompt: z
     .string()

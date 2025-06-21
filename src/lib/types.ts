@@ -178,4 +178,3 @@ export interface JobPostingRssItem {
   isProcessingDetails?: boolean; // UI loading state for AI processing this item
   isCalculatingMatch?: boolean; // UI loading state for CV match calculation for this item (can reuse or differentiate)
 }
-

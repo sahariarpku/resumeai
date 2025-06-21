@@ -215,4 +215,3 @@ export const getFeedDetailsByCategoryAndType = (type: RssFeed['type'], category:
 // General feeds for "Any" options
 export const ALL_SUBJECT_AREAS_URL = "https://www.jobs.ac.uk/jobs/academic-disciplines/?format=rss"; // A broad subject feed
 export const ALL_LOCATIONS_URL = "https://www.jobs.ac.uk/?format=rss"; // The most general feed for all locations
-
