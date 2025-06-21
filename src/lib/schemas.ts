@@ -190,7 +190,7 @@ export const ExtractRssItemOutputSchema = z.object({
 });
 export type ExtractRssItemOutput = z.infer<typeof ExtractRssItemOutputSchema>;
 
-// Schemas for AI Job Search (Firecrawl Extract)
+// Schemas for AI Job Search (Firecrawl Search)
 export const jobSearchFormSchema = z.object({
   prompt: z.string().min(10, "Your search query must be at least 10 characters long."),
 });
@@ -199,7 +199,7 @@ export type JobSearchInput = z.infer<typeof jobSearchFormSchema>;
 export const JobExtractionResultSchema = z.object({
     title: z.string().optional(),
     url: z.string().url().optional(),
-    markdownContent: z.string().optional(),
+    markdown: z.string().optional(), // Changed from markdownContent
     company: z.string().optional(),
     location: z.string().optional(),
 });

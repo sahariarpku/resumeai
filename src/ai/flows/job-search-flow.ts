@@ -1,6 +1,6 @@
 'use server';
 /**
- * @fileOverview Genkit flow to perform a sophisticated job search using the Firecrawl extract API.
+ * @fileOverview Genkit flow to perform a sophisticated job search using the Firecrawl search API.
  *
  * - jobSearch - A function that performs the job search using a natural language prompt.
  * - JobSearchInput - The input type for the function.
@@ -20,58 +20,38 @@ export async function jobSearch(
 
   const app = new FireCrawlApp({ apiKey });
 
-  // Define a set of reliable job board URL patterns
-  const sources = [
-    "https://jobs.ac.uk/*",
-    "https://glassdoor.co.uk/Job/*",
-    "https://uk.indeed.com/jobs?q=*",
-    "https://www.linkedin.com/jobs/search/*"
-  ];
-
-  console.log('--- Firecrawl Extract Search ---');
+  console.log('--- Firecrawl Search ---');
   console.log('Using prompt:', input.prompt);
   
   try {
-    // Use the extract method with enableWebSearch
-    const extractResult = await app.extract(sources, {
-      prompt: input.prompt,
-      enableWebSearch: true,
-      // Define a schema to get structured data back from the extraction
-      schema: {
-        type: "array",
-        items: {
-          type: "object",
-          properties: {
-            jobTitle: { type: "string" },
-            companyName: { type: "string" },
-            jobLocation: { type: "string" },
-            jobDescription: { type: "string" },
-            jobUrl: { type: "string" }
-          }
-        }
+    // Use the search method, which is the correct function for this operation.
+    const searchResult = await app.search(input.prompt, {
+      limit: 7, // Limit the number of results
+      scrapeOptions: {
+        formats: ["markdown"] // Ensure we get markdown content back
       }
     });
 
-    console.log('Received raw response from Firecrawl Extract API:', JSON.stringify(extractResult, null, 2));
+    console.log('Received raw response from Firecrawl Search API:', JSON.stringify(searchResult, null, 2));
 
-    if (!extractResult || !Array.isArray(extractResult)) {
-        console.error('Firecrawl extract returned an unexpected format. Expected an array of job objects.');
-        throw new Error('Invalid response format from Firecrawl extract API.');
+    if (!searchResult || !Array.isArray(searchResult)) {
+        console.error('Firecrawl search returned an unexpected format. Expected an array of job objects.');
+        throw new Error('Invalid response format from Firecrawl search API.');
     }
     
-    // The result of `extract` with a schema is directly the array of objects
-    const jobs: JobExtractionResult[] = extractResult.map((item: any) => ({
-      title: item.jobTitle || 'Untitled Job Posting',
-      url: item.jobUrl || undefined,
-      markdownContent: item.jobDescription || 'No description extracted.',
-      company: item.companyName || undefined,
-      location: item.jobLocation || undefined,
+    // The result of `search` is directly the array of objects
+    const jobs: JobExtractionResult[] = searchResult.map((item: any) => ({
+      title: item.title || 'Untitled Job Posting',
+      url: item.url || undefined,
+      markdown: item.markdown || 'No description extracted.', // The field is 'markdown'
+      company: item.company || undefined,
+      location: item.location || undefined,
     }));
 
     return { jobs };
 
   } catch (error) {
-    console.error('--- Firecrawl Extract Failed ---');
+    console.error('--- Firecrawl Search Failed ---');
     console.error('Full error object:', error);
     
     let errorMessage = 'An unknown error occurred during the job search.';

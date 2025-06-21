@@ -279,7 +279,7 @@ export default function JobSearchPage() {
                   </CardHeader>
                   <CardContent className="flex-grow space-y-2">
                      <div className="text-xs text-muted-foreground max-h-40 overflow-y-auto border p-2 rounded-md bg-muted/30">
-                       <SimpleMarkdownToHtmlDisplay text={job.markdownContent || 'No description provided.'} />
+                       <SimpleMarkdownToHtmlDisplay text={job.markdown || 'No description provided.'} />
                      </div>
                      {job.url && <p className="text-xs text-muted-foreground">
                         <Link href={job.url} target="_blank" rel="noopener noreferrer" className="hover:underline break-all">
@@ -288,7 +288,7 @@ export default function JobSearchPage() {
                      </p>}
                   </CardContent>
                   <CardFooter>
-                     <Button className="w-full" onClick={() => handleTailorResumeForJob(job.markdownContent)} disabled={!currentUser || !userProfile}>
+                     <Button className="w-full" onClick={() => handleTailorResumeForJob(job.markdown)} disabled={!currentUser || !userProfile}>
                         <Sparkles className="mr-2 h-4 w-4" /> Tailor Resume
                     </Button>
                   </CardFooter>
