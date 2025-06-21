@@ -101,6 +101,7 @@ export default function ProfilePage() {
   const [profileData, setProfileData] = useState<UserProfile>(fallbackInitialProfileData);
   const [isProfileLoaded, setIsProfileLoaded] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
 
   const [isWorkExperienceModalOpen, setIsWorkExperienceModalOpen] = useState(false);
   const [editingWorkExperience, setEditingWorkExperience] = useState<WorkExperience | null>(null);
@@ -469,20 +470,40 @@ export default function ProfilePage() {
     toast({ title: "Word (.docx) Download Started" });
   };
   
-  const handlePrintToPdf = () => {
-    if (!currentUser) { toast({ title: "Not Authenticated", variant: "destructive" }); return; }
-    const resumeHtml = profileToResumeHtml(profileData);
-    const printWindow = window.open('', '_blank');
-    if (printWindow) {
-      printWindow.document.write(resumeHtml);
-      printWindow.document.close(); 
-      printWindow.focus(); 
-      setTimeout(() => {
-        printWindow.print();
-      }, 500); 
-      toast({ title: "Preparing PDF for Print" });
-    } else {
-      toast({ title: "Print Error", description: "Could not open print window. Check pop-up blocker.", variant: "destructive" });
+  const handleDownloadPdf = async () => {
+    if (!currentUser || isGeneratingPdf) { return; }
+    setIsGeneratingPdf(true);
+    toast({ title: "Generating PDF...", description: "This may take a moment. The download will start automatically." });
+    try {
+      const resumeHtml = profileToResumeHtml(profileData);
+      const response = await fetch('/api/generate-pdf', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ htmlContent: resumeHtml }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to generate PDF on the server.');
+      }
+
+      const blob = await response.blob();
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      const filename = `${(profileData.fullName || currentUser.displayName || 'resume').replace(/\s+/g, '_')}.pdf`;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(link.href);
+      toast({ title: "PDF Downloaded!", description: `${filename} has been downloaded.` });
+    } catch (error) {
+      console.error("Error downloading PDF:", error);
+      toast({ title: "PDF Generation Error", description: error instanceof Error ? error.message : "An unknown error occurred.", variant: "destructive" });
+    } finally {
+      setIsGeneratingPdf(false);
     }
   };
   
@@ -854,14 +875,18 @@ export default function ProfilePage() {
             </Button>
             <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="lg" disabled={!currentUser || isSaving}>
-                        <DownloadCloud className="mr-2 h-5 w-5" /> Download / Print
+                    <Button variant="outline" size="lg" disabled={!currentUser || isSaving || isGeneratingPdf}>
+                        {isGeneratingPdf ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <DownloadCloud className="mr-2 h-5 w-5" />}
+                        Download / Export
                     </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
                     <DropdownMenuItem onClick={handleDownloadMd}><FileText className="mr-2 h-4 w-4" /> Download as .md</DropdownMenuItem>
-                    <DropdownMenuItem onClick={handleDownloadDocx}><FileText className="mr-2 h-4 w-4" /> Download as Word (.docx)</DropdownMenuItem>
-                    <DropdownMenuItem onClick={handlePrintToPdf}><Printer className="mr-2 h-4 w-4" /> Print to PDF...</DropdownMenuItem>
+                    <DropdownMenuItem onClick={handleDownloadDocx}><FileText className="mr-2 h-4 w-4" /> Download as .docx</DropdownMenuItem>
+                    <DropdownMenuItem onClick={handleDownloadPdf} disabled={isGeneratingPdf}>
+                      {isGeneratingPdf ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Printer className="mr-2 h-4 w-4" />}
+                      Download as PDF
+                    </DropdownMenuItem>
                      <DropdownMenuItem onSelect={() => setIsCvCustomizationModalOpen(true)}>
                         <ListRestart className="mr-2 h-4 w-4" /> Customize & Reorder CV...
                     </DropdownMenuItem>
@@ -944,4 +969,3 @@ export default function ProfilePage() {
     </TooltipProvider>
   );
 }
-
