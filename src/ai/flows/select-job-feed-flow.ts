@@ -35,7 +35,6 @@ export type SelectJobFeedInput = z.infer<typeof SelectJobFeedInputSchema>;
 const SelectJobFeedOutputSchema = z.object({
   selectedFeedUrl: z
     .string()
-    .url()
     .describe(
       "The single best URL from the availableFeeds that matches the user's prompt."
     ),
