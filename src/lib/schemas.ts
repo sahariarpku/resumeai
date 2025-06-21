@@ -199,7 +199,7 @@ export type JobSearchInput = z.infer<typeof jobSearchFormSchema>;
 export const JobExtractionResultSchema = z.object({
     title: z.string().optional(),
     url: z.string().url().optional(),
-    markdown: z.string().optional(), // Changed from markdownContent
+    markdown: z.string().optional(),
     company: z.string().optional(),
     location: z.string().optional(),
 });
