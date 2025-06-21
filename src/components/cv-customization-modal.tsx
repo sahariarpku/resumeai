@@ -38,7 +38,7 @@ export function CvCustomizationModal({ isOpen, onOpenChange, currentProfile, onO
   const { currentUser } = useAuth();
   const [userPreference, setUserPreference] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+  const [isPrinting, setIsPrinting] = useState(false);
   const [profileForModal, setProfileForModal] = useState<UserProfile | null>(null);
   const [downloadsReady, setDownloadsReady] = useState(false);
   const [generatedLatex, setGeneratedLatex] = useState<string | null>(null);
@@ -154,38 +154,28 @@ export function CvCustomizationModal({ isOpen, onOpenChange, currentProfile, onO
     }
   };
 
-  const handleDownloadPdf = async () => {
-    if (!profileForModal || isGeneratingPdf) { return; }
-    setIsGeneratingPdf(true);
-    toast({ title: "Generating PDF...", description: "This may take a moment." });
+  const handlePrintPdf = () => {
+    if (!profileForModal || isPrinting) { return; }
+    setIsPrinting(true);
+    toast({ title: "Opening Print View...", description: "Please use your browser's print dialog to save as PDF." });
     try {
       const htmlContent = profileToResumeHtml(profileForModal);
-      const response = await fetch('/api/generate-pdf', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ htmlContent }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to generate PDF on the server.');
+      const printWindow = window.open('', '_blank');
+      if (printWindow) {
+        printWindow.document.write(htmlContent);
+        printWindow.document.close();
+        printWindow.focus();
+        setTimeout(() => {
+          printWindow.print();
+        }, 500);
+      } else {
+        toast({ title: "Popup Blocked", description: "Please allow popups for this site to print the PDF.", variant: "destructive" });
       }
-      
-      const blob = await response.blob();
-      const link = document.createElement('a');
-      link.href = URL.createObjectURL(blob);
-      const filename = `${(profileForModal.fullName || currentUser?.displayName || 'resume').replace(/\s+/g, '_')}_CV.pdf`;
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(link.href);
-
     } catch (error) {
-      console.error("Error downloading PDF:", error);
-      toast({ title: "PDF Generation Error", description: error instanceof Error ? error.message : "An unknown error occurred.", variant: "destructive" });
+      console.error("Error preparing for print:", error);
+      toast({ title: "Print Error", description: error instanceof Error ? error.message : "An unknown error occurred.", variant: "destructive" });
     } finally {
-      setIsGeneratingPdf(false);
+        setTimeout(() => setIsPrinting(false), 2000);
     }
   };
 
@@ -217,14 +207,14 @@ export function CvCustomizationModal({ isOpen, onOpenChange, currentProfile, onO
         {downloadsReady && profileForModal && (
           <><Separator className="my-4"/><div className="space-y-3"><h3 className="text-md font-medium text-center">Download Reordered CV (from Profile Data)</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                <Button variant="outline" onClick={() => handleDownload('md')} disabled={isLoading || isGeneratingPdf}><Download className="mr-2 h-4 w-4" /> .md</Button>
-                <Button variant="outline" onClick={() => handleDownload('docx')} disabled={isLoading || isGeneratingPdf}><Download className="mr-2 h-4 w-4" /> .docx</Button>
-                <Button variant="outline" onClick={handleDownloadPdf} disabled={isLoading || isGeneratingPdf}>
-                  {isGeneratingPdf ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Printer className="mr-2 h-4 w-4" />} PDF
+                <Button variant="outline" onClick={() => handleDownload('md')} disabled={isLoading || isPrinting}><Download className="mr-2 h-4 w-4" /> .md</Button>
+                <Button variant="outline" onClick={() => handleDownload('docx')} disabled={isLoading || isPrinting}><Download className="mr-2 h-4 w-4" /> .docx</Button>
+                <Button variant="outline" onClick={handlePrintPdf} disabled={isLoading || isPrinting}>
+                  {isPrinting ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Printer className="mr-2 h-4 w-4" />} PDF...
                 </Button>
             </div><Separator className="my-4"/><h3 className="text-md font-medium text-center">Generate & Download LaTeX CV</h3>
             <div className="space-y-2 pt-2">
-                 <Button variant="outline" onClick={handleGenerateLatex} disabled={isGeneratingLatex || isLoading || isGeneratingPdf} className="w-full">{isGeneratingLatex ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileText className="mr-2 h-4 w-4" />}Generate LaTeX Code (.tex)</Button>
+                 <Button variant="outline" onClick={handleGenerateLatex} disabled={isGeneratingLatex || isLoading || isPrinting} className="w-full">{isGeneratingLatex ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileText className="mr-2 h-4 w-4" />}Generate LaTeX Code (.tex)</Button>
                 {generatedLatex && (<Button variant="default" onClick={() => handleDownload('tex')} disabled={!generatedLatex || isLoading} className="w-full bg-green-600 hover:bg-green-700 text-white"><Download className="mr-2 h-4 w-4" /> Download .tex File</Button>)}
                 <p className="text-xs text-muted-foreground text-center">For .tex, you'll need a LaTeX editor to compile it into a PDF.</p>
             </div></div></> )}

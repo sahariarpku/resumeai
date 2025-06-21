@@ -109,7 +109,7 @@ export default function TailorResumePage() {
 
   const [isLoadingResume, setIsLoadingResume] = useState(false);
   const [isLoadingCoverLetter, setIsLoadingCoverLetter] = useState(false);
-  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+  const [isPrinting, setIsPrinting] = useState(false);
   const [tailoredResume, setTailoredResume] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<string | null>(null);
@@ -348,42 +348,32 @@ export default function TailorResumePage() {
     document.body.appendChild(link); link.click(); document.body.removeChild(link); URL.revokeObjectURL(link.href);
     toast({ title: "Word (.docx) Download Started" });
   };
-  const handleDownloadPdf = async (content: string | null, baseFilename: string, type: string) => {
-    if (!content || isGeneratingPdf) { return; }
-    setIsGeneratingPdf(true);
-    toast({ title: "Generating PDF...", description: "This may take a moment. The download will start automatically." });
+  const handlePrintPdf = (content: string | null, baseFilename: string, type: string) => {
+    if (!content || isPrinting) { return; }
+    setIsPrinting(true);
+    toast({ title: "Opening Print View...", description: "Please use your browser's print dialog to save as PDF." });
     try {
       const htmlContent = textToProfessionalHtml(content, `${jobTitleForSave} ${type}`);
-      const response = await fetch('/api/generate-pdf', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ htmlContent }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to generate PDF on the server.');
+      const printWindow = window.open('', '_blank');
+      if (printWindow) {
+          printWindow.document.write(htmlContent);
+          printWindow.document.close();
+          printWindow.focus();
+          setTimeout(() => {
+              printWindow.print();
+          }, 500);
+      } else {
+          toast({ title: "Popup Blocked", description: "Please allow popups for this site to print the PDF.", variant: "destructive" });
       }
-      
-      const blob = await response.blob();
-      const link = document.createElement('a');
-      link.href = URL.createObjectURL(blob);
-      const filename = `${baseFilename.replace(/\s+/g, '_')}_${type.toLowerCase()}.pdf`;
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(link.href);
-
     } catch (error) {
-      console.error("Error downloading PDF:", error);
-      toast({ title: "PDF Generation Error", description: error instanceof Error ? error.message : "An unknown error occurred.", variant: "destructive" });
+      console.error("Error preparing for print:", error);
+      toast({ title: "Print Error", description: error instanceof Error ? error.message : "An unknown error occurred.", variant: "destructive" });
     } finally {
-      setIsGeneratingPdf(false);
+        setTimeout(() => setIsPrinting(false), 2000);
     }
   };
   
-  const isLoading = isLoadingResume || isLoadingCoverLetter || isGeneratingPdf;
+  const isLoading = isLoadingResume || isLoadingCoverLetter || isPrinting;
 
   return (
     <div className="container mx-auto py-8 space-y-8">
@@ -403,14 +393,14 @@ export default function TailorResumePage() {
       {(tailoredResume || analysis || suggestions) && !error && (
         <div ref={resultsSectionRef} className="space-y-8 pt-8"><Separator /><h2 className="font-headline text-2xl font-bold text-center">AI-Powered Resume Results</h2>
           <Tabs defaultValue="tailoredResume" className="w-full"><TabsList className="grid w-full grid-cols-3"><TabsTrigger value="tailoredResume" disabled={!tailoredResume}>Tailored Resume</TabsTrigger><TabsTrigger value="analysis" disabled={!analysis}>AI Analysis</TabsTrigger><TabsTrigger value="suggestions" disabled={!suggestions}>AI Suggestions</TabsTrigger></TabsList>
-            <TabsContent value="tailoredResume">{tailoredResume && (<Card><CardHeader><div className="flex justify-between items-center flex-wrap gap-2"><CardTitle className="font-headline flex items-center"><FileText className="mr-2 h-5 w-5 text-primary"/> Tailored Resume</CardTitle><div className="flex gap-2 flex-wrap"><Button variant="outline" size="sm" onClick={() => handleCopyToClipboard(tailoredResume, "Resume")}><Copy className="mr-2 h-4 w-4" />Copy</Button><DropdownMenu><DropdownMenuTrigger asChild><Button variant="outline" size="sm" disabled={isLoading}><Download className="mr-2 h-4 w-4" />Download</Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onClick={() => handleDownloadMd(tailoredResume, jobTitleForSave, "Resume")}><FileText className="mr-2 h-4 w-4" /> .md</DropdownMenuItem><DropdownMenuItem onClick={() => handleDownloadDocx(tailoredResume, jobTitleForSave, "Resume")}><FileText className="mr-2 h-4 w-4" /> .docx</DropdownMenuItem><DropdownMenuItem onClick={() => handleDownloadPdf(tailoredResume, jobTitleForSave, "Resume")} disabled={isGeneratingPdf}>{isGeneratingPdf ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Printer className="mr-2 h-4 w-4" />} Download as PDF</DropdownMenuItem></DropdownMenuContent></DropdownMenu></div></div></CardHeader><CardContent><div className="bg-muted/50 p-4 rounded-md max-h-[600px] overflow-y-auto"><SimpleMarkdownToHtmlDisplay text={tailoredResume} /></div></CardContent></Card>)}</TabsContent>
+            <TabsContent value="tailoredResume">{tailoredResume && (<Card><CardHeader><div className="flex justify-between items-center flex-wrap gap-2"><CardTitle className="font-headline flex items-center"><FileText className="mr-2 h-5 w-5 text-primary"/> Tailored Resume</CardTitle><div className="flex gap-2 flex-wrap"><Button variant="outline" size="sm" onClick={() => handleCopyToClipboard(tailoredResume, "Resume")}><Copy className="mr-2 h-4 w-4" />Copy</Button><DropdownMenu><DropdownMenuTrigger asChild><Button variant="outline" size="sm" disabled={isLoading}><Download className="mr-2 h-4 w-4" />Download</Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onClick={() => handleDownloadMd(tailoredResume, jobTitleForSave, "Resume")}><FileText className="mr-2 h-4 w-4" /> .md</DropdownMenuItem><DropdownMenuItem onClick={() => handleDownloadDocx(tailoredResume, jobTitleForSave, "Resume")}><FileText className="mr-2 h-4 w-4" /> .docx</DropdownMenuItem><DropdownMenuItem onClick={() => handlePrintPdf(tailoredResume, jobTitleForSave, "Resume")} disabled={isPrinting}>{isPrinting ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Printer className="mr-2 h-4 w-4" />} Save as PDF...</DropdownMenuItem></DropdownMenuContent></DropdownMenu></div></div></CardHeader><CardContent><div className="bg-muted/50 p-4 rounded-md max-h-[600px] overflow-y-auto"><SimpleMarkdownToHtmlDisplay text={tailoredResume} /></div></CardContent></Card>)}</TabsContent>
             <TabsContent value="analysis">{analysis && (<Card><CardHeader><div className="flex justify-between items-center flex-wrap gap-2"><CardTitle className="font-headline flex items-center"><Brain className="mr-2 h-5 w-5 text-primary"/> AI Resume Analysis</CardTitle><Button variant="outline" size="sm" onClick={() => handleCopyToClipboard(analysis, "Analysis")}><Copy className="mr-2 h-4 w-4" />Copy</Button></div></CardHeader><CardContent><div className="bg-muted/50 p-4 rounded-md max-h-[600px] overflow-y-auto"><SimpleMarkdownToHtmlDisplay text={analysis} /></div></CardContent></Card>)}</TabsContent>
             <TabsContent value="suggestions">{suggestions && (<Card><CardHeader><div className="flex justify-between items-center flex-wrap gap-2"><CardTitle className="font-headline flex items-center"><Lightbulb className="mr-2 h-5 w-5 text-primary"/> AI Resume Suggestions</CardTitle><Button variant="outline" size="sm" onClick={() => handleCopyToClipboard(suggestions, "Suggestions")}><Copy className="mr-2 h-4 w-4" />Copy</Button></div></CardHeader><CardContent><div className="bg-muted/50 p-4 rounded-md max-h-[600px] overflow-y-auto"><SimpleMarkdownToHtmlDisplay text={suggestions} /></div></CardContent></Card>)}</TabsContent>
           </Tabs>
         </div>)}
       {generatedCoverLetter && !error && (
          <div ref={coverLetterSectionRef} className="space-y-8 pt-8"><Separator />
-           <Card><CardHeader><div className="flex justify-between items-center flex-wrap gap-2"><CardTitle className="font-headline flex items-center"><Mail className="mr-2 h-5 w-5 text-primary"/> Generated Cover Letter</CardTitle><div className="flex gap-2 flex-wrap"><Button variant="outline" size="sm" onClick={() => handleCopyToClipboard(generatedCoverLetter, "Cover Letter")}><Copy className="mr-2 h-4 w-4" />Copy</Button><DropdownMenu><DropdownMenuTrigger asChild><Button variant="outline" size="sm" disabled={isLoading}><Download className="mr-2 h-4 w-4" />Download</Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onClick={() => handleDownloadMd(generatedCoverLetter, jobTitleForSave, "CoverLetter")}><FileText className="mr-2 h-4 w-4" /> .md</DropdownMenuItem><DropdownMenuItem onClick={() => handleDownloadDocx(generatedCoverLetter, jobTitleForSave, "CoverLetter")}><FileText className="mr-2 h-4 w-4" /> .docx</DropdownMenuItem><DropdownMenuItem onClick={() => handleDownloadPdf(generatedCoverLetter, jobTitleForSave, "CoverLetter")} disabled={isGeneratingPdf}>{isGeneratingPdf ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Printer className="mr-2 h-4 w-4" />} Download as PDF</DropdownMenuItem></DropdownMenuContent></DropdownMenu></div></div><p className="text-xs text-muted-foreground pt-2">Use the download options for different formats. Cover letters are not automatically saved to "My Resumes".</p></CardHeader><CardContent><div className="bg-muted/50 p-4 rounded-md max-h-[700px] overflow-y-auto"><SimpleMarkdownToHtmlDisplay text={generatedCoverLetter} /></div></CardContent></Card>
+           <Card><CardHeader><div className="flex justify-between items-center flex-wrap gap-2"><CardTitle className="font-headline flex items-center"><Mail className="mr-2 h-5 w-5 text-primary"/> Generated Cover Letter</CardTitle><div className="flex gap-2 flex-wrap"><Button variant="outline" size="sm" onClick={() => handleCopyToClipboard(generatedCoverLetter, "Cover Letter")}><Copy className="mr-2 h-4 w-4" />Copy</Button><DropdownMenu><DropdownMenuTrigger asChild><Button variant="outline" size="sm" disabled={isLoading}><Download className="mr-2 h-4 w-4" />Download</Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onClick={() => handleDownloadMd(generatedCoverLetter, jobTitleForSave, "CoverLetter")}><FileText className="mr-2 h-4 w-4" /> .md</DropdownMenuItem><DropdownMenuItem onClick={() => handleDownloadDocx(generatedCoverLetter, jobTitleForSave, "CoverLetter")}><FileText className="mr-2 h-4 w-4" /> .docx</DropdownMenuItem><DropdownMenuItem onClick={() => handlePrintPdf(generatedCoverLetter, jobTitleForSave, "CoverLetter")} disabled={isPrinting}>{isPrinting ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Printer className="mr-2 h-4 w-4" />} Save as PDF...</DropdownMenuItem></DropdownMenuContent></DropdownMenu></div></div><p className="text-xs text-muted-foreground pt-2">Use the download options for different formats. Cover letters are not automatically saved to "My Resumes".</p></CardHeader><CardContent><div className="bg-muted/50 p-4 rounded-md max-h-[700px] overflow-y-auto"><SimpleMarkdownToHtmlDisplay text={generatedCoverLetter} /></div></CardContent></Card>
         </div>)}
     </div>
   );

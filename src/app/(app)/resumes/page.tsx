@@ -44,7 +44,7 @@ export default function MyResumesPage() {
   const router = useRouter();
   const [resumes, setResumes] = useState<StoredResume[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+  const [isPrinting, setIsPrinting] = useState(false);
 
   useEffect(() => {
     if (!currentUser) {
@@ -140,40 +140,31 @@ export default function MyResumesPage() {
     toast({ title: "Word (.docx) Download Started" });
   };
   
-  const handleDownloadPdf = async (content: string, filename: string) => {
-    if (!content || isGeneratingPdf) {
-        toast({ title: "No content to download or PDF generation in progress.", variant: "destructive" });
+  const handlePrintPdf = (content: string, filename: string) => {
+    if (!content || isPrinting) {
+        toast({ title: "No content to download or print job in progress.", variant: "destructive" });
         return;
     }
-    setIsGeneratingPdf(true);
-    toast({ title: "Generating PDF...", description: "This may take a moment. The download will start automatically." });
+    setIsPrinting(true);
+    toast({ title: "Opening Print View...", description: "Please use your browser's print dialog to save as PDF." });
     try {
         const htmlContent = textToProfessionalHtml(content, filename);
-        const response = await fetch('/api/generate-pdf', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ htmlContent }),
-        });
-
-        if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error || 'Failed to generate PDF on the server.');
+        const printWindow = window.open('', '_blank');
+        if (printWindow) {
+            printWindow.document.write(htmlContent);
+            printWindow.document.close();
+            printWindow.focus();
+            setTimeout(() => {
+                printWindow.print();
+            }, 500); 
+        } else {
+            toast({ title: "Popup Blocked", description: "Please allow popups for this site to print the PDF.", variant: "destructive" });
         }
-        
-        const blob = await response.blob();
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
-        link.download = `${filename.replace(/\s+/g, '_')}.pdf`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(link.href);
-
     } catch (error) {
-        console.error("Error downloading PDF:", error);
-        toast({ title: "PDF Generation Error", description: error instanceof Error ? error.message : "An unknown error occurred.", variant: "destructive" });
+        console.error("Error preparing to print PDF:", error);
+        toast({ title: "Print Error", description: error instanceof Error ? error.message : "An unknown error occurred.", variant: "destructive" });
     } finally {
-        setIsGeneratingPdf(false);
+        setTimeout(() => setIsPrinting(false), 2000);
     }
   };
 
@@ -216,7 +207,7 @@ export default function MyResumesPage() {
               <CardFooter className="grid grid-cols-2 gap-2">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="outline" className="w-full" disabled={isGeneratingPdf}><Download className="mr-2 h-4 w-4" /> Download</Button>
+                    <Button variant="outline" className="w-full" disabled={isPrinting}><Download className="mr-2 h-4 w-4" /> Download</Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
                     <DropdownMenuItem onClick={() => handleDownloadMd(resume.tailoredContent, resume.name)}>
@@ -225,9 +216,9 @@ export default function MyResumesPage() {
                     <DropdownMenuItem onClick={() => handleDownloadDocx(resume.tailoredContent, resume.name)}>
                       <FileText className="mr-2 h-4 w-4" /> Download as .docx
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => handleDownloadPdf(resume.tailoredContent, resume.name)} disabled={isGeneratingPdf}>
-                       {isGeneratingPdf ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Printer className="mr-2 h-4 w-4" />}
-                       Download as PDF
+                    <DropdownMenuItem onClick={() => handlePrintPdf(resume.tailoredContent, resume.name)} disabled={isPrinting}>
+                       {isPrinting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Printer className="mr-2 h-4 w-4" />}
+                       Save as PDF...
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
