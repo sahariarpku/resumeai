@@ -211,7 +211,7 @@ export default function JobSearchPage() {
                     <Button 
                       variant="outline" 
                       onClick={() => handleCalculateMatch(job.url!)}
-                      disabled={!currentUser || job.isCalculatingMatch}
+                      disabled={!currentUser || job.isCalculatingMatch || !job.url}
                     >
                       {job.isCalculatingMatch ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Sparkles className="mr-2 h-4 w-4" />}
                       Calculate CV Match

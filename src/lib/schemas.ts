@@ -202,7 +202,7 @@ export type JobSearchInput = z.infer<typeof JobSearchInputSchema>;
 
 export const JobExtractionResultSchema = z.object({
   title: z.string(), // Mapped from 'name' in the API response
-  url: z.string().url().optional(),
+  url: z.string().optional(), // Relaxed validation from .url() to just .string()
   markdown: z.string(),
   company: z.string().optional(),
   location: z.string().optional(),
