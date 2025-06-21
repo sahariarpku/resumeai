@@ -5,7 +5,6 @@ import React, { createContext, useContext, useEffect, useState, ReactNode } from
 import { User, onAuthStateChanged, signOut as firebaseSignOut, GoogleAuthProvider, GithubAuthProvider, signInWithPopup, AuthError } from 'firebase/auth';
 import { auth } from '@/lib/firebase'; // Adjust path as necessary
 import { useRouter, usePathname } from 'next/navigation';
-import { Loader2 } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast"; // Import useToast
 
 interface AuthContextType {
@@ -44,6 +43,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     });
     return () => unsubscribe();
   }, [toast]);
+
+  // The fix: Move the redirect logic into a useEffect hook
+  useEffect(() => {
+    const isProtectedRoute = !pathname.startsWith('/auth') && pathname !== '/';
+    if (!loading && !currentUser && isProtectedRoute) {
+        router.push('/auth/signin');
+    }
+  }, [loading, currentUser, pathname, router]);
 
   const handleSocialSignInSuccess = (user: User) => {
     setCurrentUser(user);
@@ -110,7 +117,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     try {
       await firebaseSignOut(auth);
       setCurrentUser(null);
-      // No toast on logout, or a very subtle one if desired by UserNav
       router.push('/'); 
     } catch (error) {
       console.error("Error signing out: ", error);
@@ -123,30 +129,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setLoading(false);
     }
   };
-  
-  if (loading && !currentUser && (pathname.startsWith('/app') || pathname.startsWith('/dashboard'))) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-background">
-        <Loader2 className="h-12 w-12 animate-spin text-primary" />
-      </div>
-    );
-  }
-
-  const isAuthPage = pathname.startsWith('/auth/');
-  const isLandingPage = pathname === '/';
-
-  if (!loading && !currentUser && !isAuthPage && !isLandingPage && !pathname.startsWith('/_next/')) {
-    if (typeof window !== 'undefined') { 
-        router.push('/auth/signin');
-    }
-    return ( 
-        <div className="flex items-center justify-center min-h-screen bg-background">
-            <Loader2 className="h-12 w-12 animate-spin text-primary" />
-            <p className="ml-2">Redirecting to sign-in...</p>
-        </div>
-    );
-  }
-
 
   return (
     <AuthContext.Provider value={{ currentUser, loading, logout, signInWithGoogle, signInWithGitHub }}>
@@ -162,4 +144,3 @@ export const useAuth = (): AuthContextType => {
   }
   return context;
 };
-

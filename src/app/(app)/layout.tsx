@@ -4,10 +4,9 @@
 import { Header } from "@/components/layout/header";
 import { MainNav } from "@/components/layout/main-nav";
 import { Sidebar, SidebarContent, SidebarInset, SidebarRail } from "@/components/ui/sidebar";
-import { useAuth } from "@/contexts/auth-context"; // Import useAuth
-import { useRouter } from "next/navigation"; // Import useRouter for redirection
-import React, { useEffect } from "react"; // Import React and useEffect
-import { Loader2 } from "lucide-react"; // Import Loader2
+import { useAuth } from "@/contexts/auth-context";
+import React from "react";
+import { Loader2 } from "lucide-react";
 
 export default function AppLayout({
   children,
@@ -15,13 +14,6 @@ export default function AppLayout({
   children: React.ReactNode;
 }) {
   const { currentUser, loading } = useAuth();
-  const router = useRouter();
-
-  useEffect(() => {
-    if (!loading && !currentUser) {
-      router.push('/auth/signin');
-    }
-  }, [currentUser, loading, router]);
 
   if (loading) {
     return (
@@ -32,12 +24,11 @@ export default function AppLayout({
   }
 
   if (!currentUser) {
-    // This return is for the brief moment before redirection completes or if redirection fails
-    // Or you can return a loader here as well if useEffect takes time to redirect
+    // AuthProvider is handling the redirect. We just show a loader here until the redirect happens.
     return (
         <div className="flex items-center justify-center min-h-screen bg-background">
             <Loader2 className="h-12 w-12 animate-spin text-primary" />
-            <p className="ml-2">Please sign in to continue...</p>
+            <p className="ml-2">Redirecting...</p>
         </div>
     );
   }
