@@ -133,15 +133,15 @@ export function CvCustomizationModal({ isOpen, onOpenChange, currentProfile, onO
     }
   };
 
-  const handleDownload = (format: 'md' | 'docx' | 'tex') => {
+  const handleDownload = (format: 'md' | 'doc' | 'tex') => {
     if (!profileForModal) return;
     const profileName = (profileForModal.fullName || currentUser?.displayName || 'resume').replace(/\s+/g, '_');
     let content = ""; let filename = ""; let blobType = "";
 
     if (format === 'md') {
       content = profileToResumeText(profileForModal); filename = `${profileName}_CV.md`; blobType = 'text/markdown;charset=utf-8';
-    } else if (format === 'docx') {
-      content = profileToResumeHtml(profileForModal); filename = `${profileName}_CV.docx`; blobType = 'application/msword'; 
+    } else if (format === 'doc') {
+      content = profileToResumeHtml(profileForModal); filename = `${profileName}_CV.doc`; blobType = 'application/msword'; 
     } else if (format === 'tex') {
         if (generatedLatex) { content = generatedLatex; filename = `${profileName}_CV.tex`; blobType = 'application/x-tex;charset=utf-8'; }
         else { toast({title: "LaTeX Not Ready", description: "Please generate LaTeX code first.", variant: "default"}); return; }
@@ -208,7 +208,7 @@ export function CvCustomizationModal({ isOpen, onOpenChange, currentProfile, onO
           <><Separator className="my-4"/><div className="space-y-3"><h3 className="text-md font-medium text-center">Download Reordered CV (from Profile Data)</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 <Button variant="outline" onClick={() => handleDownload('md')} disabled={isLoading || isPrinting}><Download className="mr-2 h-4 w-4" /> .md</Button>
-                <Button variant="outline" onClick={() => handleDownload('docx')} disabled={isLoading || isPrinting}><Download className="mr-2 h-4 w-4" /> .docx</Button>
+                <Button variant="outline" onClick={() => handleDownload('doc')} disabled={isLoading || isPrinting}><Download className="mr-2 h-4 w-4" /> .doc</Button>
                 <Button variant="outline" onClick={handlePrintPdf} disabled={isLoading || isPrinting}>
                   {isPrinting ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Printer className="mr-2 h-4 w-4" />} PDF...
                 </Button>

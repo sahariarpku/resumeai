@@ -123,7 +123,7 @@ export default function MyResumesPage() {
     toast({title: "Download Started", description: `${link.download} is downloading.`});
   };
 
-  const handleDownloadDocx = (content: string, filename: string) => {
+  const handleDownloadDoc = (content: string, filename: string) => {
     if (!content) {
         toast({ title: "No content to download.", variant: "destructive" });
         return;
@@ -132,12 +132,12 @@ export default function MyResumesPage() {
     const blob = new Blob([finalHtmlContent], { type: 'application/msword' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = `${filename.replace(/\s+/g, '_')}.docx`;
+    link.download = `${filename.replace(/\s+/g, '_')}.doc`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(link.href);
-    toast({ title: "Word (.docx) Download Started" });
+    toast({ title: "Word (.doc) Download Started" });
   };
   
   const handlePrintPdf = (content: string, filename: string) => {
@@ -213,8 +213,8 @@ export default function MyResumesPage() {
                     <DropdownMenuItem onClick={() => handleDownloadMd(resume.tailoredContent, resume.name)}>
                       <FileText className="mr-2 h-4 w-4" /> Download as .md
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => handleDownloadDocx(resume.tailoredContent, resume.name)}>
-                      <FileText className="mr-2 h-4 w-4" /> Download as .docx
+                    <DropdownMenuItem onClick={() => handleDownloadDoc(resume.tailoredContent, resume.name)}>
+                      <FileText className="mr-2 h-4 w-4" /> Download as .doc
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => handlePrintPdf(resume.tailoredContent, resume.name)} disabled={isPrinting}>
                        {isPrinting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Printer className="mr-2 h-4 w-4" />}

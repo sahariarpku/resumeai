@@ -293,7 +293,11 @@ const PROFESSIONAL_DOCUMENT_STYLES = `
 export function profileToResumeHtml(profile: UserProfile): string {
   let html = `
     <!DOCTYPE html>
-    <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
+    <html xmlns:v="urn:schemas-microsoft-com:vml"
+    xmlns:o="urn:schemas-microsoft-com:office:office"
+    xmlns:w="urn:schemas-microsoft-com:office:word"
+    xmlns:m="http://schemas.microsoft.com/office/2004/12/omml"
+    xmlns="http://www.w3.org/TR/REC-html40">
     <head>
       <meta charset="UTF-8">
       <title>${profile.fullName ? `${profile.fullName} - Resume` : 'Resume'}</title>
@@ -573,7 +577,11 @@ export function textToProfessionalHtml(text: string, documentTitle: string): str
 
   return `
     <!DOCTYPE html>
-    <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
+    <html xmlns:v="urn:schemas-microsoft-com:vml"
+    xmlns:o="urn:schemas-microsoft-com:office:office"
+    xmlns:w="urn:schemas-microsoft-com:office:word"
+    xmlns:m="http://schemas.microsoft.com/office/2004/12/omml"
+    xmlns="http://www.w3.org/TR/REC-html40">
     <head>
       <meta charset="UTF-8">
       <title>${documentTitle}</title>
@@ -604,5 +612,3 @@ export function textToProfessionalHtml(text: string, documentTitle: string): str
     </html>
   `;
 }
-
-

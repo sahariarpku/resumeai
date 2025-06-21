@@ -456,18 +456,18 @@ export default function ProfilePage() {
     toast({ title: "Markdown Download Started" });
   };
 
-  const handleDownloadDocx = () => {
+  const handleDownloadDoc = () => {
     if (!currentUser) { toast({ title: "Not Authenticated", variant: "destructive" }); return; }
     const resumeHtml = profileToResumeHtml(profileData);
     const blob = new Blob([resumeHtml], { type: 'application/msword;charset=utf-8' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = `${(profileData.fullName || currentUser.displayName || 'resume').replace(/\s+/g, '_')}.docx`;
+    link.download = `${(profileData.fullName || currentUser.displayName || 'resume').replace(/\s+/g, '_')}.doc`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(link.href);
-    toast({ title: "Word (.docx) Download Started" });
+    toast({ title: "Word (.doc) Download Started" });
   };
   
   const handlePrintPdf = () => {
@@ -871,7 +871,7 @@ export default function ProfilePage() {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
                     <DropdownMenuItem onClick={handleDownloadMd}><FileText className="mr-2 h-4 w-4" /> Download as .md</DropdownMenuItem>
-                    <DropdownMenuItem onClick={handleDownloadDocx}><FileText className="mr-2 h-4 w-4" /> Download as .docx</DropdownMenuItem>
+                    <DropdownMenuItem onClick={handleDownloadDoc}><FileText className="mr-2 h-4 w-4" /> Download as .doc</DropdownMenuItem>
                     <DropdownMenuItem onClick={handlePrintPdf} disabled={isPrinting}>
                       {isPrinting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Printer className="mr-2 h-4 w-4" />}
                       Save as PDF...
