@@ -5,7 +5,7 @@ import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { FileText, Download, Trash2, PlusCircle, FileSearch, Info, Loader2 } from "lucide-react";
+import { FileText, Download, Trash2, PlusCircle, FileSearch, Info, Loader2, Printer } from "lucide-react";
 import Link from "next/link";
 import type { StoredResume } from "@/lib/types";
 import {
@@ -20,6 +20,12 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
@@ -29,6 +35,7 @@ import { useAuth } from '@/contexts/auth-context';
 import { db } from '@/lib/firebase';
 import { collection, query, orderBy, onSnapshot, doc, deleteDoc, Timestamp } from "firebase/firestore";
 import { useRouter } from 'next/navigation';
+import { textToProfessionalHtml } from '@/lib/profile-utils';
 
 
 export default function MyResumesPage() {
@@ -99,16 +106,57 @@ export default function MyResumesPage() {
     }
   };
 
-  const handleDownload = (content: string, filename: string) => {
-    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+  const handleDownloadMd = (content: string, filename: string) => {
+    if (!content) {
+        toast({ title: "No content to download.", variant: "destructive" });
+        return;
+    }
+    const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = filename;
+    link.download = `${filename.replace(/\s+/g, '_')}.md`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(link.href);
-    toast({title: "Download Started", description: `${filename} is downloading.`});
+    toast({title: "Download Started", description: `${link.download} is downloading.`});
+  };
+
+  const handleDownloadDocx = (content: string, filename: string) => {
+    if (!content) {
+        toast({ title: "No content to download.", variant: "destructive" });
+        return;
+    }
+    const finalHtmlContent = textToProfessionalHtml(content, filename);
+    const blob = new Blob([finalHtmlContent], { type: 'application/msword' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `${filename.replace(/\s+/g, '_')}.docx`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(link.href);
+    toast({ title: "Word (.docx) Download Started" });
+  };
+  
+  const handlePrintToPdf = (content: string, filename: string) => {
+    if (!content) {
+        toast({ title: "No content to print.", variant: "destructive" });
+        return;
+    }
+    const htmlContent = textToProfessionalHtml(content, filename);
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(htmlContent);
+      printWindow.document.close();
+      printWindow.focus();
+      setTimeout(() => {
+        printWindow.print();
+      }, 500);
+      toast({ title: `Preparing PDF for Print` });
+    } else {
+      toast({ title: "Print Error", description: "Could not open print window. Check pop-up blocker.", variant: "destructive" });
+    }
   };
 
   if (isLoading) {
@@ -148,7 +196,22 @@ export default function MyResumesPage() {
               </CardHeader>
               <CardContent className="flex-grow"><p className="text-sm text-muted-foreground line-clamp-3">{resume.tailoredContent.substring(0, 150)}...</p></CardContent>
               <CardFooter className="grid grid-cols-2 gap-2">
-                <Button variant="outline" onClick={() => handleDownload(resume.tailoredContent, `${resume.name.replace(/\s+/g, '_')}.txt`)}><Download className="mr-2 h-4 w-4" /> Download</Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" className="w-full"><Download className="mr-2 h-4 w-4" /> Download</Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => handleDownloadMd(resume.tailoredContent, resume.name)}>
+                      <FileText className="mr-2 h-4 w-4" /> Download as .md
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleDownloadDocx(resume.tailoredContent, resume.name)}>
+                      <FileText className="mr-2 h-4 w-4" /> Download as .docx
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handlePrintToPdf(resume.tailoredContent, resume.name)}>
+                      <Printer className="mr-2 h-4 w-4" /> Print to PDF...
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
                 <AlertDialog><AlertDialogTrigger asChild><Button variant="destructive" className="w-full"><Trash2 className="mr-2 h-4 w-4" /> Delete</Button></AlertDialogTrigger>
                   <AlertDialogContent>
                     <AlertDialogHeader><AlertDialogTitle>Are you sure?</AlertDialogTitle><AlertDialogDescription>This action cannot be undone. This will permanently delete the resume &quot;{resume.name}&quot; from the cloud.</AlertDialogDescription></AlertDialogHeader>
