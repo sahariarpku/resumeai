@@ -1,81 +1,72 @@
+
 'use server';
 /**
- * @fileOverview Genkit flow to perform a job search using a direct call to the Firecrawl search API.
+ * @fileOverview Genkit flow to perform a job search using the Firecrawl search API.
  *
  * - jobSearch - A function that performs the job search using a natural language prompt.
  * - JobSearchInput - The input type for the function.
  * - JobSearchOutput - The return type for the function.
  */
+import { ai } from '@/ai/genkit';
 import { JobSearchInputSchema, JobSearchOutputSchema } from '@/lib/schemas';
 import type { JobSearchInput, JobSearchOutput, JobExtractionResult } from '@/lib/schemas';
+import FireCrawlApp from '@mendable/firecrawl-js';
 
-export async function jobSearch(
-  input: JobSearchInput
-): Promise<JobSearchOutput> {
-  const apiKey = process.env.FIRECRAWL_API_KEY;
-  if (!apiKey) {
-    throw new Error('Firecrawl API key not found in environment variables.');
-  }
+export type { JobSearchInput, JobSearchOutput };
 
-  const payload = {
-    query: input.prompt,
-    limit: 7,
-    scrapeOptions: {
-      formats: ["markdown"]
+export const jobSearch = ai.defineFlow(
+  {
+    name: 'jobSearchFlow',
+    inputSchema: JobSearchInputSchema,
+    outputSchema: JobSearchOutputSchema,
+  },
+  async (input) => {
+    const apiKey = process.env.FIRECRAWL_API_KEY;
+    if (!apiKey) {
+      throw new Error('Firecrawl API key not found in environment variables.');
     }
-  };
+    
+    console.log(`--- Starting Job Search with prompt: "${input.prompt}" ---`);
+    const app = new FireCrawlApp({ apiKey });
 
-  console.log('--- Calling Firecrawl Search API ---');
-  console.log('Endpoint: https://api.firecrawl.dev/v1/search');
-  console.log('Payload:', JSON.stringify(payload, null, 2));
+    try {
+      // Use the .search() method for broad, prompt-based searches
+      const searchResult = await app.search(input.prompt, {
+        limit: 9, // Fetch a few results
+        scrapeOptions: {
+          // Ask for markdown as it's easier to process than raw HTML
+          formats: ["markdown"]
+        }
+      });
+      
+      console.log('--- Firecrawl Search API Success ---');
+      // The search result is an array of objects
+      if (!searchResult || !Array.isArray(searchResult.data)) {
+        console.error('Firecrawl search returned an unexpected format.');
+        throw new Error('Invalid response format from Firecrawl search API.');
+      }
+      
+      // Map the raw result to our defined JobExtractionResult schema
+      const jobs: JobExtractionResult[] = searchResult.data.map((item: any) => ({
+        title: item.title || 'Untitled Job Posting',
+        url: item.url || undefined,
+        markdown: item.markdown || 'No description extracted.',
+        company: item.company || undefined, // These fields may or may not exist
+        location: item.location || undefined,
+      }));
 
-  try {
-    const response = await fetch('https://api.firecrawl.dev/v1/search', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify(payload),
-    });
+      return { jobs };
 
-    const responseBody = await response.json();
-
-    if (!response.ok) {
-      console.error('--- Firecrawl Search API Failed ---');
-      console.error('Status:', response.status);
-      console.error('Response Body:', JSON.stringify(responseBody, null, 2));
-      const errorMessage = responseBody?.error || `API responded with status ${response.status}`;
+    } catch (error) {
+      console.error('--- Firecrawl Search Request Failed ---');
+      console.error('Full error object:', error);
+      
+      let errorMessage = 'An unknown error occurred during the job search.';
+      if (error instanceof Error) {
+          errorMessage = error.message;
+      }
+      // Re-throw the error so the client-side can catch it
       throw new Error(`Job search failed: ${errorMessage}`);
     }
-
-    console.log('--- Firecrawl Search API Success ---');
-    console.log('Received raw response:', JSON.stringify(responseBody, null, 2));
-    
-    if (!responseBody || !Array.isArray(responseBody.data)) {
-        console.error('Firecrawl search returned an unexpected format. Expected an object with a "data" array.');
-        throw new Error('Invalid response format from Firecrawl search API.');
-    }
-
-    const jobs: JobExtractionResult[] = responseBody.data.map((item: any) => ({
-      title: item.title || 'Untitled Job Posting',
-      url: item.url || undefined,
-      markdown: item.markdown || 'No description extracted.',
-      company: item.company || undefined,
-      location: item.location || undefined,
-    }));
-
-    return { jobs };
-
-  } catch (error) {
-    console.error('--- Firecrawl Search Request Failed ---');
-    console.error('Full error object:', error);
-    
-    let errorMessage = 'An unknown error occurred during the job search.';
-    if (error instanceof Error) {
-        errorMessage = error.message;
-    }
-
-    throw new Error(`Job search failed: ${errorMessage}`);
   }
-}
+);
