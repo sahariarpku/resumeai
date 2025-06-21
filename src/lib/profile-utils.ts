@@ -293,11 +293,19 @@ const PROFESSIONAL_DOCUMENT_STYLES = `
 export function profileToResumeHtml(profile: UserProfile): string {
   let html = `
     <!DOCTYPE html>
-    <html lang="en">
+    <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
     <head>
       <meta charset="UTF-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1.0">
       <title>${profile.fullName ? `${profile.fullName} - Resume` : 'Resume'}</title>
+      <!--[if gte mso 9]>
+      <xml>
+        <w:WordDocument>
+          <w:View>Print</w:View>
+          <w:Zoom>90</w:Zoom>
+          <w:DoNotOptimizeForBrowser/>
+        </w:WordDocument>
+      </xml>
+      <![endif]-->
       ${PROFESSIONAL_DOCUMENT_STYLES}
     </head>
     <body>
@@ -565,11 +573,19 @@ export function textToProfessionalHtml(text: string, documentTitle: string): str
 
   return `
     <!DOCTYPE html>
-    <html lang="en">
+    <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
     <head>
       <meta charset="UTF-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1.0">
       <title>${documentTitle}</title>
+      <!--[if gte mso 9]>
+      <xml>
+        <w:WordDocument>
+          <w:View>Print</w:View>
+          <w:Zoom>90</w:Zoom>
+          <w:DoNotOptimizeForBrowser/>
+        </w:WordDocument>
+      </xml>
+      <![endif]-->
       ${PROFESSIONAL_DOCUMENT_STYLES}
     </head>
     <body>
@@ -588,4 +604,5 @@ export function textToProfessionalHtml(text: string, documentTitle: string): str
     </html>
   `;
 }
+
 
