@@ -6,7 +6,7 @@ import { useForm, Controller } from "react-hook-form";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Search, Briefcase, BarChart3, ArrowRight } from "lucide-react";
+import { Loader2, Search, Briefcase, BarChart3, ArrowRight, ExternalLink } from "lucide-react";
 import { useAuth } from '@/contexts/auth-context';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -19,6 +19,7 @@ import { calculateProfileJdMatch } from '@/ai/flows/calculate-profile-jd-match-f
 import { useRouter } from 'next/navigation';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, enableNetwork, setDoc, Timestamp } from 'firebase/firestore';
+import Link from 'next/link';
 
 
 const TAILOR_RESUME_PREFILL_JD_KEY = "tailorResumePrefillJD";
@@ -310,6 +311,11 @@ export default function JobSearchPage() {
                   )}
                 </CardContent>
                 <CardFooter className="flex flex-col gap-2 items-stretch">
+                   <Button asChild variant="secondary">
+                      <Link href={job.jobUrl || job.link} target="_blank" rel="noopener noreferrer">
+                        View Original Post <ExternalLink className="ml-2 h-4 w-4" />
+                      </Link>
+                    </Button>
                    <Button variant="outline" onClick={() => handleCalculateMatchScore(job.id)} disabled={!job.requirementsSummary || !!job.isCalculatingMatch}>
                      {job.isCalculatingMatch ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <BarChart3 className="mr-2 h-4 w-4" />}
                      Calculate CV Match
