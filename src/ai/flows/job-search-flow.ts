@@ -21,16 +21,9 @@ export const jobSearch = ai.defineFlow(
     outputSchema: JobSearchOutputSchema,
   },
   async (input) => {
-    const apiKey = process.env.FIRECRAWL_API_KEY;
-    if (!apiKey) {
-      throw new Error('Firecrawl API key not found in environment variables.');
-    }
-    
-    console.log(`--- Starting Job Search with prompt: "${input.prompt}" ---`);
-    const app = new FireCrawlApp({ apiKey });
+    const app = new FireCrawlApp({apiKey: process.env.FIRECRAWL_API_KEY});
 
     try {
-      // Use the .search() method for broad, prompt-based searches
       const searchResult = await app.search(input.prompt, {
         limit: 9, // Fetch a few results
         scrapeOptions: {
