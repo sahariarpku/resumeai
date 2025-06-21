@@ -18,7 +18,7 @@ import { extractJobDetailsFromRssItem } from '@/ai/flows/extract-rss-item-flow';
 import { calculateProfileJdMatch } from '@/ai/flows/calculate-profile-jd-match-flow';
 import { useRouter } from 'next/navigation';
 import { db } from '@/lib/firebase';
-import { doc, getDoc, enableNetwork, setDoc, Timestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, Timestamp } from 'firebase/firestore';
 import Link from 'next/link';
 
 
@@ -153,7 +153,7 @@ export default function JobSearchPage() {
     setJobPostings(prev => prev.map(job => job.id === jobId ? { ...job, isCalculatingMatch: true } : job));
 
     try {
-      await enableNetwork(db);
+      
       const userDocRef = doc(db, "users", currentUser.uid);
       const userDocSnap = await getDoc(userDocRef);
       if (!userDocSnap.exists()) {
@@ -195,7 +195,7 @@ export default function JobSearchPage() {
     if (!job.requirementsSummary) { toast({ title: "Job Details Missing", description: "Please wait for AI to extract job details before tailoring.", variant: "default" }); return; }
     
     try {
-      await enableNetwork(db);
+      
       const userDocRef = doc(db, "users", currentUser.uid);
       const userDocSnap = await getDoc(userDocRef);
       if (!userDocSnap.exists()) {
@@ -340,3 +340,4 @@ export default function JobSearchPage() {
     </div>
   );
 }
+

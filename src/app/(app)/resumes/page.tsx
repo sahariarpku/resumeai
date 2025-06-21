@@ -27,7 +27,7 @@ import {
 } from "@/components/ui/tooltip";
 import { useAuth } from '@/contexts/auth-context';
 import { db } from '@/lib/firebase';
-import { collection, query, orderBy, onSnapshot, doc, deleteDoc, Timestamp, enableNetwork } from "firebase/firestore";
+import { collection, query, orderBy, onSnapshot, doc, deleteDoc, Timestamp } from "firebase/firestore";
 import { useRouter } from 'next/navigation';
 
 
@@ -81,7 +81,7 @@ export default function MyResumesPage() {
       return;
     }
     try {
-      await enableNetwork(db);
+      
       const resumeDocRef = doc(db, "users", currentUser.uid, "resumes", id);
       await deleteDoc(resumeDocRef);
       toast({ title: "Resume Deleted", variant: "destructive" });
@@ -164,4 +164,3 @@ export default function MyResumesPage() {
     </TooltipProvider>
   );
 }
-

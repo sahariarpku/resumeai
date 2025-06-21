@@ -24,7 +24,7 @@ import { Loader2, Download, FileText, Settings2, ListRestart, Printer } from 'lu
 import { Separator } from '@/components/ui/separator';
 import { useAuth } from '@/contexts/auth-context';
 import { db } from '@/lib/firebase';
-import { doc, getDoc, setDoc, serverTimestamp, enableNetwork } from 'firebase/firestore';
+import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 
 interface CvCustomizationModalProps {
   isOpen: boolean;
@@ -58,7 +58,7 @@ export function CvCustomizationModal({ isOpen, onOpenChange, currentProfile, onO
         const loadProfileForModal = async () => {
             setIsLoading(true);
             try {
-                await enableNetwork(db);
+                
                 const userDocRef = doc(db, "users", currentUser.uid);
                 const userDocSnap = await getDoc(userDocRef);
                 if (userDocSnap.exists()) {

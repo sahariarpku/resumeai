@@ -33,7 +33,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAuth } from '@/contexts/auth-context';
 import { db } from '@/lib/firebase';
-import { collection, query, orderBy, onSnapshot, doc, setDoc, deleteDoc, Timestamp, getDoc, enableNetwork } from "firebase/firestore"; 
+import { collection, query, orderBy, onSnapshot, doc, setDoc, deleteDoc, Timestamp, getDoc } from "firebase/firestore"; 
 
 const TAILOR_RESUME_PREFILL_JD_KEY = "tailorResumePrefillJD";
 const TAILOR_RESUME_PREFILL_RESUME_KEY = "tailorResumePrefillResume";
@@ -117,7 +117,7 @@ export default function JobDescriptionsPage() {
     };
 
     try {
-      await enableNetwork(db);
+      
       let jdIdToUse: string;
       if (editingJd && editingJd.id) {
         jdIdToUse = editingJd.id;
@@ -168,7 +168,7 @@ export default function JobDescriptionsPage() {
       return;
     }
     try {
-      await enableNetwork(db);
+      
       const jdDocRef = doc(db, "users", currentUser.uid, "jobDescriptions", id);
       await deleteDoc(jdDocRef);
       toast({ title: "Job Application Deleted", variant: "destructive" });
@@ -252,7 +252,7 @@ export default function JobDescriptionsPage() {
   const handleTailorResumeWithProfile = async (jd: JobDescriptionItem) => {
     if (!currentUser) { toast({ title: "Not Authenticated", description: "Please sign in to tailor resumes.", variant: "destructive" }); return; }
     try {
-      await enableNetwork(db);
+      
       const userDocRef = doc(db, "users", currentUser.uid);
       const userDocSnap = await getDoc(userDocRef);
       if (!userDocSnap.exists()) {
@@ -286,7 +286,7 @@ export default function JobDescriptionsPage() {
     if (!currentUser) { toast({ title: "Not Authenticated", description: "Please sign in to calculate match scores.", variant: "destructive" }); return; }
     setCalculatingMatchId(jdId);
     try {
-      await enableNetwork(db);
+      
       const userDocRef = doc(db, "users", currentUser.uid);
       const userDocSnap = await getDoc(userDocRef);
       if (!userDocSnap.exists()) {

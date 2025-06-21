@@ -68,7 +68,7 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { Label } from '@/components/ui/label';
 import { useAuth } from '@/contexts/auth-context';
 import { db } from '@/lib/firebase';
-import { doc, getDoc, setDoc, serverTimestamp, enableNetwork, Timestamp } from "firebase/firestore";
+import { doc, getDoc, setDoc, serverTimestamp, Timestamp } from "firebase/firestore";
 import { CvCustomizationModal } from '@/components/cv-customization-modal';
 
 
@@ -162,7 +162,7 @@ export default function ProfilePage() {
     const loadProfile = async () => {
       if (currentUser) {
         try {
-          await enableNetwork(db); 
+           
           const userDocRef = doc(db, "users", currentUser.uid);
           const userDocSnap = await getDoc(userDocRef);
           let loadedProfile: UserProfile;
@@ -268,7 +268,7 @@ export default function ProfilePage() {
 
 
     try {
-      await enableNetwork(db); 
+       
       const userDocRef = doc(db, "users", currentUser.uid);
       await setDoc(userDocRef, profileToSave, { merge: true }); 
       

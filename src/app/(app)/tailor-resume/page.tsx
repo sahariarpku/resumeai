@@ -23,7 +23,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from '@/contexts/auth-context';
 import { db } from '@/lib/firebase';
-import { doc, getDoc, setDoc, Timestamp, enableNetwork } from "firebase/firestore";
+import { doc, getDoc, setDoc, Timestamp } from "firebase/firestore";
 
 const TAILOR_RESUME_PREFILL_JD_KEY = "tailorResumePrefillJD";
 const TAILOR_RESUME_PREFILL_RESUME_KEY = "tailorResumePrefillResume";
@@ -130,7 +130,7 @@ export default function TailorResumePage() {
       let loadedProfile: UserProfile | null = null;
       if (currentUser) {
         try {
-          await enableNetwork(db);
+          
           const userDocRef = doc(db, "users", currentUser.uid);
           const userDocSnap = await getDoc(userDocRef);
           if (userDocSnap.exists()) {
@@ -233,7 +233,7 @@ export default function TailorResumePage() {
     }
 
     try {
-      await enableNetwork(db);
+      
       const resumeDocRef = doc(db, "users", currentUser.uid, "resumes", newResumeId);
       await setDoc(resumeDocRef, newResume);
       toast({ title: "Resume Saved!", description: "Your tailored resume has been saved to the cloud." });
@@ -392,4 +392,3 @@ export default function TailorResumePage() {
     </div>
   );
 }
-
