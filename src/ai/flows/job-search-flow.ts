@@ -1,6 +1,6 @@
 'use server';
 /**
- * @fileOverview Genkit flow to perform a sophisticated job search using the Firecrawl search API.
+ * @fileOverview Genkit flow to perform a job search using the Firecrawl search API.
  *
  * - jobSearch - A function that performs the job search using a natural language prompt.
  * - JobSearchInput - The input type for the function.
