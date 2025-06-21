@@ -13,3 +13,4 @@ import '@/ai/flows/suggest-cv-section-order-flow.ts'; // Added CV reordering flo
 import '@/ai/flows/generate-latex-cv-flow.ts'; // Added LaTeX CV generation flow
 import '@/ai/flows/extract-rss-item-flow.ts'; // Added new flow for RSS item parsing
 import '@/ai/flows/extract-profile-from-cv-flow.ts'; // Added new flow for CV parsing
+import '@/ai/flows/select-job-feed-flow.ts'; // Added new flow for selecting job feed

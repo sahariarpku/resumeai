@@ -1,19 +1,19 @@
 
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useForm, Controller } from "react-hook-form";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Search, Briefcase, BarChart3, ArrowRight } from "lucide-react";
 import { useAuth } from '@/contexts/auth-context';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from '@/components/ui/label';
-import { Separator } from '@/components/ui/separator';
-import type { RssFeed, JobPostingRssItem, JobDescriptionItem, UserProfile } from '@/lib/types';
+import { Textarea } from '@/components/ui/textarea';
+import type { JobPostingRssItem, JobDescriptionItem, UserProfile } from '@/lib/types';
 import { profileToResumeText } from '@/lib/profile-utils';
-import { getFeedCategoriesByType, getFeedDetailsByCategoryAndType } from '@/lib/job-rss-feeds';
+import { PREDEFINED_RSS_FEEDS } from '@/lib/job-rss-feeds';
+import { selectJobFeed } from '@/ai/flows/select-job-feed-flow';
 import { extractJobDetailsFromRssItem } from '@/ai/flows/extract-rss-item-flow';
 import { calculateProfileJdMatch } from '@/ai/flows/calculate-profile-jd-match-flow';
 import { useRouter } from 'next/navigation';
@@ -32,34 +32,11 @@ export default function JobSearchPage() {
   const [jobPostings, setJobPostings] = useState<JobPostingRssItem[]>([]);
   const [error, setError] = useState<string | null>(null);
 
-  // States for dropdown content
-  const [categories, setCategories] = useState<string[]>([]);
-  const [feeds, setFeeds] = useState<RssFeed[]>([]);
-
-  const { control, handleSubmit, watch, setValue } = useForm({
+  const { control, handleSubmit } = useForm({
     defaultValues: {
-      feedType: 'subjectArea' as RssFeed['type'],
-      category: '',
-      feedUrl: ''
+      prompt: '',
     }
   });
-  const watchedFeedType = watch("feedType");
-  const watchedCategory = watch("category");
-
-  useEffect(() => {
-    setCategories(getFeedCategoriesByType(watchedFeedType));
-    setValue("category", '');
-    setValue("feedUrl", '');
-  }, [watchedFeedType, setValue]);
-
-  useEffect(() => {
-    if(watchedCategory) {
-      setFeeds(getFeedDetailsByCategoryAndType(watchedFeedType, watchedCategory));
-    } else {
-      setFeeds([]);
-    }
-    setValue("feedUrl", '');
-  }, [watchedCategory, watchedFeedType, setValue]);
 
   const parseRssXml = (xmlString: string): JobPostingRssItem[] => {
     try {
@@ -124,17 +101,26 @@ export default function JobSearchPage() {
     setJobPostings(successfullyProcessed);
   };
   
-  const onSubmit = async (data: { feedUrl: string }) => {
+  const onSubmit = async (data: { prompt: string }) => {
     if (!currentUser) { toast({ title: "Not Authenticated", variant: "destructive" }); return; }
-    if (!data.feedUrl) { toast({ title: "No Feed Selected", description: "Please select a job feed to search." }); return; }
+    if (!data.prompt) { toast({ title: "No Prompt Provided", description: "Please describe the job you're looking for." }); return; }
 
     setIsLoading(true);
     setError(null);
     setJobPostings([]);
-    toast({ title: "Fetching Job Feed...", description: "Please wait while we retrieve the latest job postings." });
+    toast({ title: "Thinking...", description: "AI is selecting the best job feed for your request." });
 
     try {
-      const response = await fetch(`/api/fetch-rss?url=${encodeURIComponent(data.feedUrl)}`);
+       // Step 1: AI selects the feed
+       const feedSelection = await selectJobFeed({
+         userPrompt: data.prompt,
+         availableFeeds: PREDEFINED_RSS_FEEDS,
+       });
+
+       toast({ title: "Feed Selected!", description: feedSelection.reasoning || `Using feed: ${feedSelection.selectedFeedUrl}` });
+
+       // Step 2: Fetch the selected feed
+      const response = await fetch(`/api/fetch-rss?url=${encodeURIComponent(feedSelection.selectedFeedUrl)}`);
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || `Failed to fetch RSS feed: ${response.statusText}`);
@@ -259,75 +245,40 @@ export default function JobSearchPage() {
     <div className="container mx-auto py-8 space-y-8">
       <div>
         <h1 className="font-headline text-3xl font-bold flex items-center">
-          <Search className="mr-3 h-8 w-8 text-primary" /> Job Feed Search
+          <Search className="mr-3 h-8 w-8 text-primary" /> AI Job Search Assistant
         </h1>
         <p className="text-muted-foreground">
-          Select a feed to browse the latest job opportunities from jobs.ac.uk.
+          Describe the job you're looking for, and our AI assistant will find relevant openings.
         </p>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle className="font-headline">Select a Job Feed</CardTitle>
+          <CardTitle className="font-headline">Find Your Next Job</CardTitle>
           <CardDescription>
-            Choose a category and then a specific feed to find relevant job listings.
+            Tell us what you're looking for in natural language. For example: "I'm looking for a senior research fellow position in quantum physics in Cambridge, UK."
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="space-y-1">
-                <Label>Feed Type</Label>
-                <Controller
-                  name="feedType"
-                  control={control}
-                  render={({ field }) => (
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <SelectTrigger><SelectValue placeholder="Select type..." /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="subjectArea">Subject Area</SelectItem>
-                        <SelectItem value="location">Location</SelectItem>
-                        <SelectItem value="jobRole">Professional Service</SelectItem>
-                        <SelectItem value="academicLevel">Job Level</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  )}
-                />
-              </div>
-               <div className="space-y-1">
-                <Label>Category</Label>
-                <Controller
-                  name="category"
-                  control={control}
-                  render={({ field }) => (
-                    <Select onValueChange={field.onChange} value={field.value} disabled={!watchedFeedType}>
-                      <SelectTrigger><SelectValue placeholder="Select category..." /></SelectTrigger>
-                      <SelectContent>
-                        {categories.map(cat => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  )}
-                />
-              </div>
-              <div className="space-y-1">
-                <Label>Specific Feed</Label>
-                 <Controller
-                  name="feedUrl"
-                  control={control}
-                  render={({ field }) => (
-                    <Select onValueChange={field.onChange} value={field.value} disabled={!watchedCategory}>
-                      <SelectTrigger><SelectValue placeholder="Select feed..." /></SelectTrigger>
-                      <SelectContent>
-                        {feeds.map(feed => <SelectItem key={feed.url} value={feed.url}>{feed.name}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  )}
-                />
-              </div>
+            <div className="space-y-1">
+              <Label htmlFor="job-prompt">Your Job Request</Label>
+              <Controller
+                name="prompt"
+                control={control}
+                render={({ field }) => (
+                  <Textarea
+                    id="job-prompt"
+                    placeholder="e.g., Post-doc in machine learning, focusing on NLP, in London..."
+                    rows={3}
+                    {...field}
+                  />
+                )}
+              />
             </div>
             <Button type="submit" disabled={isLoading || !currentUser} size="lg">
               {isLoading ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Search className="mr-2 h-5 w-5" />}
-              Fetch Jobs
+              Search for Jobs
             </Button>
           </form>
         </CardContent>
