@@ -11,7 +11,7 @@ runConfig:
 # For production, consider using Firebase Secret Manager for sensitive keys.
 env:
   - variable: NEXT_PUBLIC_FIREBASE_API_KEY
-    value: AIzaSyBz0PpzsIoStvCGNobvUZD8CTf6XseXUAA
+    value: 
   - variable: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
     value: resumeai-29368.firebaseapp.com
   - variable: NEXT_PUBLIC_FIREBASE_PROJECT_ID
