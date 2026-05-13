@@ -1,0 +1,229 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Default (mid) theme in @layer base ──────────────────────── */
+@layer base {
+  :root {
+    --t-page-bg:    #f2f1ed;
+    --t-card-bg:    #ffffff;
+    --t-header-bg:  rgba(242, 241, 237, 0.88);
+    --t-text:       #26251e;
+    --t-text-2:     rgba(38, 37, 30, 0.55);
+    --t-text-3:     rgba(38, 37, 30, 0.35);
+    --t-border-1:   rgba(38, 37, 30, 0.08);
+    --t-border-2:   rgba(38, 37, 30, 0.14);
+    --t-surface-1:  #f7f7f4;
+    --t-surface-2:  #f2f1ed;
+    --t-surface-3:  #ebeae5;
+    --t-surface-4:  #e6e5e0;
+    --t-surface-5:  #e1e0db;
+    --t-scrollbar:  rgba(38, 37, 30, 0.2);
+    --t-selection:  rgba(245, 78, 0, 0.15);
+    --t-cta-card:   #26251e;
+    --t-cta-text:   rgba(242, 241, 237, 0.5);
+    --c-orange:   #f54e00;
+    --c-crimson:  #cf2d56;
+    --c-success:  #1f8a65;
+    --c-gold:     #c08532;
+    --background:             47 17% 94%;
+    --foreground:             47 12% 13%;
+    --card:                   0 0% 100%;
+    --card-foreground:        47 12% 13%;
+    --popover:                48 20% 97%;
+    --popover-foreground:     47 12% 13%;
+    --primary:                19 100% 48%;
+    --primary-foreground:     0 0% 100%;
+    --secondary:              50 14% 91%;
+    --secondary-foreground:   47 12% 13%;
+    --muted:                  50 10% 89%;
+    --muted-foreground:       47 12% 40%;
+    --accent:                 50 14% 91%;
+    --accent-foreground:      47 12% 13%;
+    --destructive:            345 65% 49%;
+    --destructive-foreground: 0 0% 100%;
+    --border:                 47 9% 87%;
+    --input:                  50 10% 89%;
+    --ring:                   19 100% 48%;
+    --radius:                 0.5rem;
+    --chart-1: 19 100% 48%; --chart-2: 159 63% 33%; --chart-3: 38 71% 47%;
+    --chart-4: 345 65% 49%; --chart-5: 47 12% 40%;
+    --sidebar-background:         47 17% 94%;
+    --sidebar-foreground:         47 12% 13%;
+    --sidebar-primary:            19 100% 48%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent:             50 14% 91%;
+    --sidebar-accent-foreground:  47 12% 13%;
+    --sidebar-border:             47 9% 87%;
+    --sidebar-ring:               19 100% 48%;
+  }
+
+  /* neutralise Next.js dark class */
+  .dark { color-scheme: light; }
+
+  * { @apply border-border; }
+
+  body {
+    @apply bg-background text-foreground;
+    background-color: var(--t-page-bg);
+    color: var(--t-text);
+    font-family: 'Plus Jakarta Sans', 'Inter', system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    transition: background-color 200ms ease, color 200ms ease;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+    color: var(--t-text);
+    letter-spacing: -0.02em;
+  }
+
+  code, pre, kbd, samp {
+    font-family: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, Monaco, Consolas, monospace;
+  }
+}
+
+/* ── Component utilities ─────────────────────────────────────── */
+@layer components {
+  .border-warm     { border: 1px solid var(--t-border-1); }
+  .border-warm-md  { border: 1px solid var(--t-border-2); }
+
+  .card-cursor {
+    background: var(--t-card-bg);
+    border: 1px solid var(--t-border-1);
+    border-radius: 8px;
+    box-shadow: rgba(0,0,0,0.06) 0px 4px 16px, rgba(0,0,0,0.04) 0px 2px 6px;
+    transition: box-shadow 200ms ease, background 200ms ease;
+  }
+  .card-cursor:hover { box-shadow: rgba(0,0,0,0.12) 0px 12px 36px, rgba(0,0,0,0.08) 0px 4px 12px; }
+
+  .card-elevated {
+    background: var(--t-card-bg);
+    border: 1px solid var(--t-border-1);
+    border-radius: 8px;
+    box-shadow: rgba(0,0,0,0.18) 0px 28px 70px, rgba(0,0,0,0.12) 0px 14px 32px;
+  }
+
+  .pill-tag {
+    background: var(--t-surface-4);
+    color: var(--t-text-2);
+    border-radius: 9999px;
+    padding: 3px 8px;
+    font-size: 13px;
+    line-height: 1.4;
+    display: inline-flex;
+    align-items: center;
+    transition: color 150ms ease;
+  }
+  .pill-tag:hover { color: var(--c-crimson); }
+
+  .hover-crimson { transition: color 150ms ease; }
+  .hover-crimson:hover { color: var(--c-crimson) !important; }
+
+  .section-divider { border-top: 1px solid var(--t-border-1); }
+}
+
+/* ── Theme overrides — OUTSIDE @layer so they're never purged ── */
+
+html.theme-white {
+  --t-page-bg:    #f8f8f8;
+  --t-card-bg:    #ffffff;
+  --t-header-bg:  rgba(248, 248, 248, 0.88);
+  --t-text:       #171717;
+  --t-text-2:     rgba(23, 23, 23, 0.55);
+  --t-text-3:     rgba(23, 23, 23, 0.35);
+  --t-border-1:   rgba(0, 0, 0, 0.07);
+  --t-border-2:   rgba(0, 0, 0, 0.13);
+  --t-surface-1:  #ffffff;
+  --t-surface-2:  #f8f8f8;
+  --t-surface-3:  #f2f2f2;
+  --t-surface-4:  #ebebeb;
+  --t-surface-5:  #e4e4e4;
+  --t-scrollbar:  rgba(0, 0, 0, 0.18);
+  --t-selection:  rgba(245, 78, 0, 0.12);
+  --t-cta-card:   #ffffff;
+  --t-cta-text:   rgba(23, 23, 23, 0.55);
+  --background:   0 0% 97%;
+  --foreground:   0 0% 9%;
+  --card:         0 0% 100%;
+  --card-foreground:        0 0% 9%;
+  --popover:                0 0% 100%;
+  --popover-foreground:     0 0% 9%;
+  --primary:                19 100% 48%;
+  --primary-foreground:     0 0% 100%;
+  --secondary:              0 0% 95%;
+  --secondary-foreground:   0 0% 9%;
+  --muted:                  0 0% 93%;
+  --muted-foreground:       0 0% 44%;
+  --accent:                 0 0% 95%;
+  --accent-foreground:      0 0% 9%;
+  --destructive:            345 65% 49%;
+  --destructive-foreground: 0 0% 100%;
+  --border:                 0 0% 89%;
+  --input:                  0 0% 95%;
+  --ring:                   19 100% 48%;
+  --sidebar-background:         0 0% 97%;
+  --sidebar-foreground:         0 0% 9%;
+  --sidebar-primary:            19 100% 48%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent:             0 0% 93%;
+  --sidebar-accent-foreground:  0 0% 9%;
+  --sidebar-border:             0 0% 91%;
+  --sidebar-ring:               19 100% 48%;
+}
+
+html.theme-dark {
+  --t-page-bg:    #141312;
+  --t-card-bg:    #1e1c1a;
+  --t-header-bg:  rgba(20, 19, 18, 0.88);
+  --t-text:       #f0ede8;
+  --t-text-2:     rgba(240, 237, 232, 0.55);
+  --t-text-3:     rgba(240, 237, 232, 0.35);
+  --t-border-1:   rgba(240, 237, 232, 0.07);
+  --t-border-2:   rgba(240, 237, 232, 0.13);
+  --t-surface-1:  #1e1c1a;
+  --t-surface-2:  #141312;
+  --t-surface-3:  #272421;
+  --t-surface-4:  #302d2a;
+  --t-surface-5:  #393633;
+  --t-scrollbar:  rgba(240, 237, 232, 0.2);
+  --t-selection:  rgba(245, 78, 0, 0.2);
+  --t-cta-card:   #0e0d0c;
+  --t-cta-text:   rgba(240, 237, 232, 0.4);
+  --background:   47 7% 8%;
+  --foreground:   47 18% 93%;
+  --card:         47 6% 11%;
+  --card-foreground:        47 18% 93%;
+  --popover:                47 6% 11%;
+  --popover-foreground:     47 18% 93%;
+  --primary:                19 100% 48%;
+  --primary-foreground:     0 0% 100%;
+  --secondary:              47 5% 17%;
+  --secondary-foreground:   47 15% 85%;
+  --muted:                  47 5% 17%;
+  --muted-foreground:       47 8% 52%;
+  --accent:                 47 5% 17%;
+  --accent-foreground:      47 15% 85%;
+  --destructive:            345 65% 49%;
+  --destructive-foreground: 0 0% 100%;
+  --border:                 47 5% 20%;
+  --input:                  47 5% 17%;
+  --ring:                   19 100% 48%;
+  --sidebar-background:         47 7% 8%;
+  --sidebar-foreground:         47 18% 93%;
+  --sidebar-primary:            19 100% 48%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent:             47 5% 17%;
+  --sidebar-accent-foreground:  47 15% 85%;
+  --sidebar-border:             47 5% 18%;
+  --sidebar-ring:               19 100% 48%;
+}
+
+/* ── Scrollbar ─────────────────────────────────────────────────── */
+::-webkit-scrollbar          { width: 6px; height: 6px; }
+::-webkit-scrollbar-track    { background: var(--t-page-bg); }
+::-webkit-scrollbar-thumb    { background: var(--t-scrollbar); border-radius: 9999px; }
+::-webkit-scrollbar-thumb:hover { background: var(--t-border-2); }
+
+::selection { background: var(--t-selection); color: var(--t-text); }
